@@ -32,6 +32,7 @@ import { DEFAULT_TEACHER_AVATAR, DEFAULT_USER_AVATAR } from '@/components/roundt
 import type { DiscussionAction } from '@/lib/types/action';
 import type { EngineMode, PlaybackView } from '@/lib/playback';
 import type { Participant } from '@/lib/types/roundtable';
+import type { PresentationSurface, SharedSimulation } from '@/lib/types/stage';
 
 export interface DiscussionRequest {
   topic: string;
