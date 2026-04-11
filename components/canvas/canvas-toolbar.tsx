@@ -468,6 +468,24 @@ export function CanvasToolbar({
       {/* ── Right: fullscreen + chat toggle ── */}
       <div className="flex items-center justify-end gap-px shrink-0 pr-1">
         <CtrlDivider />
+        {canShowMiroFishManager && (
+          <button
+            type="button"
+            onClick={onOpenMiroFishManager}
+            className={cn(
+              ctrlBtn,
+              'w-auto px-2.5 text-[11px] font-medium',
+              sharedSimulation
+                ? 'text-slate-700 dark:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400',
+            )}
+            aria-label={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
+            title={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            <span>{sharedSimulation ? 'MiroFish' : 'Attach'}</span>
+          </button>
+        )}
         {onTogglePresentation && (
           <button
             onClick={onTogglePresentation}
