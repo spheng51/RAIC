@@ -14,8 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { ClassroomPresentationParticipant } from '@/lib/server/classroom-presentation';
+import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
 import type { PresentationSurface, SharedSimulation } from '@/lib/types/stage';
+import { toast } from 'sonner';
 
 interface MiroFishManagerDialogProps {
   readonly open: boolean;
@@ -146,6 +147,10 @@ export function MiroFishManagerDialog({
                     reportId: reportId.trim() || undefined,
                     defaultSurface,
                   });
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : 'Failed to attach MiroFish.',
+                  );
                 } finally {
                   setBusyAction(null);
                 }
@@ -215,6 +220,10 @@ export function MiroFishManagerDialog({
                           setBusyAction('grant');
                           try {
                             await onGrantControl(participant.sessionId);
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error ? error.message : 'Failed to grant control.',
+                            );
                           } finally {
                             setBusyAction(null);
                           }
@@ -245,6 +254,10 @@ export function MiroFishManagerDialog({
               setBusyAction('revoke');
               try {
                 await onRevokeControl();
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : 'Failed to return control to the teacher.',
+                );
               } finally {
                 setBusyAction(null);
               }

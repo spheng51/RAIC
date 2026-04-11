@@ -9,16 +9,8 @@ import {
   type PersistedClassroomData,
 } from '@/lib/server/classroom-storage';
 import { withMiroFishEmbedToken } from '@/lib/server/mirofish';
+import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
 import type { SharedSimulation } from '@/lib/types/stage';
-
-export interface ClassroomPresentationParticipant {
-  sessionId: string;
-  userId: string;
-  displayName: string;
-  role: SessionRecord['role'];
-  lastSeenAt: string;
-  isController: boolean;
-}
 
 export interface ClassroomPresentationSnapshot {
   classroom: PersistedClassroomData;

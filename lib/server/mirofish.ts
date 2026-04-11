@@ -122,12 +122,18 @@ export function createMiroFishEmbedToken(input: MiroFishEmbedTokenInput) {
     return null;
   }
 
+  const validityWindowSeconds = 10 * 60;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const exp =
+    Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds +
+    validityWindowSeconds;
+
   const payload = Buffer.from(
     JSON.stringify({
       classroomId: input.classroomId,
       simulationId: input.simulationId,
       reportId: input.reportId,
-      exp: Math.floor(Date.now() / 1000) + 10 * 60,
+      exp,
     }),
     'utf-8',
   ).toString('base64url');

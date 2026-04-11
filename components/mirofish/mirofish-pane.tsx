@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Shield, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type { PresentationSurface, SharedSimulationStatus } from '@/lib/types/stage';
 
 export interface MiroFishHostEvent {
@@ -46,6 +45,7 @@ export function MiroFishPane({
   const src = pickMiroFishSource(activeSurface, runUrl, reportUrl);
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const errorReportedRef = useRef(false);
 
   const allowedOrigins = useMemo(() => {
@@ -53,12 +53,6 @@ export function MiroFishPane({
       .filter((value): value is string => Boolean(value))
       .map((value) => new URL(value).origin);
   }, [reportUrl, runUrl]);
-
-  useEffect(() => {
-    setFrameState('loading');
-    setErrorMessage(null);
-    errorReportedRef.current = false;
-  }, [src]);
 
   useEffect(() => {
     if (!src) {
@@ -178,7 +172,7 @@ export function MiroFishPane({
   return (
     <div className="absolute inset-0 overflow-hidden bg-slate-950">
       <iframe
-        key={src}
+        key={`${src}:${reloadNonce}`}
         src={src}
         title="MiroFish Classroom Pane"
         className="absolute inset-0 h-full w-full border-0 bg-white"
@@ -246,6 +240,7 @@ export function MiroFishPane({
                   setFrameState('loading');
                   setErrorMessage(null);
                   errorReportedRef.current = false;
+                  setReloadNonce((value) => value + 1);
                 }}
               >
                 Retry MiroFish

@@ -149,6 +149,7 @@ export function CanvasArea({
 
           {!isLessonSurface && sharedSimulation && !whiteboardOpen && (
             <MiroFishPane
+              key={`${currentSurface}:${runUrl ?? 'no-run'}:${reportUrl ?? 'no-report'}`}
               activeSurface={currentSurface === 'report' ? 'report' : 'simulation'}
               runUrl={runUrl ?? null}
               reportUrl={reportUrl ?? null}
