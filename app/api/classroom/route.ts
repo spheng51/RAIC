@@ -1,5 +1,6 @@
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { apiSuccess, apiError, API_ERROR_CODES } from '@/lib/server/api-response';
 import {
   buildRequestOrigin,
@@ -28,7 +29,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const id = stage.id || randomUUID();
+    const requestedId = stage.id;
+    if (requestedId !== undefined && requestedId !== null && requestedId !== '') {
+      if (typeof requestedId !== 'string' || !isValidClassroomId(requestedId)) {
+        return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+      }
+    }
+
+    const id = requestedId || randomUUID();
     const baseUrl = buildRequestOrigin(request);
 
     const persisted = await persistClassroom({ id, stage: { ...stage, id }, scenes }, baseUrl);
@@ -62,6 +70,11 @@ export async function GET(request: NextRequest) {
 
     if (!isValidClassroomId(id)) {
       return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    }
+
+    const access = await requireClassroomAccess(request, id);
+    if (access instanceof NextResponse) {
+      return access;
     }
 
     const classroom = await readClassroom(id);

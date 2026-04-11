@@ -1,6 +1,7 @@
 import { promises as fs, createReadStream } from 'fs';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { CLASSROOMS_DIR, isValidClassroomId } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
 
@@ -21,7 +22,7 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ classroomId: string; path: string[] }> },
 ) {
   const { classroomId, path: pathSegments } = await params;
@@ -29,6 +30,11 @@ export async function GET(
   // Validate classroomId
   if (!isValidClassroomId(classroomId)) {
     return NextResponse.json({ error: 'Invalid classroom ID' }, { status: 400 });
+  }
+
+  const access = await requireClassroomAccess(req, classroomId);
+  if (access instanceof NextResponse) {
+    return access;
   }
 
   // Validate path segments — no traversal

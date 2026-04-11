@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import type { PBLProjectConfig, PBLChatMessage, PBLAgent, PBLIssue } from '@/lib/pbl/types';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -21,6 +22,8 @@ interface UsePBLChatOptions {
 export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLChatOptions) {
   const { t } = useI18n();
   const [isLoading, setIsLoading] = useState(false);
+  const params = useParams<{ id?: string }>();
+  const classroomId = typeof params.id === 'string' ? params.id : '';
 
   const messages = projectConfig.chat.messages;
 
@@ -74,6 +77,7 @@ export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLCh
           method: 'POST',
           headers,
           body: JSON.stringify({
+            classroomId,
             message: cleanMessage,
             agent: targetAgent,
             currentIssue,
@@ -110,7 +114,7 @@ export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLCh
             msgUpper.includes('COMPLETE') &&
             !msgUpper.includes('NEEDS_REVISION')
           ) {
-            await handleIssueComplete(afterConfig, currentIssue, headers, t);
+            await handleIssueComplete(afterConfig, currentIssue, headers, t, classroomId);
           }
 
           onConfigUpdate(afterConfig);
@@ -121,7 +125,7 @@ export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLCh
         setIsLoading(false);
       }
     },
-    [projectConfig, userRole, currentIssue, isLoading, onConfigUpdate, t],
+    [classroomId, projectConfig, userRole, currentIssue, isLoading, onConfigUpdate, t],
   );
 
   return { messages, isLoading, sendMessage, currentIssue };
@@ -165,6 +169,7 @@ async function handleIssueComplete(
   completedIssue: PBLIssue,
   headers: Record<string, string>,
   t: (key: string, options?: Record<string, unknown>) => string,
+  classroomId: string,
 ) {
   // Mark current issue as done
   const issue = config.issueboard.issues.find((i) => i.id === completedIssue.id);
@@ -209,6 +214,7 @@ async function handleIssueComplete(
           method: 'POST',
           headers,
           body: JSON.stringify({
+            classroomId,
             message: questionPrompt,
             agent: questionAgent,
             currentIssue: nextIssue,

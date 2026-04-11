@@ -25,13 +25,6 @@ export function getTextStyle(style?: TableCellStyle): CSSProperties {
 }
 
 /**
- * Format text: convert \n to <br/> and spaces to &nbsp;
- */
-export function formatText(text: string): string {
-  return text.replace(/\n/g, '<br/>').replace(/ /g, '&nbsp;');
-}
-
-/**
  * Compute hidden cell positions based on colspan/rowspan merges.
  * Returns a Set of "row_col" keys for cells that should be hidden.
  */

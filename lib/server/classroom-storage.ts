@@ -28,10 +28,17 @@ export async function writeJsonFileAtomic(filePath: string, data: unknown) {
   await fs.rename(tempFilePath, filePath);
 }
 
+function normalizeAppBaseUrl(url: string): string {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('APP_BASE_URL must use http or https');
+  }
+  return parsed.origin;
+}
+
 export function buildRequestOrigin(req: NextRequest): string {
-  return req.headers.get('x-forwarded-host')
-    ? `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('x-forwarded-host')}`
-    : req.nextUrl.origin;
+  const configuredBaseUrl = process.env.APP_BASE_URL?.trim();
+  return configuredBaseUrl ? normalizeAppBaseUrl(configuredBaseUrl) : req.nextUrl.origin;
 }
 
 export interface PersistedClassroomData {
@@ -45,8 +52,24 @@ export function isValidClassroomId(id: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
+export function resolveClassroomJsonPath(id: string): string {
+  if (!isValidClassroomId(id)) {
+    throw new Error('Invalid classroom id');
+  }
+
+  const resolvedBase = path.resolve(CLASSROOMS_DIR);
+  const resolvedFilePath = path.resolve(CLASSROOMS_DIR, `${id}.json`);
+  const relativePath = path.relative(resolvedBase, resolvedFilePath);
+
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('Resolved classroom path escapes data directory');
+  }
+
+  return resolvedFilePath;
+}
+
 export async function readClassroom(id: string): Promise<PersistedClassroomData | null> {
-  const filePath = path.join(CLASSROOMS_DIR, `${id}.json`);
+  const filePath = resolveClassroomJsonPath(id);
   try {
     const content = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(content) as PersistedClassroomData;
@@ -56,6 +79,12 @@ export async function readClassroom(id: string): Promise<PersistedClassroomData 
     }
     throw error;
   }
+}
+
+async function writePersistedClassroomData(data: PersistedClassroomData) {
+  await ensureClassroomsDir();
+  const filePath = resolveClassroomJsonPath(data.id);
+  await writeJsonFileAtomic(filePath, data);
 }
 
 export async function persistClassroom(
@@ -73,12 +102,24 @@ export async function persistClassroom(
     createdAt: new Date().toISOString(),
   };
 
-  await ensureClassroomsDir();
-  const filePath = path.join(CLASSROOMS_DIR, `${data.id}.json`);
-  await writeJsonFileAtomic(filePath, classroomData);
+  await writePersistedClassroomData(classroomData);
 
   return {
     ...classroomData,
     url: `${baseUrl}/classroom/${data.id}`,
   };
+}
+
+export async function updateClassroom(
+  id: string,
+  updater: (current: PersistedClassroomData) => PersistedClassroomData,
+): Promise<PersistedClassroomData | null> {
+  const existing = await readClassroom(id);
+  if (!existing) {
+    return null;
+  }
+
+  const next = updater(existing);
+  await writePersistedClassroomData(next);
+  return next;
 }

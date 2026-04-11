@@ -5,7 +5,8 @@
  * Students @question or @judge an agent, and this endpoint generates a response.
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { callLLM } from '@/lib/ai/llm';
 import type { PBLAgent, PBLIssue } from '@/lib/pbl/types';
 import { createLogger } from '@/lib/logger';
@@ -14,6 +15,7 @@ import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 const log = createLogger('PBL Chat');
 
 interface PBLChatRequest {
+  classroomId: string;
   message: string;
   agent: PBLAgent;
   currentIssue: PBLIssue | null;
@@ -27,12 +29,17 @@ export async function POST(req: NextRequest) {
   let resolvedAgentType: string | undefined;
   try {
     const body = (await req.json()) as PBLChatRequest;
-    const { message, agent, currentIssue, recentMessages, userRole, agentType } = body;
+    const { classroomId, message, agent, currentIssue, recentMessages, userRole, agentType } = body;
     agentName = agent?.name;
     resolvedAgentType = agentType;
 
-    if (!message || !agent) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Message and agent are required');
+    if (!classroomId || !message || !agent) {
+      return apiError('MISSING_REQUIRED_FIELD', 400, 'Classroom ID, message, and agent are required');
+    }
+
+    const access = await requireClassroomAccess(req, classroomId);
+    if (access instanceof NextResponse) {
+      return access;
     }
 
     // Get model config from headers

@@ -1,0 +1,159 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Script from 'next/script';
+import { useRouter } from 'next/navigation';
+import { AlertCircle, LoaderCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (options: Record<string, unknown>) => void;
+          renderButton: (element: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
+
+interface GoogleSignInButtonProps {
+  redirectTo?: string;
+}
+
+export function GoogleSignInButton({
+  redirectTo = '/studio',
+}: GoogleSignInButtonProps) {
+  const router = useRouter();
+  const buttonContainerRef = useRef<HTMLDivElement | null>(null);
+  const [nonce, setNonce] = useState<string | null>(null);
+  const [isScriptReady, setIsScriptReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNonce() {
+      try {
+        const response = await fetch('/api/auth/nonce', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to prepare Google sign-in');
+        }
+        const data = (await response.json()) as { nonce: string };
+        if (!cancelled) {
+          setNonce(data.nonce);
+        }
+      } catch (fetchError) {
+        if (!cancelled) {
+          setError(fetchError instanceof Error ? fetchError.message : 'Failed to prepare sign-in');
+        }
+      }
+    }
+
+    loadNonce();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!clientId || !isScriptReady || !nonce || !buttonContainerRef.current || !window.google?.accounts?.id) {
+      return;
+    }
+
+    const accountsApi = window.google.accounts.id;
+
+    accountsApi.initialize({
+      client_id: clientId,
+      nonce,
+      callback: async (response: { credential?: string }) => {
+        if (!response.credential) {
+          setError('Google did not return a credential');
+          return;
+        }
+
+        try {
+          setIsLoading(true);
+          setError(null);
+
+          const authResponse = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              credential: response.credential,
+              redirectTo,
+            }),
+          });
+
+          const data = (await authResponse.json()) as {
+            success?: boolean;
+            error?: string;
+            redirectTo?: string;
+          };
+
+          if (!authResponse.ok || !data.success) {
+            throw new Error(data.error || 'Google sign-in failed');
+          }
+
+          router.push(data.redirectTo || redirectTo);
+          router.refresh();
+        } catch (authError) {
+          setError(authError instanceof Error ? authError.message : 'Google sign-in failed');
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
+
+    buttonContainerRef.current.innerHTML = '';
+    accountsApi.renderButton(buttonContainerRef.current, {
+      theme: 'outline',
+      size: 'large',
+      text: 'signin_with',
+      shape: 'pill',
+      width: buttonContainerRef.current.clientWidth || 320,
+      logo_alignment: 'left',
+    });
+  }, [clientId, isScriptReady, nonce, redirectTo, router]);
+
+  if (!clientId) {
+    return (
+      <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        <AlertCircle className="mt-0.5 size-4 shrink-0" />
+        <span>NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured yet.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => setIsScriptReady(true)}
+      />
+
+      <div ref={buttonContainerRef} className="min-h-11" />
+
+      {isLoading ? (
+        <Button variant="outline" disabled className="w-full justify-center">
+          <LoaderCircle className="size-4 animate-spin" />
+          Signing you in...
+        </Button>
+      ) : null}
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    </div>
+  );
+}

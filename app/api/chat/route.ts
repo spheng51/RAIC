@@ -12,7 +12,8 @@
  * the fetch request, which triggers req.signal on the server side.
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { statelessGenerate } from '@/lib/orchestration/stateless-generate';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
 import type { StatelessChatRequest, StatelessEvent } from '@/lib/types/chat';
@@ -58,6 +59,16 @@ export async function POST(req: NextRequest) {
 
     if (!body.storeState) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: storeState');
+    }
+
+    const classroomId = body.storeState.stage?.id;
+    if (typeof classroomId !== 'string' || classroomId.length === 0) {
+      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: storeState.stage.id');
+    }
+
+    const access = await requireClassroomAccess(req, classroomId);
+    if (access instanceof NextResponse) {
+      return access;
     }
 
     if (!body.config || !body.config.agentIds || body.config.agentIds.length === 0) {
