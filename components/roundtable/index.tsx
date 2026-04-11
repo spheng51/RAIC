@@ -663,6 +663,13 @@ export function Roundtable({
       onToggleAutoPlay={() => setAutoPlayLecture(!autoPlayLecture)}
       playbackSpeed={playbackSpeed}
       onCycleSpeed={handleCycleSpeed}
+      sharedSimulation={sharedSimulation}
+      activeSurface={activeSurface}
+      reportAvailable={reportAvailable}
+      viewerCanManageSimulation={viewerCanManageSimulation}
+      viewerCanControlPresentation={viewerCanControlPresentation}
+      onSetPresentationSurface={onSetPresentationSurface}
+      onOpenMiroFishManager={onOpenMiroFishManager}
     />
   );
 
