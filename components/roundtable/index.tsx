@@ -89,6 +89,13 @@ interface RoundtableProps {
   readonly controlsVisible?: boolean;
   readonly onTogglePresentation?: () => void;
   readonly onPresentationInteractionChange?: (active: boolean) => void;
+  readonly sharedSimulation?: SharedSimulation | null;
+  readonly activeSurface?: PresentationSurface;
+  readonly reportAvailable?: boolean;
+  readonly viewerCanManageSimulation?: boolean;
+  readonly viewerCanControlPresentation?: boolean;
+  readonly onSetPresentationSurface?: (surface: PresentationSurface) => void;
+  readonly onOpenMiroFishManager?: () => void;
   /** Ref to the fullscreen container — passed to ProactiveCard so its portal
    *  renders inside the top-layer during presentation mode. */
   readonly fullscreenContainerRef?: React.RefObject<HTMLDivElement | null>;
@@ -174,6 +181,13 @@ export function Roundtable({
   controlsVisible,
   onTogglePresentation,
   onPresentationInteractionChange,
+  sharedSimulation,
+  activeSurface,
+  reportAvailable,
+  viewerCanManageSimulation,
+  viewerCanControlPresentation,
+  onSetPresentationSurface,
+  onOpenMiroFishManager,
   fullscreenContainerRef,
 }: RoundtableProps) {
   const { t } = useI18n();
