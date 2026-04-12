@@ -69,7 +69,7 @@ const initialFormState: FormState = {
   webSearch: false,
 };
 
-function HomePage() {
+export function HomePage() {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
@@ -210,7 +210,9 @@ function HomePage() {
   const showSetupToast = (icon: React.ReactNode, title: string, desc: string) => {
     toast.custom(
       (id) => (
-        <div
+        <button
+          type="button"
+          aria-label={`${title}. ${desc}.`}
           className="w-[356px] rounded-xl border border-amber-200/60 dark:border-amber-800/40 bg-gradient-to-r from-amber-50 via-white to-amber-50 dark:from-amber-950/60 dark:via-slate-900 dark:to-amber-950/60 shadow-lg shadow-amber-500/8 dark:shadow-amber-900/20 p-4 flex items-start gap-3 cursor-pointer"
           onClick={() => {
             toast.dismiss(id);
@@ -229,9 +231,9 @@ function HomePage() {
             </p>
           </div>
           <div className="shrink-0 mt-1 text-[10px] font-medium text-amber-500 dark:text-amber-500/70 tracking-wide">
-            <Settings className="size-3.5 animate-[spin_3s_linear_infinite]" />
+            <Settings className="size-3.5 motion-safe:animate-[spin_3s_linear_infinite] motion-reduce:animate-none" />
           </div>
-        </div>
+        </button>
       ),
       { duration: 4000 },
     );
@@ -344,6 +346,8 @@ function HomePage() {
         {/* Theme Selector */}
         <div className="relative">
           <button
+            type="button"
+            aria-label={t('settings.theme')}
             onClick={() => {
               setThemeOpen(!themeOpen);
             }}
@@ -406,6 +410,9 @@ function HomePage() {
         {/* Settings Button */}
         <div className="relative">
           <button
+            type="button"
+            aria-label={t('settings.title')}
+            data-testid="settings-button"
             onClick={() => setSettingsOpen(true)}
             className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
           >
@@ -425,12 +432,12 @@ function HomePage() {
       {/* ═══ Background Decor ═══ */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: '4s' }}
+          className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl motion-safe:animate-pulse motion-reduce:animate-none"
+          style={{ animationDuration: 'var(--motion-duration-ambient)' }}
         />
         <div
-          className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: '6s' }}
+          className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl motion-safe:animate-pulse motion-reduce:animate-none"
+          style={{ animationDuration: 'calc(var(--motion-duration-ambient) + 1600ms)' }}
         />
       </div>
 
@@ -486,8 +493,14 @@ function HomePage() {
             </div>
 
             {/* Textarea */}
+            <label htmlFor="requirement-input" className="sr-only">
+              {t('upload.requirementPlaceholder')}
+            </label>
             <textarea
+              id="requirement-input"
               ref={textareaRef}
+              data-testid="requirement-input"
+              aria-label={t('upload.requirementPlaceholder')}
               placeholder={t('upload.requirementPlaceholder')}
               className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
               value={form.requirement}
@@ -530,6 +543,9 @@ function HomePage() {
               <button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
+                type="button"
+                aria-label={t('toolbar.enterClassroom')}
+                data-testid="enter-classroom-button"
                 className={cn(
                   'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
                   canGenerate
@@ -548,6 +564,8 @@ function HomePage() {
         <AnimatePresence>
           {error && (
             <motion.div
+              role={error.includes('setup') ? 'alert' : 'status'}
+              aria-live={error.includes('setup') ? 'assertive' : 'polite'}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -569,6 +587,10 @@ function HomePage() {
         >
           {/* Trigger — divider-line with centered text */}
           <button
+            type="button"
+            aria-expanded={recentOpen}
+            aria-controls="recent-classrooms-panel"
+            aria-label={t('classroom.recentClassrooms')}
             onClick={() => {
               const next = !recentOpen;
               setRecentOpen(next);
@@ -599,6 +621,7 @@ function HomePage() {
           <AnimatePresence>
             {recentOpen && (
               <motion.div
+                id="recent-classrooms-panel"
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -739,8 +762,10 @@ function GreetingBar() {
 
       {/* ── Collapsed pill (always in flow) ── */}
       {!open && (
-        <div
-          className="flex items-center gap-2.5 cursor-pointer transition-all duration-200 group rounded-full px-2.5 py-1.5 border border-border/50 text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 active:scale-[0.97]"
+        <button
+          className="flex items-center gap-2.5 cursor-pointer transition-all duration-200 group rounded-full px-2.5 py-1.5 border border-border/50 text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+          type="button"
+          aria-label={t('home.greetingWithName', { name: displayName })}
           onClick={() => setOpen(true)}
         >
           <div className="shrink-0 relative">
@@ -766,7 +791,7 @@ function GreetingBar() {
               </TooltipContent>
             </Tooltip>
           </div>
-        </div>
+        </button>
       )}
 
       {/* ── Expanded panel (absolute, floating) ── */}
@@ -782,7 +807,18 @@ function GreetingBar() {
             <div className="rounded-2xl bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06] shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_8px_-2px_rgba(0,0,0,0.3)] px-2.5 py-2">
               {/* ── Row: avatar + name ── */}
               <div
+                role="button"
+                tabIndex={0}
                 className="flex items-center gap-2.5 cursor-pointer transition-all duration-200"
+                aria-label={t('common.close')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setOpen(false);
+                    setEditingName(false);
+                    setAvatarPickerOpen(false);
+                  }
+                }}
                 onClick={() => {
                   setOpen(false);
                   setEditingName(false);
@@ -790,8 +826,10 @@ function GreetingBar() {
                 }}
               >
                 {/* Avatar */}
-                <div
-                  className="shrink-0 relative cursor-pointer"
+                <button
+                  type="button"
+                  className="shrink-0 relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+                  aria-label={t('profile.uploadAvatar')}
                   onClick={(e) => {
                     e.stopPropagation();
                     setAvatarPickerOpen(!avatarPickerOpen);
@@ -812,7 +850,7 @@ function GreetingBar() {
                       )}
                     />
                   </motion.div>
-                </div>
+                </button>
 
                 {/* Text */}
                 <div className="flex-1 min-w-0">
@@ -895,6 +933,7 @@ function GreetingBar() {
                           </button>
                         ))}
                         <label
+                          aria-label={t('profile.uploadAvatar')}
                           className={cn(
                             'size-7 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 border border-dashed',
                             'hover:scale-110 active:scale-95',
@@ -989,7 +1028,21 @@ function ClassroomCard({
   };
 
   return (
-    <div className="group cursor-pointer" onClick={confirmingDelete ? undefined : onClick}>
+    <div
+      role="button"
+      tabIndex={confirmingDelete ? -1 : 0}
+      aria-label={`Open classroom ${classroom.name}`}
+      className="group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+      onClick={confirmingDelete ? undefined : onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (!confirmingDelete) {
+            onClick();
+          }
+        }
+      }}
+    >
       {/* Thumbnail — large radius, no border, subtle bg */}
       <div
         ref={thumbRef}
@@ -1022,6 +1075,7 @@ function ClassroomCard({
               <Button
                 size="icon"
                 variant="ghost"
+                aria-label={t('classroom.delete')}
                 className="absolute top-2 right-2 size-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 hover:bg-destructive/80 text-white hover:text-white backdrop-blur-sm rounded-full"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1033,6 +1087,7 @@ function ClassroomCard({
               <Button
                 size="icon"
                 variant="ghost"
+                aria-label={t('common.rename')}
                 className="absolute top-2 right-11 size-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 hover:bg-black/50 text-white hover:text-white backdrop-blur-sm rounded-full"
                 onClick={startRename}
               >
@@ -1058,12 +1113,16 @@ function ClassroomCard({
               </span>
               <div className="flex gap-2">
                 <button
+                  type="button"
+                  aria-label={t('common.cancel')}
                   className="px-3.5 py-1 rounded-lg text-[12px] font-medium bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm transition-colors"
                   onClick={onCancelDelete}
                 >
                   {t('common.cancel')}
                 </button>
                 <button
+                  type="button"
+                  aria-label={t('classroom.delete')}
                   className="px-3.5 py-1 rounded-lg text-[12px] font-medium bg-red-500/90 text-white hover:bg-red-500 transition-colors"
                   onClick={onConfirmDelete}
                 >
@@ -1114,6 +1173,7 @@ function ClassroomCard({
               <div className="flex items-center gap-1.5">
                 <span className="break-all">{classroom.name}</span>
                 <button
+                  aria-label={t('classroom.nameCopied')}
                   className="shrink-0 p-0.5 rounded hover:bg-foreground/10 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();

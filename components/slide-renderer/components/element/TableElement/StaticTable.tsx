@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import type { PPTTableElement } from '@/lib/types/slides';
 import { getTableSubThemeColor } from '@/lib/utils/element';
-import { getTextStyle, formatText, getHiddenCells } from './tableUtils';
+import { getTextStyle, getHiddenCells } from './tableUtils';
 
 interface StaticTableProps {
   elementInfo: PPTTableElement;
@@ -111,10 +111,12 @@ export function StaticTable({ elementInfo }: StaticTableProps) {
                     padding: '5px',
                     verticalAlign: 'middle',
                     wordBreak: 'break-word',
+                    whiteSpace: 'pre-wrap',
                     ...textStyle,
                   }}
-                  dangerouslySetInnerHTML={{ __html: formatText(cell.text) }}
-                />
+                >
+                  {cell.text}
+                </td>
               );
             })}
           </tr>

@@ -19,12 +19,69 @@ import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
 import { validateProvider, validateModel } from '@/lib/store/settings-validation';
+import type { AIPolicySettings, AIProviderSource, EffectiveAIOptionsResponse } from '@/lib/types/ai-governance';
 
 const log = createLogger('Settings');
 
 /** Available playback speed tiers */
 export const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 2] as const;
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
+interface GovernedProviderMetadata {
+  isServerConfigured?: boolean;
+  serverBaseUrl?: string;
+  serverModels?: string[];
+  serverDefaultModel?: string;
+  source?: AIProviderSource;
+  serverEnabled?: boolean;
+  legacyFallbackAllowed?: boolean;
+  hasOrganizationConfig?: boolean;
+  hasPersonalOverride?: boolean;
+}
+
+type ManagedTTSProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+  modelId?: string;
+  customModels?: Array<{ id: string; name: string }>;
+  providerOptions?: Record<string, unknown>;
+} & GovernedProviderMetadata;
+
+type ManagedASRProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+  modelId?: string;
+  customModels?: Array<{ id: string; name: string }>;
+  providerOptions?: Record<string, unknown>;
+} & GovernedProviderMetadata;
+
+type ManagedPDFProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+} & GovernedProviderMetadata;
+
+type ManagedImageProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+  customModels?: Array<{ id: string; name: string }>;
+} & GovernedProviderMetadata;
+
+type ManagedVideoProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+  customModels?: Array<{ id: string; name: string }>;
+} & GovernedProviderMetadata;
+
+type ManagedWebSearchProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+} & GovernedProviderMetadata;
 
 export interface SettingsState {
   // Model selection
@@ -43,78 +100,26 @@ export interface SettingsState {
   ttsSpeed: number;
   asrProviderId: ASRProviderId;
   asrLanguage: string;
+  aiPolicy: AIPolicySettings;
 
   // Audio provider configurations
-  ttsProvidersConfig: Record<
-    TTSProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      modelId?: string;
-      customModels?: Array<{ id: string; name: string }>;
-      providerOptions?: Record<string, unknown>;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-    }
-  >;
+  ttsProvidersConfig: Record<TTSProviderId, ManagedTTSProviderConfig>;
 
-  asrProvidersConfig: Record<
-    ASRProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      modelId?: string;
-      customModels?: Array<{ id: string; name: string }>;
-      providerOptions?: Record<string, unknown>;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-    }
-  >;
+  asrProvidersConfig: Record<ASRProviderId, ManagedASRProviderConfig>;
 
   // PDF settings
   pdfProviderId: PDFProviderId;
-  pdfProvidersConfig: Record<
-    PDFProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-    }
-  >;
+  pdfProvidersConfig: Record<PDFProviderId, ManagedPDFProviderConfig>;
 
   // Image Generation settings
   imageProviderId: ImageProviderId;
   imageModelId: string;
-  imageProvidersConfig: Record<
-    ImageProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-      customModels?: Array<{ id: string; name: string }>;
-    }
-  >;
+  imageProvidersConfig: Record<ImageProviderId, ManagedImageProviderConfig>;
 
   // Video Generation settings
   videoProviderId: VideoProviderId;
   videoModelId: string;
-  videoProvidersConfig: Record<
-    VideoProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-      customModels?: Array<{ id: string; name: string }>;
-    }
-  >;
+  videoProvidersConfig: Record<VideoProviderId, ManagedVideoProviderConfig>;
 
   // Media generation toggles
   imageGenerationEnabled: boolean;
@@ -122,16 +127,7 @@ export interface SettingsState {
 
   // Web Search settings
   webSearchProviderId: WebSearchProviderId;
-  webSearchProvidersConfig: Record<
-    WebSearchProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-    }
-  >;
+  webSearchProvidersConfig: Record<WebSearchProviderId, ManagedWebSearchProviderConfig>;
 
   // Global TTS/ASR toggles
   ttsEnabled: boolean;
@@ -278,10 +274,14 @@ const getDefaultProvidersConfig = (): ProvidersConfig => {
 // Initialize default audio config
 const getDefaultAudioConfig = () => ({
   ttsProviderId: 'browser-native-tts' as TTSProviderId,
-  ttsVoice: 'default',
-  ttsSpeed: 1.0,
-  asrProviderId: 'browser-native' as ASRProviderId,
-  asrLanguage: 'zh',
+        ttsVoice: 'default',
+        ttsSpeed: 1.0,
+        asrProviderId: 'browser-native' as ASRProviderId,
+        asrLanguage: 'zh',
+        aiPolicy: {
+          allowPersonalOverrides: false,
+          allowPersonalCustomBaseUrls: false,
+        },
   ttsProvidersConfig: {
     'openai-tts': { apiKey: '', baseUrl: '', enabled: true },
     'azure-tts': { apiKey: '', baseUrl: '', enabled: false },
@@ -345,6 +345,31 @@ const getDefaultWebSearchConfig = () => ({
     tavily: { apiKey: '', baseUrl: '', enabled: true },
   } as Record<WebSearchProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
+
+function getGovernedMetadata(
+  option?: {
+    source?: AIProviderSource;
+    enabled?: boolean;
+    allowedModels?: string[];
+    defaultModel?: string | null;
+    baseUrl?: string;
+    legacyFallbackAllowed?: boolean;
+    hasOrganizationConfig?: boolean;
+    hasPersonalOverride?: boolean;
+  } | null,
+): GovernedProviderMetadata {
+  return {
+    isServerConfigured: !!option && option.source !== 'legacy' && option.source !== 'none',
+    serverBaseUrl: option?.baseUrl,
+    serverModels: option?.allowedModels,
+    serverDefaultModel: option?.defaultModel ?? undefined,
+    source: option?.source,
+    serverEnabled: option?.enabled,
+    legacyFallbackAllowed: option?.legacyFallbackAllowed,
+    hasOrganizationConfig: option?.hasOrganizationConfig,
+    hasPersonalOverride: option?.hasPersonalOverride,
+  };
+}
 
 /**
  * Check whether a provider ID exists in the given provider registry.
@@ -751,30 +776,89 @@ export const useSettingsStore = create<SettingsState>()(
         // Fetch server-configured providers and merge into local state
         fetchServerProviders: async () => {
           try {
-            const res = await fetch('/api/server-providers');
+            const res = await fetch('/api/ai/options');
             if (!res.ok) return;
-            const data = (await res.json()) as {
-              providers: Record<string, { models?: string[]; baseUrl?: string }>;
-              tts: Record<string, { baseUrl?: string }>;
-              asr: Record<string, { baseUrl?: string }>;
-              pdf: Record<string, { baseUrl?: string }>;
-              image: Record<string, { baseUrl?: string }>;
-              video: Record<string, { baseUrl?: string }>;
-              webSearch: Record<string, { baseUrl?: string }>;
+            const payload = (await res.json()) as { success?: boolean } & EffectiveAIOptionsResponse;
+            const providerOptions = payload.providers;
+            const data = {
+              policy: payload.policy,
+              providers: Object.fromEntries(
+                Object.entries(providerOptions.llm)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [
+                    providerId,
+                    {
+                      models: option.allowedModels,
+                      baseUrl: option.baseUrl,
+                    },
+                  ]),
+              ) as Record<string, { models?: string[]; baseUrl?: string }>,
+              tts: Object.fromEntries(
+                Object.entries(providerOptions.tts)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
+              asr: Object.fromEntries(
+                Object.entries(providerOptions.asr)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
+              pdf: Object.fromEntries(
+                Object.entries(providerOptions.pdf)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
+              image: Object.fromEntries(
+                Object.entries(providerOptions.image)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
+              video: Object.fromEntries(
+                Object.entries(providerOptions.video)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
+              webSearch: Object.fromEntries(
+                Object.entries(providerOptions.webSearch)
+                  .filter(([, option]) => option.enabled)
+                  .map(([providerId, option]) => [providerId, { baseUrl: option.baseUrl }]),
+              ) as Record<string, { baseUrl?: string }>,
             };
 
             set((state) => {
               // Merge LLM providers
               const newProvidersConfig = { ...state.providersConfig };
+              for (const [pid, option] of Object.entries(providerOptions.llm)) {
+                const key = pid as ProviderId;
+                if (!newProvidersConfig[key]) {
+                  newProvidersConfig[key] = {
+                    apiKey: '',
+                    baseUrl: '',
+                    models: (option.allowedModels || []).map((modelId) => ({
+                      id: modelId,
+                      name: modelId,
+                      capabilities: {
+                        streaming: true,
+                        tools: true,
+                        vision: false,
+                      },
+                    })),
+                    name: option.displayName || pid,
+                    type: option.providerType || 'openai',
+                    defaultBaseUrl: option.baseUrl,
+                    icon: option.icon,
+                    requiresApiKey: option.requiresApiKey ?? true,
+                    isBuiltIn: false,
+                  };
+                }
+              }
               // First reset all server flags
               for (const pid of Object.keys(newProvidersConfig)) {
                 const key = pid as ProviderId;
                 if (newProvidersConfig[key]) {
                   newProvidersConfig[key] = {
                     ...newProvidersConfig[key],
-                    isServerConfigured: false,
-                    serverModels: undefined,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -782,6 +866,7 @@ export const useSettingsStore = create<SettingsState>()(
               for (const [pid, info] of Object.entries(data.providers)) {
                 const key = pid as ProviderId;
                 if (newProvidersConfig[key]) {
+                  const option = providerOptions.llm[pid];
                   const currentModels = newProvidersConfig[key].models;
                   // When server specifies allowed models, filter the models list
                   const filteredModels = info.models?.length
@@ -789,9 +874,7 @@ export const useSettingsStore = create<SettingsState>()(
                     : currentModels;
                   newProvidersConfig[key] = {
                     ...newProvidersConfig[key],
-                    isServerConfigured: true,
-                    serverModels: info.models,
-                    serverBaseUrl: info.baseUrl,
+                    ...getGovernedMetadata(option),
                     models: filteredModels,
                   };
                 }
@@ -804,8 +887,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newTTSConfig[key]) {
                   newTTSConfig[key] = {
                     ...newTTSConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -814,8 +896,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newTTSConfig[key]) {
                   newTTSConfig[key] = {
                     ...newTTSConfig[key],
-                    isServerConfigured: true,
-                    serverBaseUrl: info.baseUrl,
+                    ...getGovernedMetadata(providerOptions.tts[pid]),
                   };
                 }
               }
@@ -827,8 +908,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newASRConfig[key]) {
                   newASRConfig[key] = {
                     ...newASRConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -837,8 +917,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newASRConfig[key]) {
                   newASRConfig[key] = {
                     ...newASRConfig[key],
-                    isServerConfigured: true,
-                    serverBaseUrl: info.baseUrl,
+                    ...getGovernedMetadata(providerOptions.asr[pid]),
                   };
                 }
               }
@@ -850,8 +929,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newPDFConfig[key]) {
                   newPDFConfig[key] = {
                     ...newPDFConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -860,8 +938,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newPDFConfig[key]) {
                   newPDFConfig[key] = {
                     ...newPDFConfig[key],
-                    isServerConfigured: true,
-                    serverBaseUrl: info.baseUrl,
+                    ...getGovernedMetadata(providerOptions.pdf[pid]),
                   };
                 }
               }
@@ -873,8 +950,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newImageConfig[key]) {
                   newImageConfig[key] = {
                     ...newImageConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -883,8 +959,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newImageConfig[key]) {
                   newImageConfig[key] = {
                     ...newImageConfig[key],
-                    isServerConfigured: true,
-                    serverBaseUrl: info.baseUrl,
+                    ...getGovernedMetadata(providerOptions.image[pid]),
                   };
                 }
               }
@@ -896,8 +971,7 @@ export const useSettingsStore = create<SettingsState>()(
                 if (newVideoConfig[key]) {
                   newVideoConfig[key] = {
                     ...newVideoConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
+                    ...getGovernedMetadata(null),
                   };
                 }
               }
@@ -907,8 +981,7 @@ export const useSettingsStore = create<SettingsState>()(
                   if (newVideoConfig[key]) {
                     newVideoConfig[key] = {
                       ...newVideoConfig[key],
-                      isServerConfigured: true,
-                      serverBaseUrl: info.baseUrl,
+                      ...getGovernedMetadata(providerOptions.video[pid]),
                     };
                   }
                 }
@@ -919,8 +992,7 @@ export const useSettingsStore = create<SettingsState>()(
               for (const key of Object.keys(newWebSearchConfig) as WebSearchProviderId[]) {
                 newWebSearchConfig[key] = {
                   ...newWebSearchConfig[key],
-                  isServerConfigured: false,
-                  serverBaseUrl: undefined,
+                  ...getGovernedMetadata(null),
                 };
               }
               if (data.webSearch) {
@@ -929,8 +1001,7 @@ export const useSettingsStore = create<SettingsState>()(
                   if (newWebSearchConfig[key]) {
                     newWebSearchConfig[key] = {
                       ...newWebSearchConfig[key],
-                      isServerConfigured: true,
-                      serverBaseUrl: info.baseUrl,
+                      ...getGovernedMetadata(providerOptions.webSearch[pid]),
                     };
                   }
                 }
@@ -939,13 +1010,24 @@ export const useSettingsStore = create<SettingsState>()(
               // === Validate current selections against updated configs ===
               // Build fallback: server-configured first, then client-key-only
               const buildFallback = <T extends string>(
-                config: Record<string, { isServerConfigured?: boolean; apiKey?: string }>,
+                config: Record<
+                  string,
+                  {
+                    isServerConfigured?: boolean;
+                    serverEnabled?: boolean;
+                    legacyFallbackAllowed?: boolean;
+                    apiKey?: string;
+                  }
+                >,
               ): T[] => [
                 ...Object.entries(config)
-                  .filter(([, c]) => c.isServerConfigured)
+                  .filter(([, c]) => c.isServerConfigured && c.serverEnabled !== false)
                   .map(([id]) => id as T),
                 ...Object.entries(config)
-                  .filter(([, c]) => !c.isServerConfigured && !!c.apiKey)
+                  .filter(
+                    ([, c]) =>
+                      !!c.apiKey && (!c.isServerConfigured || c.legacyFallbackAllowed !== false),
+                  )
                   .map(([id]) => id as T),
               ];
 
@@ -995,35 +1077,61 @@ export const useSettingsStore = create<SettingsState>()(
               if (!validImageProvider && imageFallback.length > 0) {
                 validImageProvider = imageFallback[0];
                 const models = IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models;
-                if (models?.length) recoveredImageModel = models[0].id;
+                recoveredImageModel =
+                  newImageConfig[validImageProvider as ImageProviderId]?.serverDefaultModel ||
+                  newImageConfig[validImageProvider as ImageProviderId]?.serverModels?.[0] ||
+                  models?.[0]?.id ||
+                  '';
               }
               let recoveredVideoModel = '';
               if (!validVideoProvider && videoFallback.length > 0) {
                 validVideoProvider = videoFallback[0];
                 const models = VIDEO_PROVIDERS[validVideoProvider as VideoProviderId]?.models;
-                if (models?.length) recoveredVideoModel = models[0].id;
+                recoveredVideoModel =
+                  newVideoConfig[validVideoProvider as VideoProviderId]?.serverDefaultModel ||
+                  newVideoConfig[validVideoProvider as VideoProviderId]?.serverModels?.[0] ||
+                  models?.[0]?.id ||
+                  '';
               }
 
+              const llmModels = validLLMProvider
+                ? newProvidersConfig[validLLMProvider as ProviderId]?.models ?? []
+                : [];
               const validLLMModel = validLLMProvider
-                ? validateModel(
-                    state.modelId,
-                    newProvidersConfig[validLLMProvider as ProviderId]?.models ?? [],
-                  )
+                ? validateModel(state.modelId, llmModels) ||
+                  newProvidersConfig[validLLMProvider as ProviderId]?.serverDefaultModel ||
+                  newProvidersConfig[validLLMProvider as ProviderId]?.serverModels?.[0] ||
+                  llmModels[0]?.id ||
+                  ''
                 : '';
               const imageModels =
-                IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models ?? [];
+                IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models.filter(
+                  (model) =>
+                    !newImageConfig[validImageProvider as ImageProviderId]?.serverModels?.length ||
+                    newImageConfig[validImageProvider as ImageProviderId]?.serverModels?.includes(
+                      model.id,
+                    ),
+                ) ?? [];
               const validImageModel = validImageProvider
                 ? recoveredImageModel ||
                   validateModel(state.imageModelId, imageModels) ||
+                  newImageConfig[validImageProvider as ImageProviderId]?.serverDefaultModel ||
                   // validateModel('', ...) returns '' — fallback to first model when modelId is empty
                   imageModels[0]?.id ||
                   ''
                 : '';
               const videoModels =
-                VIDEO_PROVIDERS[validVideoProvider as VideoProviderId]?.models ?? [];
+                VIDEO_PROVIDERS[validVideoProvider as VideoProviderId]?.models.filter(
+                  (model) =>
+                    !newVideoConfig[validVideoProvider as VideoProviderId]?.serverModels?.length ||
+                    newVideoConfig[validVideoProvider as VideoProviderId]?.serverModels?.includes(
+                      model.id,
+                    ),
+                ) ?? [];
               const validVideoModel = validVideoProvider
                 ? recoveredVideoModel ||
                   validateModel(state.videoModelId, videoModels) ||
+                  newVideoConfig[validVideoProvider as VideoProviderId]?.serverDefaultModel ||
                   videoModels[0]?.id ||
                   ''
                 : '';
@@ -1081,8 +1189,10 @@ export const useSettingsStore = create<SettingsState>()(
                   !newImageConfig[state.imageProviderId]?.isServerConfigured
                 ) {
                   autoImageProvider = serverImageIds[0];
-                  const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
-                  if (models?.length) autoImageModel = models[0].id;
+                  autoImageModel =
+                    newImageConfig[autoImageProvider]?.serverDefaultModel ||
+                    newImageConfig[autoImageProvider]?.serverModels?.[0] ||
+                    IMAGE_PROVIDERS[autoImageProvider]?.models?.[0]?.id;
                 }
                 if (serverImageIds.length > 0 && !state.imageGenerationEnabled) {
                   autoImageEnabled = true;
@@ -1095,8 +1205,10 @@ export const useSettingsStore = create<SettingsState>()(
                   !newVideoConfig[state.videoProviderId]?.isServerConfigured
                 ) {
                   autoVideoProvider = serverVideoIds[0];
-                  const models = VIDEO_PROVIDERS[autoVideoProvider]?.models;
-                  if (models?.length) autoVideoModel = models[0].id;
+                  autoVideoModel =
+                    newVideoConfig[autoVideoProvider]?.serverDefaultModel ||
+                    newVideoConfig[autoVideoProvider]?.serverModels?.[0] ||
+                    VIDEO_PROVIDERS[autoVideoProvider]?.models?.[0]?.id;
                 }
                 if (serverVideoIds.length > 0 && !state.videoGenerationEnabled) {
                   autoVideoEnabled = true;
@@ -1124,6 +1236,7 @@ export const useSettingsStore = create<SettingsState>()(
               }
 
               return {
+                aiPolicy: data.policy,
                 providersConfig: newProvidersConfig,
                 ttsProvidersConfig: newTTSConfig,
                 asrProvidersConfig: newASRConfig,
@@ -1255,7 +1368,8 @@ export const useSettingsStore = create<SettingsState>()(
         }
         // Migrate MiniMax's model field to modelId
         for (const [, cfg] of Object.entries(
-          (state.ttsProvidersConfig as Record<string, Record<string, unknown>>) || {},
+          ((state.ttsProvidersConfig as unknown as Record<string, Record<string, unknown>>) ||
+            {}),
         )) {
           if (cfg.model && !cfg.modelId) {
             cfg.modelId = cfg.model;
@@ -1313,6 +1427,12 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if ((state as Record<string, unknown>).autoAgentCount === undefined) {
           (state as Record<string, unknown>).autoAgentCount = 3;
+        }
+        if ((state as Record<string, unknown>).aiPolicy === undefined) {
+          (state as Record<string, unknown>).aiPolicy = {
+            allowPersonalOverrides: false,
+            allowPersonalCustomBaseUrls: false,
+          } satisfies AIPolicySettings;
         }
 
         // Migrate Web Search: old flat fields → new provider-based config

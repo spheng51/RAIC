@@ -3,7 +3,9 @@
     "you": "Вы",
     "confirm": "Подтвердить",
     "cancel": "Отмена",
-    "loading": "Загрузка..."
+    "loading": "Загрузка...",
+    "retry": "Повторить",
+    "error": "Ошибка"
   },
   "home": {
     "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
@@ -46,6 +48,8 @@
     "unknown": "Неизвестно",
     "stopDiscussion": "Завершить обсуждение",
     "endQA": "Завершить вопросы и ответы",
+    "resizePanel": "Изменить ширину панели чата",
+    "collapsePanel": "Свернуть панель чата",
     "tabs": {
       "lecture": "Заметки",
       "chat": "Чат"
@@ -113,6 +117,11 @@
     "generating": "Генерация...",
     "paused": "Пауза",
     "generationFailed": "Ошибка генерации",
+    "resizeSidebar": "Изменить ширину боковой панели сцен",
+    "collapseSidebar": "Свернуть боковую панель сцен",
+    "openScene": "Открыть сцену {{index}}: {{title}}",
+    "openGeneratingScene": "Открыть генерируемую сцену: {{title}}",
+    "failedScene": "Не удалось сгенерировать {{title}}",
     "confirmSwitchTitle": "Переключить сцену",
     "confirmSwitchMessage": "В данный момент идёт обсуждение. Переключение сцены завершит текущую тему. Продолжить?",
     "generatingNextPage": "Сцена генерируется, пожалуйста подождите...",
@@ -255,6 +264,7 @@
   },
   "classroom": {
     "recentClassrooms": "Недавние",
+    "loading": "Загрузка класса...",
     "today": "Сегодня",
     "yesterday": "Вчера",
     "daysAgo": "дн. назад",
@@ -299,8 +309,10 @@
     "sessionNotFound": "Сессия не найдена",
     "sessionNotFoundDesc": "Пожалуйста, заполните требования к курсу, чтобы начать генерацию.",
     "goBackAndRetry": "Вернуться и повторить",
+    "loadingPreview": "Загрузка предварительного просмотра генерации",
     "classroomReady": "Ваша персонализированная AI-среда обучения успешно создана.",
     "aiWorking": "AI-агенты работают...",
+    "viewWarnings": "Показать предупреждения генерации: {{count}}",
     "textTruncated": "Текст документа слишком длинный, используются первые {{n}} символов",
     "imageTruncated": "Найдено {{total}} изображений, что превышает лимит в {{max}}. Лишние будут описаны текстом",
     "agentGeneration": "Генерация ролей в классе",

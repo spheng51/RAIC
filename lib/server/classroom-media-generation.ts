@@ -16,23 +16,14 @@ import { DEFAULT_TTS_VOICES, DEFAULT_TTS_MODELS, TTS_PROVIDERS } from '@/lib/aud
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { isMediaPlaceholder } from '@/lib/store/media-generation';
-import {
-  getServerImageProviders,
-  getServerVideoProviders,
-  getServerTTSProviders,
-  resolveImageApiKey,
-  resolveImageBaseUrl,
-  resolveVideoApiKey,
-  resolveVideoBaseUrl,
-  resolveTTSApiKey,
-  resolveTTSBaseUrl,
-} from '@/lib/server/provider-config';
+import { resolveGovernedProviderConfig } from '@/lib/server/ai-governance';
 import type { SceneOutline } from '@/lib/types/generation';
 import type { Scene } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
 import type { ImageProviderId } from '@/lib/media/types';
 import type { VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId } from '@/lib/audio/types';
+import type { AIProviderFamily } from '@/lib/types/ai-governance';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 
 const log = createLogger('ClassroomMedia');
@@ -62,6 +53,28 @@ function mediaServingUrl(baseUrl: string, classroomId: string, subPath: string):
   return `${baseUrl}/api/classroom-media/${classroomId}/${subPath}`;
 }
 
+async function resolveFirstBackgroundProvider<T extends string>(input: {
+  family: Exclude<AIProviderFamily, 'llm'>;
+  providerIds: T[];
+  organizationId: string | null;
+}) {
+  for (const providerId of input.providerIds) {
+    try {
+      return await resolveGovernedProviderConfig({
+        auth: null,
+        organizationId: input.organizationId,
+        family: input.family,
+        providerId,
+        mode: 'background',
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Image / Video generation
 // ---------------------------------------------------------------------------
@@ -70,6 +83,9 @@ export async function generateMediaForClassroom(
   outlines: SceneOutline[],
   classroomId: string,
   baseUrl: string,
+  scope: {
+    organizationId: string | null;
+  },
 ): Promise<Record<string, string>> {
   const mediaDir = path.join(CLASSROOMS_DIR, classroomId, 'media');
   await ensureDir(mediaDir);
@@ -79,30 +95,44 @@ export async function generateMediaForClassroom(
   if (requests.length === 0) return {};
 
   // Resolve providers
-  const imageProviderIds = Object.keys(getServerImageProviders());
-  const videoProviderIds = Object.keys(getServerVideoProviders());
+  const imageProviderIds = Object.keys(IMAGE_PROVIDERS) as ImageProviderId[];
+  const videoProviderIds = Object.keys(VIDEO_PROVIDERS) as VideoProviderId[];
+  const resolvedImageProvider = await resolveFirstBackgroundProvider({
+    family: 'image',
+    providerIds: imageProviderIds,
+    organizationId: scope.organizationId,
+  });
+  const resolvedVideoProvider = await resolveFirstBackgroundProvider({
+    family: 'video',
+    providerIds: videoProviderIds,
+    organizationId: scope.organizationId,
+  });
 
   const mediaMap: Record<string, string> = {};
 
   // Separate image and video requests, generate each type sequentially
   // but run the two types in parallel (providers often have limited concurrency).
-  const imageRequests = requests.filter((r) => r.type === 'image' && imageProviderIds.length > 0);
-  const videoRequests = requests.filter((r) => r.type === 'video' && videoProviderIds.length > 0);
+  const imageRequests = requests.filter((r) => r.type === 'image' && !!resolvedImageProvider);
+  const videoRequests = requests.filter((r) => r.type === 'video' && !!resolvedVideoProvider);
 
   const generateImages = async () => {
+    if (!resolvedImageProvider) {
+      return;
+    }
+
     for (const req of imageRequests) {
       try {
-        const providerId = imageProviderIds[0] as ImageProviderId;
-        const apiKey = resolveImageApiKey(providerId);
-        if (!apiKey) {
-          log.warn(`No API key for image provider "${providerId}", skipping ${req.elementId}`);
-          continue;
-        }
+        const providerId = resolvedImageProvider.providerId as ImageProviderId;
         const providerConfig = IMAGE_PROVIDERS[providerId];
-        const model = providerConfig?.models?.[0]?.id;
+        const model = resolvedImageProvider.modelId || providerConfig?.models?.[0]?.id;
 
         const result = await generateImage(
-          { providerId, apiKey, baseUrl: resolveImageBaseUrl(providerId), model },
+          {
+            providerId,
+            apiKey: resolvedImageProvider.apiKey,
+            baseUrl: resolvedImageProvider.baseUrl,
+            model,
+          },
           { prompt: req.prompt, aspectRatio: req.aspectRatio || '16:9' },
         );
 
@@ -131,16 +161,15 @@ export async function generateMediaForClassroom(
   };
 
   const generateVideos = async () => {
+    if (!resolvedVideoProvider) {
+      return;
+    }
+
     for (const req of videoRequests) {
       try {
-        const providerId = videoProviderIds[0] as VideoProviderId;
-        const apiKey = resolveVideoApiKey(providerId);
-        if (!apiKey) {
-          log.warn(`No API key for video provider "${providerId}", skipping ${req.elementId}`);
-          continue;
-        }
+        const providerId = resolvedVideoProvider.providerId as VideoProviderId;
         const providerConfig = VIDEO_PROVIDERS[providerId];
-        const model = providerConfig?.models?.[0]?.id;
+        const model = resolvedVideoProvider.modelId || providerConfig?.models?.[0]?.id;
 
         const normalized = normalizeVideoOptions(providerId, {
           prompt: req.prompt,
@@ -148,7 +177,12 @@ export async function generateMediaForClassroom(
         });
 
         const result = await generateVideo(
-          { providerId, apiKey, baseUrl: resolveVideoBaseUrl(providerId), model },
+          {
+            providerId,
+            apiKey: resolvedVideoProvider.apiKey,
+            baseUrl: resolvedVideoProvider.baseUrl,
+            model,
+          },
           normalized,
         );
 
@@ -205,26 +239,29 @@ export async function generateTTSForClassroom(
   scenes: Scene[],
   classroomId: string,
   baseUrl: string,
+  scope: {
+    organizationId: string | null;
+  },
 ): Promise<void> {
   const audioDir = path.join(CLASSROOMS_DIR, classroomId, 'audio');
   await ensureDir(audioDir);
 
   // Resolve TTS provider (exclude browser-native-tts)
-  const ttsProviderIds = Object.keys(getServerTTSProviders()).filter(
-    (id) => id !== 'browser-native-tts',
-  );
-  if (ttsProviderIds.length === 0) {
+  const resolvedTTSProvider = await resolveFirstBackgroundProvider({
+    family: 'tts',
+    providerIds: (Object.keys(TTS_PROVIDERS) as TTSProviderId[]).filter(
+      (id) => id !== 'browser-native-tts',
+    ),
+    organizationId: scope.organizationId,
+  });
+
+  if (!resolvedTTSProvider) {
     log.warn('No server TTS provider configured, skipping TTS generation');
     return;
   }
 
-  const providerId = ttsProviderIds[0] as TTSProviderId;
-  const apiKey = resolveTTSApiKey(providerId);
-  if (!apiKey) {
-    log.warn(`No API key for TTS provider "${providerId}", skipping TTS generation`);
-    return;
-  }
-  const ttsBaseUrl = resolveTTSBaseUrl(providerId) || TTS_PROVIDERS[providerId]?.defaultBaseUrl;
+  const providerId = resolvedTTSProvider.providerId as TTSProviderId;
+  const ttsBaseUrl = resolvedTTSProvider.baseUrl || TTS_PROVIDERS[providerId]?.defaultBaseUrl;
   const voice = DEFAULT_TTS_VOICES[providerId] || 'default';
   const format = TTS_PROVIDERS[providerId]?.supportedFormats?.[0] || 'mp3';
 
@@ -244,8 +281,9 @@ export async function generateTTSForClassroom(
         const result = await generateTTS(
           {
             providerId,
-            modelId: DEFAULT_TTS_MODELS[providerId] || '',
-            apiKey,
+            modelId:
+              resolvedTTSProvider.modelId || DEFAULT_TTS_MODELS[providerId] || '',
+            apiKey: resolvedTTSProvider.apiKey,
             baseUrl: ttsBaseUrl,
             voice,
             speed: speechAction.speed,

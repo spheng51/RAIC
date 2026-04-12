@@ -10,7 +10,12 @@ import { Whiteboard } from '@/components/whiteboard';
 import { CanvasToolbar } from '@/components/canvas/canvas-toolbar';
 import type { CanvasToolbarProps } from '@/components/canvas/canvas-toolbar';
 import type { Scene, StageMode } from '@/lib/types/stage';
+import type {
+  ClassroomCollaborationInteractionReason,
+  ClassroomCollaborationStatePayload,
+} from '@/lib/types/classroom-collaboration';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { MiroFishPane, type MiroFishHostEvent } from '@/components/mirofish/mirofish-pane';
 
 interface CanvasAreaProps extends CanvasToolbarProps {
   readonly currentScene: Scene | null;
@@ -19,6 +24,19 @@ interface CanvasAreaProps extends CanvasToolbarProps {
   readonly isPendingScene?: boolean;
   readonly isGenerationFailed?: boolean;
   readonly onRetryGeneration?: () => void;
+  readonly runUrl?: string | null;
+  readonly reportUrl?: string | null;
+  readonly viewerHasSimulationControl?: boolean;
+  readonly collaboration?: ClassroomCollaborationStatePayload | null;
+  readonly viewerCanInteractWithSimulation?: boolean;
+  readonly viewerInteractionReason?: ClassroomCollaborationInteractionReason;
+  readonly spotlightDisplayName?: string | null;
+  readonly controllerDisplayName?: string;
+  readonly controlLeaseExpiresAt?: string | null;
+  readonly presentationFallbackMessage?: string | null;
+  readonly onMiroFishEvent?: (event: MiroFishHostEvent) => void;
+  readonly onReclaimMiroFishControl?: () => void;
+  readonly onRecoverToLesson?: (message: string) => void;
 }
 
 export function CanvasArea({
@@ -45,11 +63,34 @@ export function CanvasArea({
   isPendingScene,
   isGenerationFailed,
   onRetryGeneration,
+  sharedSimulation,
+  activeSurface,
+  reportAvailable,
+  viewerCanManageSimulation,
+  viewerCanControlPresentation,
+  onSetPresentationSurface,
+  onOpenMiroFishManager,
+  runUrl,
+  reportUrl,
+  viewerHasSimulationControl,
+  collaboration,
+  viewerCanInteractWithSimulation,
+  viewerInteractionReason,
+  spotlightDisplayName,
+  controllerDisplayName,
+  controlLeaseExpiresAt,
+  presentationFallbackMessage,
+  onMiroFishEvent,
+  onReclaimMiroFishControl,
+  onRecoverToLesson,
 }: CanvasAreaProps) {
   const { t } = useI18n();
+  const currentSurface = activeSurface ?? sharedSimulation?.activeSurface ?? 'lesson';
+  const isLessonSurface = currentSurface === 'lesson';
   const showControls = mode === 'playback' && !whiteboardOpen;
   const showPlayHint =
     showControls &&
+    isLessonSurface &&
     engineState !== 'playing' &&
     currentScene?.type === 'slide' &&
     !isLiveSession &&
@@ -57,7 +98,9 @@ export function CanvasArea({
 
   const handleSlideClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!showControls || isLiveSession || currentScene?.type !== 'slide') return;
+      if (!showControls || !isLessonSurface || isLiveSession || currentScene?.type !== 'slide') {
+        return;
+      }
       // Don't trigger page play/pause when clicking inside a video element's visual area.
       // Video elements may be visually covered by other slide elements (e.g. text),
       // so we check click coordinates against all video element bounding rects.
@@ -76,7 +119,7 @@ export function CanvasArea({
       }
       onPlayPause();
     },
-    [showControls, isLiveSession, onPlayPause, currentScene?.type],
+    [showControls, isLessonSurface, isLiveSession, onPlayPause, currentScene?.type],
   );
 
   return (
@@ -85,7 +128,7 @@ export function CanvasArea({
       <div
         className={cn(
           'flex-1 min-h-0 relative overflow-hidden flex items-center justify-center p-2 transition-colors duration-500',
-          currentScene?.type === 'interactive'
+          isLessonSurface && currentScene?.type === 'interactive'
             ? 'bg-blue-50/30 dark:bg-blue-900/10'
             : 'bg-gray-50/30 dark:bg-gray-900/30',
         )}
@@ -93,8 +136,12 @@ export function CanvasArea({
         <div
           className={cn(
             'aspect-[16/9] h-full max-h-full max-w-full bg-white dark:bg-gray-800 shadow-2xl rounded-lg overflow-hidden relative transition-all duration-700',
-            showControls && !isLiveSession && currentScene?.type === 'slide' && 'cursor-pointer',
-            currentScene?.type === 'interactive'
+            showControls &&
+              isLessonSurface &&
+              !isLiveSession &&
+              currentScene?.type === 'slide' &&
+              'cursor-pointer',
+            isLessonSurface && currentScene?.type === 'interactive'
               ? 'shadow-blue-200/50 dark:shadow-blue-900/50 ring-1 ring-blue-900/5 dark:ring-blue-500/10'
               : 'shadow-gray-200/50 dark:shadow-gray-800/50 ring-1 ring-gray-950/5 dark:ring-white/5',
           )}
@@ -108,12 +155,35 @@ export function CanvasArea({
           </div>
 
           {/* Scene Content */}
-          {currentScene && !whiteboardOpen && (
+          {isLessonSurface && currentScene && !whiteboardOpen && (
             <div className="absolute inset-0">
               <SceneProvider>
                 <SceneRenderer scene={currentScene} mode={mode} />
               </SceneProvider>
             </div>
+          )}
+
+          {!isLessonSurface && sharedSimulation && !whiteboardOpen && (
+          <MiroFishPane
+              key={`${currentSurface}:${sharedSimulation.simulationId}:${sharedSimulation.reportId ?? 'no-report'}`}
+              activeSurface={currentSurface === 'report' ? 'report' : 'simulation'}
+              simulationId={sharedSimulation.simulationId}
+              reportId={sharedSimulation.reportId ?? null}
+              runUrl={runUrl ?? null}
+              reportUrl={reportUrl ?? null}
+              collaborationMode={sharedSimulation.collaborationMode ?? 'single-controller'}
+              viewerCanInteract={viewerCanInteractWithSimulation ?? !!viewerHasSimulationControl}
+              viewerCanManageSimulation={!!viewerCanManageSimulation}
+              collaborationState={collaboration?.collaborationState ?? sharedSimulation.collaborationState}
+              viewerInteractionReason={viewerInteractionReason ?? null}
+              spotlightDisplayName={spotlightDisplayName ?? null}
+              controllerRole={sharedSimulation.controllerRole}
+              controllerDisplayName={controllerDisplayName ?? 'Teacher'}
+              controlLeaseExpiresAt={controlLeaseExpiresAt ?? null}
+              onEvent={onMiroFishEvent}
+              onReclaimControl={onReclaimMiroFishControl}
+              onRecoverToLesson={onRecoverToLesson}
+            />
           )}
 
           {/* Pending Scene Loading Overlay */}
@@ -176,6 +246,14 @@ export function CanvasArea({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {isLessonSurface && presentationFallbackMessage && (
+            <div className="absolute inset-x-0 top-4 z-[115] flex justify-center px-4">
+              <div className="max-w-xl rounded-2xl border border-amber-200 bg-white/95 px-4 py-3 text-sm text-slate-700 shadow-lg backdrop-blur dark:border-amber-900 dark:bg-slate-950/95 dark:text-slate-200">
+                {presentationFallbackMessage}
+              </div>
+            </div>
+          )}
 
           {/* Scene Number Badge */}
           {currentScene && (
@@ -252,6 +330,13 @@ export function CanvasArea({
           onTogglePresentation={onTogglePresentation}
           showStopDiscussion={showStopDiscussion}
           onStopDiscussion={onStopDiscussion}
+          sharedSimulation={sharedSimulation}
+          activeSurface={activeSurface}
+          reportAvailable={reportAvailable}
+          viewerCanManageSimulation={viewerCanManageSimulation}
+          viewerCanControlPresentation={viewerCanControlPresentation}
+          onSetPresentationSurface={onSetPresentationSurface}
+          onOpenMiroFishManager={onOpenMiroFishManager}
         />
       )}
     </div>

@@ -3,7 +3,9 @@
     "you": "你",
     "confirm": "确定",
     "cancel": "取消",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "retry": "重试",
+    "error": "错误"
   },
   "home": {
     "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
@@ -46,6 +48,8 @@
     "unknown": "未知",
     "stopDiscussion": "结束讨论",
     "endQA": "结束问答",
+    "resizePanel": "调整对话面板宽度",
+    "collapsePanel": "收起对话面板",
     "tabs": {
       "lecture": "笔记",
       "chat": "对话"
@@ -113,6 +117,11 @@
     "generating": "生成中...",
     "paused": "已暂停",
     "generationFailed": "生成失败",
+    "resizeSidebar": "调整场景侧边栏宽度",
+    "collapseSidebar": "收起场景侧边栏",
+    "openScene": "打开场景 {{index}}：{{title}}",
+    "openGeneratingScene": "打开正在生成的场景：{{title}}",
+    "failedScene": "{{title}} 生成失败",
     "confirmSwitchTitle": "切换页面",
     "confirmSwitchMessage": "当前话题正在进行中，切换页面将结束当前话题。确定要切换吗？",
     "generatingNextPage": "场景正在生成，请稍候...",
@@ -255,6 +264,7 @@
   },
   "classroom": {
     "recentClassrooms": "最近学习",
+    "loading": "正在加载课堂...",
     "today": "今天",
     "yesterday": "昨天",
     "daysAgo": "天前",
@@ -299,8 +309,10 @@
     "sessionNotFound": "未找到生成会话",
     "sessionNotFoundDesc": "请先填写课程需求开始生成流程。",
     "goBackAndRetry": "返回重试",
+    "loadingPreview": "正在加载生成预览",
     "classroomReady": "你的个性化AI学习环境已成功生成。",
     "aiWorking": "AI智能体工作中...",
+    "viewWarnings": "查看 {{count}} 条生成警告",
     "textTruncated": "文档文本较长，已截取前 {{n}} 字符用于生成",
     "imageTruncated": "文档含 {{total}} 张图片，超出上限 {{max}} 张，多余图片将仅以文字描述传递",
     "agentGeneration": "生成课堂角色",

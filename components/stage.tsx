@@ -5,10 +5,15 @@ import { useStageStore } from '@/lib/store';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
+import { useClassroomCollaborationState } from '@/lib/hooks/use-classroom-collaboration-state';
+import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-presentation-state';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { SceneSidebar } from './stage/scene-sidebar';
+import { LiveClassroomCockpit } from './stage/live-classroom-cockpit';
 import { Header } from './header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
+import { MiroFishManagerDialog } from '@/components/mirofish/mirofish-manager-dialog';
+import type { MiroFishHostEvent } from '@/components/mirofish/mirofish-pane';
 import { Roundtable } from '@/components/roundtable';
 import { PlaybackEngine, computePlaybackView } from '@/lib/playback';
 import type { EngineMode, TriggerEvent, Effect } from '@/lib/playback';
@@ -17,7 +22,31 @@ import { createAudioPlayer } from '@/lib/utils/audio-player';
 import { useDiscussionTTS } from '@/lib/hooks/use-discussion-tts';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
+import type {
+  ClassroomCollaborationAction,
+  ClassroomCollaborationStatePayload,
+} from '@/lib/types/classroom-collaboration';
+import type { ClassroomPresentationStatePayload } from '@/lib/types/classroom-presentation';
+import type {
+  PresentationSurface,
+  SharedSimulation,
+  SharedSimulationCollaborationMode,
+  SharedSimulationStatus,
+} from '@/lib/types/stage';
 import { cn } from '@/lib/utils';
+import {
+  getSharedSimulationCollaborationMode,
+  getSharedSimulationInteractionReason,
+  getControllerDisplayName,
+  hasSharedSimulationReport,
+  preserveStageSharedSimulation,
+} from '@/lib/utils/classroom-presentation';
+import {
+  buildLiveClassroomApprovalItems,
+  buildLiveClassroomStudentPulse,
+  canShowLiveClassroomCockpit,
+  getLiveClassroomSurfaceLabel,
+} from '@/lib/utils/live-classroom-cockpit';
 // Playback state persistence removed — refresh always starts from the beginning
 import { ChatArea, type ChatAreaRef } from '@/components/chat/chat-area';
 import { agentsToParticipants, useAgentRegistry } from '@/lib/orchestration/registry/store';
@@ -32,6 +61,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { AlertTriangle } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
+import { toast } from 'sonner';
 
 /**
  * Stage Component
@@ -40,12 +70,71 @@ import { VisuallyHidden } from 'radix-ui';
  * Combines sidebar (scene navigation) and content area (scene viewer).
  * Supports two modes: autonomous and playback.
  */
+function getInitialPresentationState(
+  sharedSimulation: SharedSimulation | null | undefined,
+): ClassroomPresentationStatePayload | null {
+  if (!sharedSimulation) {
+    return null;
+  }
+
+  return {
+    activeSurface: sharedSimulation.activeSurface,
+    controllerSessionId: sharedSimulation.controllerSessionId ?? null,
+    controllerRole: sharedSimulation.controllerRole,
+    controlLeaseExpiresAt: sharedSimulation.controlLeaseExpiresAt ?? null,
+    simulationStatus: sharedSimulation.status,
+    reportAvailable: hasSharedSimulationReport(sharedSimulation),
+    sharedSimulation,
+    runUrl: sharedSimulation.runUrl,
+    reportUrl: sharedSimulation.reportUrl ?? null,
+    viewerSessionId: '',
+    viewerRole: 'teacher',
+    viewerKind: 'web',
+    viewerCanManageSimulation: false,
+    viewerCanControlPresentation: false,
+    viewerHasSimulationControl: false,
+    participants: [],
+  };
+}
+
+function getInitialCollaborationState(
+  sharedSimulation: SharedSimulation | null | undefined,
+): ClassroomCollaborationStatePayload | null {
+  if (!sharedSimulation) {
+    return null;
+  }
+
+  return {
+    collaborationMode: sharedSimulation.collaborationMode ?? 'single-controller',
+    collaborationState: sharedSimulation.collaborationState ?? 'inactive',
+    allowStudentInteraction: sharedSimulation.allowStudentInteraction !== false,
+    spotlightSessionId: sharedSimulation.spotlightSessionId ?? null,
+    participantCount: sharedSimulation.participantCount ?? 0,
+    participants: [],
+    mirofishSessionId: sharedSimulation.mirofishSessionId ?? null,
+    lastCollaborationSyncAt: sharedSimulation.lastCollaborationSyncAt ?? null,
+    viewerSessionId: '',
+    viewerRole: 'teacher',
+    viewerKind: 'web',
+    viewerCanModerateCollaboration: false,
+    viewerCanInteract: false,
+    viewerIsRemoved: false,
+    viewerInteractionReason: getSharedSimulationInteractionReason(sharedSimulation, {
+      id: '',
+      kind: 'web',
+      role: 'teacher',
+    }),
+    multiUserEnabled: false,
+  };
+}
+
 export function Stage({
   onRetryOutline,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
 }) {
   const { t } = useI18n();
+  const stage = useStageStore.use.stage();
   const { mode, getCurrentScene, scenes, currentSceneId, setCurrentSceneId, generatingOutlines } =
     useStageStore();
   const failedOutlines = useStageStore.use.failedOutlines();
@@ -61,6 +150,8 @@ export function Stage({
   const setChatAreaCollapsed = useSettingsStore((s) => s.setChatAreaCollapsed);
   const setTTSMuted = useSettingsStore((s) => s.setTTSMuted);
   const setTTSVolume = useSettingsStore((s) => s.setTTSVolume);
+  const autoPlayLecture = useSettingsStore((s) => s.autoPlayLecture);
+  const setAutoPlayLecture = useSettingsStore((s) => s.setAutoPlayLecture);
 
   // PlaybackEngine state
   const [engineMode, setEngineMode] = useState<EngineMode>('idle');
@@ -101,6 +192,28 @@ export function Stage({
   const [isPresenting, setIsPresenting] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPresentationInteractionActive, setIsPresentationInteractionActive] = useState(false);
+  const [miroFishManagerOpen, setMiroFishManagerOpen] = useState(false);
+  const [cockpitOpen, setCockpitOpen] = useState(false);
+  const [livePromptsLocked, setLivePromptsLocked] = useState(false);
+  const [dismissedApprovalIds, setDismissedApprovalIds] = useState<string[]>([]);
+  const [presentationState, setPresentationState] =
+    useState<ClassroomPresentationStatePayload | null>(() =>
+      getInitialPresentationState(stage?.sharedSimulation),
+    );
+  const [collaborationState, setCollaborationState] =
+    useState<ClassroomCollaborationStatePayload | null>(() =>
+      getInitialCollaborationState(stage?.sharedSimulation),
+    );
+  const [miroFishSessionEmbed, setMiroFishSessionEmbed] = useState<{
+    simulationId: string;
+    mirofishSessionId: string;
+    embedUrl: string;
+    tokenExpiresAt: string | null;
+    capabilities: string[];
+  } | null>(null);
+  const [presentationFallbackMessage, setPresentationFallbackMessage] = useState<string | null>(
+    null,
+  );
 
   // Whiteboard state (from canvas store so AI tools can open it)
   const whiteboardOpen = useCanvasStore.use.whiteboardOpen();
@@ -162,7 +275,9 @@ export function Stage({
   const lectureActionCounterRef = useRef(0);
   const discussionAbortRef = useRef<AbortController | null>(null);
   const presentationIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presentationFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const previousApprovalCountRef = useRef(0);
   // Guard to prevent double flash when manual stop triggers onDiscussionEnd
   const manualStopRef = useRef(false);
   // Monotonic counter incremented on each scene switch — used to discard stale SSE callbacks
@@ -295,6 +410,363 @@ export function Stage({
       console.warn('[Presentation] Fullscreen request denied — browser policy');
     }
   }, [setChatAreaCollapsed, setSidebarCollapsed]);
+
+  const syncSharedSimulationInStore = useCallback((sharedSimulation: SharedSimulation | null) => {
+    useStageStore.setState((state) => {
+      if (!state.stage) {
+        return state;
+      }
+
+      return {
+        stage: preserveStageSharedSimulation(state.stage, sharedSimulation),
+      };
+    });
+  }, []);
+
+  const syncPresentationState = useCallback(
+    (nextState: ClassroomPresentationStatePayload | null) => {
+      setPresentationState(nextState);
+      syncSharedSimulationInStore(nextState?.sharedSimulation ?? null);
+    },
+    [syncSharedSimulationInStore],
+  );
+
+  const syncCollaborationState = useCallback(
+    (nextState: ClassroomCollaborationStatePayload | null) => {
+      setCollaborationState(nextState);
+    },
+    [],
+  );
+
+  const showPresentationFallback = useCallback((message: string) => {
+    setPresentationFallbackMessage(message);
+    if (presentationFallbackTimerRef.current) {
+      clearTimeout(presentationFallbackTimerRef.current);
+    }
+    presentationFallbackTimerRef.current = setTimeout(() => {
+      setPresentationFallbackMessage(null);
+      presentationFallbackTimerRef.current = null;
+    }, 6000);
+  }, []);
+
+  const { refreshPresentationState } = useClassroomPresentationState({
+    classroomId: stage?.id,
+    onStateChange: syncPresentationState,
+  });
+  const { refreshCollaborationState } = useClassroomCollaborationState({
+    classroomId: stage?.id,
+    enabled: Boolean(stage?.id && (presentationState?.sharedSimulation ?? stage?.sharedSimulation)),
+    onStateChange: syncCollaborationState,
+  });
+
+  const patchPresentationState = useCallback(
+    async (
+      body: Partial<{ activeSurface: PresentationSurface; status: SharedSimulationStatus }>,
+      { silent = false }: { silent?: boolean } = {},
+    ) => {
+      if (!stage?.id) {
+        return;
+      }
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/presentation`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success) {
+        if (!silent) {
+          throw new Error(errorMessage || 'Failed to update the shared presentation.');
+        }
+        return;
+      }
+
+      await refreshPresentationState(true);
+    },
+    [refreshPresentationState, stage?.id],
+  );
+
+  const handleAttachMiroFish = useCallback(
+    async (input: {
+      simulationId: string;
+      reportId?: string;
+      defaultSurface: 'lesson' | 'simulation';
+      collaborationMode?: SharedSimulationCollaborationMode;
+    }) => {
+      if (!stage?.id) {
+        return;
+      }
+
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(stage.id)}/mirofish/attach`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(input),
+        },
+      );
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success) {
+        throw new Error(errorMessage || 'Failed to attach the MiroFish sidecar.');
+      }
+
+      await refreshPresentationState(true);
+      await refreshCollaborationState(true);
+      setMiroFishSessionEmbed(null);
+      setMiroFishManagerOpen(false);
+      toast.success('MiroFish is now attached to this classroom.');
+    },
+    [refreshCollaborationState, refreshPresentationState, stage?.id],
+  );
+
+  const handleSetPresentationSurface = useCallback(
+    async (surface: PresentationSurface) => {
+      try {
+        await patchPresentationState({ activeSurface: surface });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to update the shared presentation.',
+        );
+      }
+    },
+    [patchPresentationState],
+  );
+
+  const handleGrantMiroFishControl = useCallback(
+    async (targetSessionId: string, leaseMinutes: number) => {
+      if (!stage?.id) {
+        return;
+      }
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/control`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'grant',
+          targetSessionId,
+          leaseMinutes,
+        }),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success) {
+        throw new Error(errorMessage || 'Failed to grant control.');
+      }
+
+      await refreshPresentationState(true);
+      toast.success('Student control granted.');
+    },
+    [refreshPresentationState, stage?.id],
+  );
+
+  const handleRevokeMiroFishControl = useCallback(async () => {
+    if (!stage?.id) {
+      return;
+    }
+
+    const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/control`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'revoke',
+      }),
+    });
+    const json = (await response.json().catch(() => null)) as {
+      success?: boolean;
+      error?: string;
+    } | null;
+    const errorMessage = json && 'error' in json ? json.error : undefined;
+
+    if (!response.ok || !json?.success) {
+      throw new Error(errorMessage || 'Failed to return control to the teacher.');
+    }
+
+    await refreshPresentationState(true);
+    toast.success('Teacher control restored.');
+  }, [refreshPresentationState, stage?.id]);
+
+  const handleMiroFishCollaborationAction = useCallback(
+    async (input: { action: ClassroomCollaborationAction; targetSessionId?: string }) => {
+      if (!stage?.id) {
+        return;
+      }
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/collaboration`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success) {
+        throw new Error(errorMessage || 'Failed to update the MiroFish collaboration session.');
+      }
+
+      if (input.action === 'reset_session') {
+        setMiroFishSessionEmbed(null);
+      }
+
+      await refreshCollaborationState(true);
+      await refreshPresentationState(true);
+      toast.success('Collaboration settings updated.');
+    },
+    [refreshCollaborationState, refreshPresentationState, stage?.id],
+  );
+
+  const requestMiroFishSessionEmbed = useCallback(
+    async (forceNew = false) => {
+      if (!stage?.id) {
+        return null;
+      }
+
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(stage.id)}/mirofish/session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ forceNew }),
+        },
+      );
+      const json = (await response.json().catch(() => null)) as
+        | {
+            success?: boolean;
+            error?: string;
+            mirofishSessionId?: string;
+            embedUrl?: string;
+            tokenExpiresAt?: string | null;
+            capabilities?: string[];
+          }
+        | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success || !json?.mirofishSessionId || !json?.embedUrl) {
+        throw new Error(errorMessage || 'Failed to start the shared MiroFish session.');
+      }
+
+      const nextState = {
+        simulationId:
+          presentationState?.sharedSimulation?.simulationId ?? stage?.sharedSimulation?.simulationId ?? '',
+        mirofishSessionId: json.mirofishSessionId,
+        embedUrl: json.embedUrl,
+        tokenExpiresAt: json.tokenExpiresAt ?? null,
+        capabilities: json.capabilities ?? [],
+      };
+      setMiroFishSessionEmbed(nextState);
+      return nextState;
+    },
+    [presentationState?.sharedSimulation?.simulationId, stage?.id, stage?.sharedSimulation?.simulationId],
+  );
+
+  const handleMiroFishEvent = useCallback(
+    (event: MiroFishHostEvent) => {
+      if (!presentationState || !presentationState.viewerCanControlPresentation) {
+        if (event.type === 'presenceSummary' || event.type === 'sessionStatus') {
+          void refreshCollaborationState(true);
+        }
+        return;
+      }
+
+      if (event.type === 'ready' && presentationState.activeSurface === 'simulation') {
+        if (presentationState.simulationStatus !== 'running') {
+          void patchPresentationState({ status: 'running' }, { silent: true });
+        }
+        return;
+      }
+
+      if (
+        event.type === 'runStatus' &&
+        event.status &&
+        event.status !== 'error' &&
+        event.status !== presentationState.simulationStatus
+      ) {
+        void patchPresentationState({ status: event.status }, { silent: true });
+        return;
+      }
+
+      if (event.type === 'reportReady' && presentationState.simulationStatus !== 'completed') {
+        void patchPresentationState({ status: 'completed' }, { silent: true });
+        return;
+      }
+
+      if (event.type === 'presenceSummary' || event.type === 'sessionStatus') {
+        void refreshCollaborationState(true);
+      }
+    },
+    [patchPresentationState, presentationState, refreshCollaborationState],
+  );
+
+  const handleRecoverMiroFishToLesson = useCallback(
+    async (message: string) => {
+      showPresentationFallback(message);
+
+      if (
+        presentationState &&
+        presentationState.viewerCanControlPresentation &&
+        presentationState.activeSurface !== 'lesson'
+      ) {
+        await patchPresentationState(
+          {
+            activeSurface: 'lesson',
+            status: 'error',
+          },
+          { silent: true },
+        );
+      }
+    },
+    [patchPresentationState, presentationState, showPresentationFallback],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (presentationFallbackTimerRef.current) {
+        clearTimeout(presentationFallbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setPresentationFallbackMessage(null);
+    setPresentationState(
+      getInitialPresentationState(useStageStore.getState().stage?.sharedSimulation),
+    );
+    setCollaborationState(
+      getInitialCollaborationState(useStageStore.getState().stage?.sharedSimulation),
+    );
+    setMiroFishSessionEmbed(null);
+    setCockpitOpen(false);
+    setDismissedApprovalIds([]);
+    setLivePromptsLocked(false);
+  }, [stage?.id]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -771,6 +1243,47 @@ export function Stage({
     setWhiteboardOpen(!whiteboardOpen);
   };
 
+  const runTeacherPrompt = useCallback(
+    async (message: string, { bypassPromptLock = false }: { bypassPromptLock?: boolean } = {}) => {
+      const nextMessage = message.trim();
+      if (!nextMessage) {
+        return true;
+      }
+
+      if (livePromptsLocked && !bypassPromptLock) {
+        toast.error('Live prompts are currently frozen by the teacher cockpit.');
+        return true;
+      }
+
+      setIsDiscussionPaused(false);
+      chatAreaRef.current?.resumeActiveLiveBuffer();
+      discussionTTS.cleanup();
+
+      if (isTopicPending) {
+        setIsTopicPending(false);
+        setLiveSpeech(null);
+        setSpeakingAgentId(null);
+      }
+
+      if (
+        engineRef.current &&
+        (engineMode === 'playing' || engineMode === 'live' || engineMode === 'paused')
+      ) {
+        engineRef.current.handleUserInterrupt(nextMessage);
+      } else {
+        await chatAreaRef.current?.sendMessage(nextMessage);
+      }
+
+      chatAreaRef.current?.switchToTab('chat');
+      setIsCueUser(false);
+      setChatIsStreaming(true);
+      setChatSessionType(chatSessionType || 'qa');
+      setThinkingState({ stage: 'director' });
+      return true;
+    },
+    [chatSessionType, discussionTTS, engineMode, isTopicPending, livePromptsLocked],
+  );
+
   const isPresentationShortcutTarget = useCallback((target: EventTarget | null) => {
     if (!(target instanceof HTMLElement)) return false;
 
@@ -891,6 +1404,198 @@ export function Stage({
     return () => window.removeEventListener('keydown', onF11);
   }, [togglePresentation]);
 
+  const sharedSimulation = presentationState?.sharedSimulation ?? stage?.sharedSimulation ?? null;
+  const collaborationMode =
+    collaborationState?.collaborationMode ?? getSharedSimulationCollaborationMode(sharedSimulation);
+  const isMultiUserSimulation = collaborationMode === 'multi-user';
+  const activePresentationSurface =
+    presentationState?.activeSurface ?? sharedSimulation?.activeSurface ?? 'lesson';
+  const miroFishRunUrl =
+    isMultiUserSimulation && activePresentationSurface === 'simulation'
+      ? miroFishSessionEmbed?.embedUrl ?? presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null
+      : presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null;
+  const miroFishReportUrl = presentationState?.reportUrl ?? sharedSimulation?.reportUrl ?? null;
+  const reportAvailable =
+    presentationState?.reportAvailable ?? hasSharedSimulationReport(sharedSimulation);
+  const viewerCanManageSimulation = presentationState?.viewerCanManageSimulation ?? false;
+  const viewerCanControlPresentation = presentationState?.viewerCanControlPresentation ?? false;
+  const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
+  const presentationParticipants = presentationState?.participants ?? [];
+  const viewerCanInteractWithSimulation = isMultiUserSimulation
+    ? collaborationState?.viewerCanInteract ?? viewerCanManageSimulation
+    : viewerHasSimulationControl;
+  const spotlightDisplayName =
+    collaborationState?.participants.find(
+      (participant) => participant.sessionId === collaborationState.spotlightSessionId,
+    )?.displayName ?? null;
+  const controllerDisplayName = getControllerDisplayName(
+    sharedSimulation,
+    presentationParticipants,
+  );
+  useEffect(() => {
+    if (
+      !stage?.id ||
+      !sharedSimulation ||
+      !isMultiUserSimulation ||
+      activePresentationSurface !== 'simulation'
+    ) {
+      return;
+    }
+
+    const desiredSessionId =
+      collaborationState?.mirofishSessionId ?? sharedSimulation.mirofishSessionId ?? null;
+    const currentSimulationId =
+      presentationState?.sharedSimulation?.simulationId ?? stage?.sharedSimulation?.simulationId ?? null;
+    if (
+      miroFishSessionEmbed &&
+      miroFishSessionEmbed.simulationId === currentSimulationId &&
+      miroFishSessionEmbed.mirofishSessionId === desiredSessionId
+    ) {
+      return;
+    }
+
+    void requestMiroFishSessionEmbed(false).catch((error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to start the shared MiroFish session.',
+      );
+    });
+  }, [
+    activePresentationSurface,
+    collaborationState?.mirofishSessionId,
+    isMultiUserSimulation,
+    miroFishSessionEmbed,
+    presentationState?.sharedSimulation?.simulationId,
+    requestMiroFishSessionEmbed,
+    sharedSimulation,
+    stage?.id,
+    stage?.sharedSimulation?.simulationId,
+  ]);
+  const isTeacherCockpitViewer = canShowLiveClassroomCockpit(presentationState);
+  const studentPulse = useMemo(
+    () => buildLiveClassroomStudentPulse(presentationParticipants),
+    [presentationParticipants],
+  );
+  const previousScene = !isPendingScene && currentSceneIndex > 0 ? scenes[currentSceneIndex - 1] : null;
+  const nextScene =
+    !isPendingScene && currentSceneIndex >= 0 && currentSceneIndex < scenes.length - 1
+      ? scenes[currentSceneIndex + 1]
+      : null;
+  const activeSurfaceLabel = getLiveClassroomSurfaceLabel(
+    activePresentationSurface,
+    whiteboardOpen,
+  );
+  const approvalSuggestions = useMemo(
+    () =>
+      buildLiveClassroomApprovalItems({
+        currentSceneId,
+        currentSceneTitle: currentScene?.title,
+        activeSurface: activePresentationSurface,
+        whiteboardOpen,
+        reportAvailable,
+        playbackCompleted,
+        hasNextScene: Boolean(nextScene || hasNextPending),
+        hasSharedSimulation: Boolean(sharedSimulation),
+      }),
+    [
+      activePresentationSurface,
+      currentScene?.title,
+      currentSceneId,
+      hasNextPending,
+      nextScene,
+      playbackCompleted,
+      reportAvailable,
+      sharedSimulation,
+      whiteboardOpen,
+    ],
+  );
+  const visibleApprovalItems = approvalSuggestions.filter(
+    (item) => !dismissedApprovalIds.includes(item.id),
+  );
+  const showTeacherCockpit =
+    isTeacherCockpitViewer && (!isPresenting || controlsVisible || cockpitOpen);
+
+  useEffect(() => {
+    const suggestionIds = new Set(approvalSuggestions.map((item) => item.id));
+    setDismissedApprovalIds((current) => {
+      const next = current.filter((itemId) => suggestionIds.has(itemId));
+      return next.length === current.length ? current : next;
+    });
+  }, [approvalSuggestions]);
+
+  useEffect(() => {
+    if (!isTeacherCockpitViewer) {
+      previousApprovalCountRef.current = 0;
+      setCockpitOpen(false);
+      setDismissedApprovalIds([]);
+      setLivePromptsLocked(false);
+      return;
+    }
+
+    if (visibleApprovalItems.length > previousApprovalCountRef.current) {
+      setCockpitOpen(true);
+    }
+
+    previousApprovalCountRef.current = visibleApprovalItems.length;
+  }, [isTeacherCockpitViewer, visibleApprovalItems.length]);
+
+  const dismissCockpitApproval = useCallback((approvalId: string) => {
+    setDismissedApprovalIds((current) =>
+      current.includes(approvalId) ? current : [...current, approvalId],
+    );
+  }, []);
+
+  const handleApproveCockpitApproval = useCallback(
+    async (item: (typeof approvalSuggestions)[number]) => {
+      switch (item.action.kind) {
+        case 'set-surface':
+          await handleSetPresentationSurface(item.action.surface);
+          break;
+        case 'toggle-whiteboard':
+          if (whiteboardOpen !== item.action.open) {
+            handleWhiteboardToggle();
+          }
+          break;
+        case 'next-scene':
+          handleNextScene();
+          break;
+        case 'replay-scene':
+          if (playbackCompleted) {
+            await handlePlayPause();
+          }
+          break;
+        case 'teacher-prompt':
+          await runTeacherPrompt(item.action.prompt, { bypassPromptLock: true });
+          break;
+      }
+
+      dismissCockpitApproval(item.id);
+    },
+    [
+      dismissCockpitApproval,
+      handleNextScene,
+      handlePlayPause,
+      handleSetPresentationSurface,
+      playbackCompleted,
+      runTeacherPrompt,
+      whiteboardOpen,
+    ],
+  );
+
+  const handleEditCockpitApproval = useCallback(
+    async (item: (typeof approvalSuggestions)[number], prompt: string) => {
+      if (item.action.kind === 'teacher-prompt') {
+        const sent = await runTeacherPrompt(prompt, { bypassPromptLock: true });
+        if (sent) {
+          dismissCockpitApproval(item.id);
+        }
+        return;
+      }
+
+      dismissCockpitApproval(item.id);
+    },
+    [dismissCockpitApproval, runTeacherPrompt],
+  );
+
   // Map engine mode to the CanvasArea's expected engine state
   const canvasEngineState = (() => {
     switch (engineMode) {
@@ -951,6 +1656,80 @@ export function Stage({
           }}
           suppressHydrationWarning
         >
+          {showTeacherCockpit ? (
+            <div
+              onMouseEnter={() => setIsPresentationInteractionActive(true)}
+              onMouseLeave={() => setIsPresentationInteractionActive(false)}
+            >
+              <LiveClassroomCockpit
+                open={cockpitOpen}
+                onOpenChange={setCockpitOpen}
+                currentSceneTitle={currentScene?.title || ''}
+                currentSceneNumber={Math.max(currentSceneIndex + 1, 1)}
+                totalScenesCount={totalScenesCount}
+                previousScene={
+                  previousScene
+                    ? {
+                        id: previousScene.id,
+                        title: previousScene.title,
+                      }
+                    : null
+                }
+                nextScene={
+                  nextScene
+                    ? {
+                        id: nextScene.id,
+                        title: nextScene.title,
+                      }
+                    : null
+                }
+                activeSurfaceLabel={activeSurfaceLabel}
+                activeSurface={activePresentationSurface}
+                simulationAvailable={Boolean(sharedSimulation)}
+                whiteboardOpen={whiteboardOpen}
+                studentCount={studentPulse.studentCount}
+                handRaiseCount={0}
+                helpCount={0}
+                pendingApprovalCount={visibleApprovalItems.length}
+                approvalItems={visibleApprovalItems}
+                participants={presentationParticipants}
+                controllerDisplayName={controllerDisplayName}
+                viewerCanControlPresentation={viewerCanControlPresentation}
+                viewerCanManageSimulation={viewerCanManageSimulation}
+                classPaused={engineMode !== 'playing' && engineMode !== 'live'}
+                ttsMuted={ttsMuted}
+                autoPlayEnabled={autoPlayLecture}
+                promptsLocked={livePromptsLocked}
+                reportAvailable={reportAvailable}
+                onTogglePause={() => {
+                  void handlePlayPause();
+                }}
+                onPreviousScene={handlePreviousScene}
+                onNextScene={handleNextScene}
+                onReplayScene={playbackCompleted ? () => void handlePlayPause() : undefined}
+                onSelectScene={gatedSceneSwitch}
+                onSetPresentationSurface={handleSetPresentationSurface}
+                onToggleWhiteboard={handleWhiteboardToggle}
+                onOpenAdvancedControls={() => setMiroFishManagerOpen(true)}
+                onTogglePromptsLock={() => setLivePromptsLocked((current) => !current)}
+                onToggleNarrationMute={() => setTTSMuted(!ttsMuted)}
+                onToggleAutoPlay={() => setAutoPlayLecture(!autoPlayLecture)}
+                onRecoverToLesson={() => {
+                  void handleRecoverMiroFishToLesson('Teacher cockpit requested lesson recovery.');
+                }}
+                onApproveApproval={(item) => {
+                  void handleApproveCockpitApproval(item);
+                }}
+                onRejectApproval={dismissCockpitApproval}
+                onEditApproval={(item, prompt) => {
+                  void handleEditCockpitApproval(item, prompt);
+                }}
+                onSendTeacherPrompt={(prompt) => {
+                  void runTeacherPrompt(prompt, { bypassPromptLock: true });
+                }}
+              />
+            </div>
+          ) : null}
           <CanvasArea
             currentScene={currentScene}
             currentSceneIndex={currentSceneIndex}
@@ -976,6 +1755,42 @@ export function Stage({
               (chatIsStreaming && (chatSessionType === 'qa' || chatSessionType === 'discussion'))
             }
             onStopDiscussion={handleStopDiscussion}
+            sharedSimulation={sharedSimulation}
+            activeSurface={activePresentationSurface}
+            reportAvailable={reportAvailable}
+            viewerCanManageSimulation={viewerCanManageSimulation}
+            viewerCanControlPresentation={viewerCanControlPresentation}
+            onSetPresentationSurface={handleSetPresentationSurface}
+            onOpenMiroFishManager={
+              viewerCanManageSimulation ? () => setMiroFishManagerOpen(true) : undefined
+            }
+            runUrl={miroFishRunUrl}
+            reportUrl={miroFishReportUrl}
+            viewerHasSimulationControl={viewerHasSimulationControl}
+            collaboration={collaborationState}
+            viewerCanInteractWithSimulation={viewerCanInteractWithSimulation}
+            viewerInteractionReason={collaborationState?.viewerInteractionReason ?? null}
+            spotlightDisplayName={spotlightDisplayName}
+            controllerDisplayName={controllerDisplayName}
+            controlLeaseExpiresAt={sharedSimulation?.controlLeaseExpiresAt ?? null}
+            presentationFallbackMessage={presentationFallbackMessage}
+            onMiroFishEvent={handleMiroFishEvent}
+            onReclaimMiroFishControl={() => {
+              void handleRevokeMiroFishControl().catch((error) => {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : 'Failed to return control to the teacher.',
+                );
+              });
+            }}
+            onRecoverToLesson={(message) => {
+              void handleRecoverMiroFishToLesson(message).catch((error) => {
+                toast.error(
+                  error instanceof Error ? error.message : 'Failed to return to the lesson view.',
+                );
+              });
+            }}
             hideToolbar={mode === 'playback' || (isPresenting && !controlsVisible)}
             isPendingScene={isPendingScene}
             isGenerationFailed={
@@ -1026,6 +1841,9 @@ export function Stage({
               isCueUser={isCueUser}
               isTopicPending={isTopicPending}
               onMessageSend={async (msg) => {
+                if (await runTeacherPrompt(msg)) {
+                  return;
+                }
                 // Always clear Level-1 pause state — the closure may hold a stale
                 // isDiscussionPaused value (e.g. voice input's onTranscription callback
                 // captures onMessageSend before React re-renders with the updated state).
@@ -1125,6 +1943,15 @@ export function Stage({
               controlsVisible={controlsVisible}
               onTogglePresentation={togglePresentation}
               onPresentationInteractionChange={setIsPresentationInteractionActive}
+              sharedSimulation={sharedSimulation}
+              activeSurface={activePresentationSurface}
+              reportAvailable={reportAvailable}
+              viewerCanManageSimulation={viewerCanManageSimulation}
+              viewerCanControlPresentation={viewerCanControlPresentation}
+              onSetPresentationSurface={handleSetPresentationSurface}
+              onOpenMiroFishManager={
+                viewerCanManageSimulation ? () => setMiroFishManagerOpen(true) : undefined
+              }
               fullscreenContainerRef={stageRef}
             />
           </div>
@@ -1184,6 +2011,19 @@ export function Stage({
         onStopSession={doSessionCleanup}
         onSegmentSealed={discussionTTS.handleSegmentSealed}
         shouldHoldAfterReveal={discussionTTS.shouldHold}
+      />
+
+      <MiroFishManagerDialog
+        open={miroFishManagerOpen}
+        onOpenChange={setMiroFishManagerOpen}
+        sharedSimulation={sharedSimulation}
+        participants={presentationParticipants}
+        collaboration={collaborationState}
+        multiUserEnabled={collaborationState?.multiUserEnabled ?? false}
+        onAttach={handleAttachMiroFish}
+        onGrantControl={handleGrantMiroFishControl}
+        onRevokeControl={handleRevokeMiroFishControl}
+        onCollaborationAction={handleMiroFishCollaborationAction}
       />
 
       {/* Scene switch confirmation dialog */}

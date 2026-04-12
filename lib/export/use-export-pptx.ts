@@ -18,6 +18,10 @@ import type {
 } from '@/lib/types/slides';
 import type { Scene, SlideContent } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
+import {
+  buildMiroFishExportNotice,
+  getStageSharedSimulation,
+} from '@/lib/utils/classroom-presentation';
 import { getElementRange, getLineElementPath, getTableSubThemeColor } from '@/lib/utils/element';
 import { type AST, toAST } from '@/lib/export/html-parser';
 import { type SvgPoints, toPoints, getSvgPathRange } from '@/lib/export/svg-path-parser';
@@ -1157,6 +1161,11 @@ export function useExportPPTX() {
           const htmlFileName = `interactive/${String(interactiveIndex).padStart(2, '0')}_${safeName}.html`;
           zip.file(htmlFileName, scene.content.html);
         }
+      }
+
+      const miroFishNotice = buildMiroFishExportNotice(getStageSharedSimulation(stage));
+      if (miroFishNotice) {
+        zip.file('README-MiroFish.txt', miroFishNotice);
       }
 
       // 3. Download ZIP

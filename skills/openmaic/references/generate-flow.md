@@ -6,6 +6,7 @@
 - Startup mode has been chosen
 - OpenMAIC is healthy at the selected `url`
 - Provider keys are configured
+- For self-hosted deployments, set `APP_BASE_URL` so OpenMAIC returns trusted absolute `url` / `pollUrl` links
 
 > **Hosted mode**: If using hosted OpenMAIC (open.maic.chat), all
 > preconditions (repo, startup, provider keys) are already satisfied.

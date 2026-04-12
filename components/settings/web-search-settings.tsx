@@ -19,9 +19,13 @@ export function WebSearchSettings({ selectedProviderId }: WebSearchSettingsProps
 
   const webSearchProvidersConfig = useSettingsStore((state) => state.webSearchProvidersConfig);
   const setWebSearchProviderConfig = useSettingsStore((state) => state.setWebSearchProviderConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   const provider = WEB_SEARCH_PROVIDERS[selectedProviderId];
   const isServerConfigured = !!webSearchProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const canOverrideBaseUrl =
+    !webSearchProvidersConfig[selectedProviderId]?.hasOrganizationConfig ||
+    aiPolicy.allowPersonalCustomBaseUrls;
 
   // Reset showApiKey when provider changes (derived state pattern)
   const [prevSelectedProviderId, setPrevSelectedProviderId] = useState(selectedProviderId);
@@ -91,6 +95,7 @@ export function WebSearchSettings({ selectedProviderId }: WebSearchSettingsProps
                   })
                 }
                 className="text-sm"
+                disabled={!canOverrideBaseUrl}
               />
             </div>
           </div>

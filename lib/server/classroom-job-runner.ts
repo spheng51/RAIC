@@ -14,6 +14,10 @@ export function runClassroomGenerationJob(
   jobId: string,
   input: GenerateClassroomInput,
   baseUrl: string,
+  scope: {
+    organizationId: string | null;
+    userId: string | null;
+  },
 ): Promise<void> {
   const existing = runningJobs.get(jobId);
   if (existing) {
@@ -26,6 +30,8 @@ export function runClassroomGenerationJob(
 
       const result = await generateClassroom(input, {
         baseUrl,
+        organizationId: scope.organizationId,
+        userId: scope.userId,
         onProgress: async (progress) => {
           await updateClassroomGenerationJobProgress(jobId, progress);
         },

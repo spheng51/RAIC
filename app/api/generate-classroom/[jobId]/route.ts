@@ -1,6 +1,11 @@
 import { type NextRequest } from 'next/server';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { requireRequestRole } from '@/lib/auth/authorize';
 import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+} from '@/lib/server/api-response';
+import {
+  canAccessClassroomGenerationJob,
   isValidClassroomJobId,
   readClassroomGenerationJob,
 } from '@/lib/server/classroom-job-store';
@@ -14,21 +19,45 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest, context: { params: Promise<{ jobId: string }> }) {
   let resolvedJobId: string | undefined;
   try {
+    const auth = await requireRequestRole(req, ['teacher']);
+    if ('status' in auth) {
+      return auth;
+    }
+
     const { jobId } = await context.params;
     resolvedJobId = jobId;
 
     if (!isValidClassroomJobId(jobId)) {
-      return apiError('INVALID_REQUEST', 400, 'Invalid classroom generation job id');
+      return apiErrorWithRequestSession(
+        req,
+        'INVALID_REQUEST',
+        400,
+        'Invalid classroom generation job id',
+      );
     }
 
     const job = await readClassroomGenerationJob(jobId);
     if (!job) {
-      return apiError('INVALID_REQUEST', 404, 'Classroom generation job not found');
+      return apiErrorWithRequestSession(
+        req,
+        'INVALID_REQUEST',
+        404,
+        'Classroom generation job not found',
+      );
+    }
+
+    if (!canAccessClassroomGenerationJob(job, auth)) {
+      return apiErrorWithRequestSession(
+        req,
+        'FORBIDDEN',
+        403,
+        'You do not have access to this classroom generation job',
+      );
     }
 
     const pollUrl = `${buildRequestOrigin(req)}/api/generate-classroom/${jobId}`;
 
-    return apiSuccess({
+    return apiSuccessWithRequestSession(req, {
       jobId: job.id,
       status: job.status,
       step: job.step,
@@ -44,7 +73,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
     });
   } catch (error) {
     log.error(`Classroom job retrieval failed [jobId=${resolvedJobId ?? 'unknown'}]:`, error);
-    return apiError(
+    return apiErrorWithRequestSession(
+      req,
       'INTERNAL_ERROR',
       500,
       'Failed to retrieve classroom generation job',

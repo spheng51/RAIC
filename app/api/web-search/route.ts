@@ -7,16 +7,24 @@
 
 import { NextRequest } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
-import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
-import { resolveWebSearchApiKey } from '@/lib/server/provider-config';
+import type { AICallFn } from '@/lib/generation/pipeline-types';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import {
   buildSearchQuery,
   SEARCH_QUERY_REWRITE_EXCERPT_LENGTH,
 } from '@/lib/server/search-query-builder';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
-import type { AICallFn } from '@/lib/generation/pipeline-types';
+import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
 
 const log = createLogger('WebSearch');
 
@@ -36,19 +44,17 @@ export async function POST(req: NextRequest) {
     query = requestQuery;
 
     if (!query || !query.trim()) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'query is required');
+      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'query is required');
     }
 
-    const apiKey = resolveWebSearchApiKey(clientApiKey);
-    if (!apiKey) {
-      return apiError(
-        'MISSING_API_KEY',
-        400,
-        'Tavily API key is not configured. Set it in Settings → Web Search or set TAVILY_API_KEY env var.',
-      );
-    }
+    const auth = await getRequestAuth(req);
+    const resolvedWebSearch = await resolveGovernedProviderConfig({
+      auth,
+      family: 'webSearch',
+      providerId: 'tavily',
+      requestedSecret: clientApiKey || undefined,
+    });
 
-    // Clamp rewrite input at the route boundary; framework body limits still apply to total request size.
     const boundedPdfText = pdfText?.slice(0, SEARCH_QUERY_REWRITE_EXCERPT_LENGTH);
 
     let aiCall: AICallFn | undefined;
@@ -81,10 +87,14 @@ export async function POST(req: NextRequest) {
       finalQueryLength: searchQuery.finalQueryLength,
     });
 
-    const result = await searchWithTavily({ query: searchQuery.query, apiKey });
+    const result = await searchWithTavily({
+      query: searchQuery.query,
+      apiKey: resolvedWebSearch.apiKey,
+      baseUrl: resolvedWebSearch.baseUrl,
+    });
     const context = formatSearchResultsAsContext(result);
 
-    return apiSuccess({
+    return apiSuccessWithRequestSession(req, {
       answer: result.answer,
       sources: result.sources,
       context,
@@ -92,8 +102,13 @@ export async function POST(req: NextRequest) {
       responseTime: result.responseTime,
     });
   } catch (err) {
+    const governanceError = toGovernedProviderApiErrorResponse(err);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+
     log.error(`Web search failed [query="${query?.substring(0, 60) ?? 'unknown'}"]:`, err);
     const message = err instanceof Error ? err.message : 'Web search failed';
-    return apiError('INTERNAL_ERROR', 500, message);
+    return apiErrorWithRequestSession(req, 'INTERNAL_ERROR', 500, message);
   }
 }

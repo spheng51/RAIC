@@ -1,9 +1,17 @@
 import { NextRequest } from 'next/server';
 import { transcribeAudio } from '@/lib/audio/asr-providers';
-import { resolveASRApiKey, resolveASRBaseUrl } from '@/lib/server/provider-config';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import type { ASRProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 const log = createLogger('Transcription');
 
@@ -22,7 +30,7 @@ export async function POST(req: NextRequest) {
     const baseUrl = formData.get('baseUrl') as string | null;
 
     if (!audioFile) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Audio file is required');
+      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Audio file is required');
     }
 
     // providerId is required from the client — no server-side store to fall back to
@@ -34,20 +42,26 @@ export async function POST(req: NextRequest) {
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
+        return apiErrorWithRequestSession(req, 'INVALID_URL', 403, ssrfError);
       }
     }
 
+    const auth = await getRequestAuth(req);
+    const resolved = await resolveGovernedProviderConfig({
+      auth,
+      family: 'asr',
+      providerId: effectiveProviderId,
+      requestedSecret: apiKey || undefined,
+      requestedBaseUrl: clientBaseUrl,
+      requestedModel: modelId || undefined,
+    });
+
     const config = {
       providerId: effectiveProviderId,
-      modelId: modelId || undefined,
+      modelId: resolved.modelId || modelId || undefined,
       language: language || 'auto',
-      apiKey: clientBaseUrl
-        ? apiKey || ''
-        : resolveASRApiKey(effectiveProviderId, apiKey || undefined),
-      baseUrl: clientBaseUrl
-        ? clientBaseUrl
-        : resolveASRBaseUrl(effectiveProviderId, baseUrl || undefined),
+      apiKey: resolved.apiKey,
+      baseUrl: resolved.baseUrl,
     };
 
     // Convert audio file to buffer
@@ -57,13 +71,19 @@ export async function POST(req: NextRequest) {
     // Transcribe using the provider system
     const result = await transcribeAudio(config, buffer);
 
-    return apiSuccess({ text: result.text });
+    return apiSuccessWithRequestSession(req, { text: result.text });
   } catch (error) {
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+
     log.error(
       `Transcription failed [provider=${resolvedProviderId ?? 'unknown'}, model=${resolvedModelId ?? 'default'}]:`,
       error,
     );
-    return apiError(
+    return apiErrorWithRequestSession(
+      req,
       'TRANSCRIPTION_FAILED',
       500,
       'Transcription failed',

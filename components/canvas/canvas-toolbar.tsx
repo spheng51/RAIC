@@ -2,8 +2,11 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
+  FileText,
+  FlaskConical,
   Play,
   Pause,
   PencilLine,
@@ -15,11 +18,13 @@ import {
   Repeat,
   Maximize2,
   Minimize2,
+  Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { PresentationSurface, SharedSimulation } from '@/lib/types/stage';
 
 export interface CanvasToolbarProps {
   readonly currentSceneIndex: number;
@@ -50,6 +55,13 @@ export interface CanvasToolbarProps {
   readonly onToggleAutoPlay?: () => void;
   readonly playbackSpeed?: number;
   readonly onCycleSpeed?: () => void;
+  readonly sharedSimulation?: SharedSimulation | null;
+  readonly activeSurface?: PresentationSurface;
+  readonly reportAvailable?: boolean;
+  readonly viewerCanManageSimulation?: boolean;
+  readonly viewerCanControlPresentation?: boolean;
+  readonly onSetPresentationSurface?: (surface: PresentationSurface) => void;
+  readonly onOpenMiroFishManager?: () => void;
 }
 
 /* Compact control button */
@@ -108,6 +120,13 @@ export function CanvasToolbar({
   onToggleAutoPlay,
   playbackSpeed = 1,
   onCycleSpeed,
+  sharedSimulation,
+  activeSurface,
+  reportAvailable,
+  viewerCanManageSimulation,
+  viewerCanControlPresentation,
+  onSetPresentationSurface,
+  onOpenMiroFishManager,
 }: CanvasToolbarProps) {
   const { t } = useI18n();
   const canGoPrev = currentSceneIndex > 0;
@@ -138,6 +157,8 @@ export function CanvasToolbar({
   // Effective volume for display
   const effectiveVolume = ttsMuted ? 0 : ttsVolume;
   const presentationLabel = isPresenting ? t('stage.exitFullscreen') : t('stage.fullscreen');
+  const showMiroFishSurfaceToggle = !!sharedSimulation && !!onSetPresentationSurface;
+  const canShowMiroFishManager = !!viewerCanManageSimulation && !!onOpenMiroFishManager;
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -393,12 +414,78 @@ export function CanvasToolbar({
               <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-violet-500 dark:bg-violet-400 rounded-full" />
             )}
           </button>
+          {showMiroFishSurfaceToggle && (
+            <>
+              <CtrlDivider />
+              <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/80 px-1 py-0.5 dark:border-slate-700 dark:bg-slate-900/80">
+                {[
+                  {
+                    surface: 'lesson' as const,
+                    label: 'Lesson',
+                    icon: BookOpen,
+                    disabled: !viewerCanControlPresentation,
+                  },
+                  {
+                    surface: 'simulation' as const,
+                    label: 'Simulation',
+                    icon: FlaskConical,
+                    disabled: !viewerCanControlPresentation,
+                  },
+                  {
+                    surface: 'report' as const,
+                    label: 'Report',
+                    icon: FileText,
+                    disabled: !reportAvailable || !viewerCanControlPresentation,
+                  },
+                ].map(({ surface, label, icon: Icon, disabled }) => {
+                  const isActive = (activeSurface ?? sharedSimulation?.activeSurface) === surface;
+                  return (
+                    <button
+                      key={surface}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onSetPresentationSurface?.(surface)}
+                      className={cn(
+                        'flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-all',
+                        isActive
+                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                        disabled && 'cursor-not-allowed opacity-40',
+                      )}
+                      title={label}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* ── Right: fullscreen + chat toggle ── */}
       <div className="flex items-center justify-end gap-px shrink-0 pr-1">
         <CtrlDivider />
+        {canShowMiroFishManager && (
+          <button
+            type="button"
+            onClick={onOpenMiroFishManager}
+            className={cn(
+              ctrlBtn,
+              'w-auto px-2.5 text-[11px] font-medium',
+              sharedSimulation
+                ? 'text-slate-700 dark:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400',
+            )}
+            aria-label={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
+            title={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            <span>{sharedSimulation ? 'MiroFish' : 'Attach'}</span>
+          </button>
+        )}
         {onTogglePresentation && (
           <button
             onClick={onTogglePresentation}

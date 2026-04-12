@@ -11,6 +11,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  mirofish_contract:
+    name: MiroFish Contract Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: MiroFish contract gate
+        run: pnpm test:mirofish:gate
+
   check:
     name: Lint, Typecheck & Unit Tests
     runs-on: ubuntu-latest
@@ -37,6 +55,12 @@ jobs:
 
       - name: Unit Tests
         run: pnpm test
+
+      - name: JSON fallback lock regression
+        run: pnpm exec vitest run tests/server/db-client.test.ts
+
+      - name: Server test slice
+        run: pnpm exec vitest run tests/server
 
   e2e:
     name: E2E Tests

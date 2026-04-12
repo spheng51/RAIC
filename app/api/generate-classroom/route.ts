@@ -1,6 +1,10 @@
 import { after, type NextRequest } from 'next/server';
 import { nanoid } from 'nanoid';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { requireRequestRole } from '@/lib/auth/authorize';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+} from '@/lib/server/api-response';
 import { type GenerateClassroomInput } from '@/lib/server/classroom-generation';
 import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
 import { createClassroomGenerationJob } from '@/lib/server/classroom-job-store';
@@ -14,6 +18,11 @@ export const maxDuration = 30;
 export async function POST(req: NextRequest) {
   let requirementSnippet: string | undefined;
   try {
+    const auth = await requireRequestRole(req, ['teacher']);
+    if ('status' in auth) {
+      return auth;
+    }
+
     const rawBody = (await req.json()) as Partial<GenerateClassroomInput>;
     requirementSnippet = rawBody.requirement?.substring(0, 60);
     const body: GenerateClassroomInput = {
@@ -33,17 +42,32 @@ export async function POST(req: NextRequest) {
     const { requirement } = body;
 
     if (!requirement) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: requirement');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Missing required field: requirement',
+      );
     }
 
     const baseUrl = buildRequestOrigin(req);
     const jobId = nanoid(10);
-    const job = await createClassroomGenerationJob(jobId, body);
+    const job = await createClassroomGenerationJob(jobId, body, {
+      organizationId: auth.organization?.id ?? null,
+      userId: auth.user.id,
+      actorRole: auth.session.role,
+    });
     const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
 
-    after(() => runClassroomGenerationJob(jobId, body, baseUrl));
+    after(() =>
+      runClassroomGenerationJob(jobId, body, baseUrl, {
+        organizationId: auth.organization?.id ?? null,
+        userId: auth.user.id,
+      }),
+    );
 
-    return apiSuccess(
+    return apiSuccessWithRequestSession(
+      req,
       {
         jobId,
         status: job.status,
@@ -59,7 +83,8 @@ export async function POST(req: NextRequest) {
       `Classroom generation job creation failed [requirement="${requirementSnippet ?? 'unknown'}..."]:`,
       error,
     );
-    return apiError(
+    return apiErrorWithRequestSession(
+      req,
       'INTERNAL_ERROR',
       500,
       'Failed to create classroom generation job',

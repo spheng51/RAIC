@@ -8,6 +8,36 @@ export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 export type StageMode = 'autonomous' | 'playback';
 
 export type Whiteboard = Omit<Slide, 'theme' | 'turningMode' | 'sectionTag' | 'type'>;
+export type PresentationSurface = 'lesson' | 'simulation' | 'report';
+export type SharedSimulationStatus = 'attached' | 'running' | 'completed' | 'error';
+export type SharedSimulationCollaborationMode = 'single-controller' | 'multi-user';
+export type SharedSimulationCollaborationState =
+  | 'inactive'
+  | 'live'
+  | 'frozen'
+  | 'closed'
+  | 'error';
+
+export interface SharedSimulation {
+  provider: 'mirofish';
+  simulationId: string;
+  reportId?: string;
+  runUrl: string;
+  reportUrl?: string;
+  activeSurface: PresentationSurface;
+  controllerSessionId?: string;
+  controllerRole: 'teacher' | 'student';
+  controlLeaseExpiresAt?: string;
+  collaborationMode?: SharedSimulationCollaborationMode;
+  mirofishSessionId?: string;
+  collaborationState?: SharedSimulationCollaborationState;
+  allowStudentInteraction?: boolean;
+  spotlightSessionId?: string;
+  participantCount?: number;
+  lastCollaborationSyncAt?: string;
+  removedParticipantSessionIds?: string[];
+  status: SharedSimulationStatus;
+}
 
 /**
  * Stage - Represents the entire classroom/course
@@ -40,6 +70,7 @@ export interface Stage {
     color: string;
     priority: number;
   }>;
+  sharedSimulation?: SharedSimulation;
 }
 
 /**

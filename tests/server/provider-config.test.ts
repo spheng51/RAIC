@@ -5,6 +5,52 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // the mock scoped to what provider-config actually reads.
 let yamlOverride: string | null = null;
 
+const PROVIDER_ENV_PREFIXES = [
+  'OPENAI',
+  'ANTHROPIC',
+  'GOOGLE',
+  'DEEPSEEK',
+  'QWEN',
+  'KIMI',
+  'MINIMAX',
+  'GLM',
+  'SILICONFLOW',
+  'DOUBAO',
+  'GROK',
+  'OLLAMA',
+  'TTS_OPENAI',
+  'TTS_AZURE',
+  'TTS_GLM',
+  'TTS_QWEN',
+  'TTS_DOUBAO',
+  'TTS_ELEVENLABS',
+  'TTS_MINIMAX',
+  'ASR_OPENAI',
+  'ASR_QWEN',
+  'PDF_UNPDF',
+  'PDF_MINERU',
+  'IMAGE_SEEDREAM',
+  'IMAGE_QWEN_IMAGE',
+  'IMAGE_NANO_BANANA',
+  'IMAGE_MINIMAX',
+  'IMAGE_GROK',
+  'VIDEO_SEEDANCE',
+  'VIDEO_KLING',
+  'VIDEO_VEO',
+  'VIDEO_SORA',
+  'VIDEO_MINIMAX',
+  'VIDEO_GROK',
+  'TAVILY',
+] as const;
+
+function clearProviderEnv() {
+  for (const prefix of PROVIDER_ENV_PREFIXES) {
+    vi.stubEnv(`${prefix}_API_KEY`, '');
+    vi.stubEnv(`${prefix}_BASE_URL`, '');
+    vi.stubEnv(`${prefix}_MODELS`, '');
+  }
+}
+
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   const isYaml = (p: unknown) => typeof p === 'string' && p.endsWith('server-providers.yml');
@@ -28,6 +74,7 @@ describe('provider-config', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    clearProviderEnv();
     yamlOverride = null;
   });
 

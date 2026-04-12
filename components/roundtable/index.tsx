@@ -32,6 +32,7 @@ import { DEFAULT_TEACHER_AVATAR, DEFAULT_USER_AVATAR } from '@/components/roundt
 import type { DiscussionAction } from '@/lib/types/action';
 import type { EngineMode, PlaybackView } from '@/lib/playback';
 import type { Participant } from '@/lib/types/roundtable';
+import type { PresentationSurface, SharedSimulation } from '@/lib/types/stage';
 
 export interface DiscussionRequest {
   topic: string;
@@ -88,6 +89,13 @@ interface RoundtableProps {
   readonly controlsVisible?: boolean;
   readonly onTogglePresentation?: () => void;
   readonly onPresentationInteractionChange?: (active: boolean) => void;
+  readonly sharedSimulation?: SharedSimulation | null;
+  readonly activeSurface?: PresentationSurface;
+  readonly reportAvailable?: boolean;
+  readonly viewerCanManageSimulation?: boolean;
+  readonly viewerCanControlPresentation?: boolean;
+  readonly onSetPresentationSurface?: (surface: PresentationSurface) => void;
+  readonly onOpenMiroFishManager?: () => void;
   /** Ref to the fullscreen container — passed to ProactiveCard so its portal
    *  renders inside the top-layer during presentation mode. */
   readonly fullscreenContainerRef?: React.RefObject<HTMLDivElement | null>;
@@ -173,6 +181,13 @@ export function Roundtable({
   controlsVisible,
   onTogglePresentation,
   onPresentationInteractionChange,
+  sharedSimulation,
+  activeSurface,
+  reportAvailable,
+  viewerCanManageSimulation,
+  viewerCanControlPresentation,
+  onSetPresentationSurface,
+  onOpenMiroFishManager,
   fullscreenContainerRef,
 }: RoundtableProps) {
   const { t } = useI18n();
@@ -648,6 +663,13 @@ export function Roundtable({
       onToggleAutoPlay={() => setAutoPlayLecture(!autoPlayLecture)}
       playbackSpeed={playbackSpeed}
       onCycleSpeed={handleCycleSpeed}
+      sharedSimulation={sharedSimulation}
+      activeSurface={activeSurface}
+      reportAvailable={reportAvailable}
+      viewerCanManageSimulation={viewerCanManageSimulation}
+      viewerCanControlPresentation={viewerCanControlPresentation}
+      onSetPresentationSurface={onSetPresentationSurface}
+      onOpenMiroFishManager={onOpenMiroFishManager}
     />
   );
 

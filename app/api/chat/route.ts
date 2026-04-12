@@ -12,13 +12,15 @@
  * the fetch request, which triggers req.signal on the server side.
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { statelessGenerate } from '@/lib/orchestration/stateless-generate';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
 import type { StatelessChatRequest, StatelessEvent } from '@/lib/types/chat';
 import type { ThinkingConfig } from '@/lib/types/provider';
-import { apiError } from '@/lib/server/api-response';
+import { apiErrorWithRequestSession, withRequestWebSession } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
+import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
 import { resolveModel } from '@/lib/server/resolve-model';
 const log = createLogger('Chat API');
 
@@ -53,15 +55,45 @@ export async function POST(req: NextRequest) {
 
     // Validate required fields
     if (!body.messages || !Array.isArray(body.messages)) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: messages');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Missing required field: messages',
+      );
     }
 
     if (!body.storeState) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: storeState');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Missing required field: storeState',
+      );
+    }
+
+    const classroomId = body.storeState.stage?.id;
+    if (typeof classroomId !== 'string' || classroomId.length === 0) {
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Missing required field: storeState.stage.id',
+      );
+    }
+
+    const access = await requireClassroomAccess(req, classroomId);
+    if (access instanceof NextResponse) {
+      return access;
     }
 
     if (!body.config || !body.config.agentIds || body.config.agentIds.length === 0) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: config.agentIds');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Missing required field: config.agentIds',
+      );
     }
 
     const {
@@ -73,10 +105,13 @@ export async function POST(req: NextRequest) {
       apiKey: body.apiKey,
       baseUrl: body.baseUrl,
       providerType: body.providerType,
+      auth: access.auth,
+      organizationId: access.auth.organization?.id ?? null,
+      userId: access.auth.user.id,
     });
 
     if (isProviderKeyRequired(providerId) && !resolvedApiKey) {
-      return apiError('MISSING_API_KEY', 401, 'API Key is required');
+      return apiErrorWithRequestSession(req, 'MISSING_API_KEY', 401, 'API Key is required');
     }
 
     log.info('Processing request');
@@ -174,19 +209,27 @@ export async function POST(req: NextRequest) {
       }
     })();
 
-    return new Response(readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    });
+    return withRequestWebSession(
+      req,
+      new NextResponse(readable, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      }),
+    );
   } catch (error) {
     log.error(
       `Chat request failed [model=${chatModel ?? 'unknown'}, messages=${chatMessageCount ?? 0}]:`,
       error,
     );
-    return apiError(
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+    return apiErrorWithRequestSession(
+      req,
       'INTERNAL_ERROR',
       500,
       error instanceof Error ? error.message : 'Failed to process request',
