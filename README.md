@@ -40,6 +40,19 @@
 
 - **2026-03-26** — [v0.1.0 released!](https://github.com/THU-MAIC/OpenMAIC/releases/tag/v0.1.0) Discussion TTS, immersive mode, keyboard shortcuts, whiteboard enhancements, new providers, and more. See [changelog](CHANGELOG.md).
 
+## 📌 What's New in v0.1.0
+
+OpenMAIC's first tagged release introduced:
+
+- **Discussion TTS + immersive classroom mode** for richer, voice-first sessions
+- **Enhanced whiteboard & keyboard controls** for smoother live teaching
+- **Expanded provider support** across LLM, image, video, and audio generation
+- **Server-side media generation + stronger governance/security defaults**
+
+See the full release notes in [CHANGELOG.md](CHANGELOG.md).
+
+---
+
 ## 📖 Overview
 
 **OpenMAIC** (Open Multi-Agent Interactive Classroom) is an open-source AI platform that turns any topic or document into a rich, interactive classroom experience. Powered by multi-agent orchestration, it generates slides, quizzes, interactive simulations, and project-based learning activities — all delivered by AI teachers and AI classmates who can speak, draw on a whiteboard, and engage in real-time discussions with you. With built-in [OpenClaw](https://github.com/openclaw/openclaw) integration, you can generate classrooms directly from messaging apps like Feishu, Slack, or Telegram.
@@ -128,9 +141,7 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 - If `RAIC_SECRET_ENCRYPTION_KEY` is missing, bootstrap config still works, but `/api/admin/ai/config` and `/api/me/ai/overrides` fail closed for secret storage
 - Public `/` demo keeps the legacy local-storage flow for this release window, while authenticated `/studio` and `/admin` use the governed path
 
-Operator rollout notes, smoke checks, and release-gate steps live in [docs/ai-governance-rollout.md](docs/ai-governance-rollout.md).
-
-MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps live in [docs/mirofish-classroom-rollout.md](docs/mirofish-classroom-rollout.md).
+Operator rollout notes and release details are tracked in the [changelog](CHANGELOG.md).
 
 MiniMax quick examples:
 
