@@ -151,6 +151,23 @@ export function MiroFishPane({
     }
   }, []);
 
+  useEffect(() => {
+    setPaneState((current) => {
+      const base = resolvePaneState(current);
+      if (base.pinnedSrc === nextSource) {
+        return base;
+      }
+
+      recoveredAttemptRef.current = null;
+      return {
+        ...base,
+        pinnedSrc: nextSource,
+        frameState: 'loading',
+        errorMessage: null,
+      };
+    });
+  }, [nextSource, resolvePaneState]);
+
   const markReady = useCallback(
     (event: MiroFishHostEvent) => {
       clearLoadTimeout();

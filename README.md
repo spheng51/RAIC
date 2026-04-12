@@ -1,9 +1,9 @@
 <!-- <p align="center">
-  <img src="assets/logo-horizontal.png" alt="OpenMAIC" width="420"/>
+  <img src="public/openraic-logo.svg" alt="OpenRAIC" width="560"/>
 </p> -->
 
 <p align="center">
-  <img src="assets/banner.png" alt="OpenMAIC Banner" width="680"/>
+  <img src="public/openraic-logo.svg" alt="OpenRAIC" width="680"/>
 </p>
 
 <p align="center">
@@ -142,6 +142,24 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 - Public `/` demo keeps the legacy local-storage flow for this release window, while authenticated `/studio` and `/admin` use the governed path
 
 Operator rollout notes and release details are tracked in the [changelog](CHANGELOG.md).
+
+### Teacher studio Google sign-in
+
+Protected `/studio` access uses Google Identity Services with the existing ID-token flow.
+
+1. Create a Google Cloud OAuth client of type `Web application`
+2. Add your local dev origin as an Authorized JavaScript origin
+   - Use `http://localhost:3000` for the default Next.js dev port
+   - Use `http://localhost:3005` if your local server is running on the same port as this workspace
+3. Set these values in `.env.local`
+
+```env
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+# Optional when the server should verify against a different audience.
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+```
+
+Leave `RAIC_ADMIN_EMAILS` unset during the teacher-only bootstrap so signed-in users land as `teacher` and `/admin` remains protected until you intentionally enable org-admin assignment.
 
 MiniMax quick examples:
 

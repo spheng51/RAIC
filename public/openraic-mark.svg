@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" fill="none">
+  <defs>
+    <linearGradient id="hexStroke" x1="54" y1="28" x2="267" y2="266" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#72E9FF" />
+      <stop offset="0.38" stop-color="#B48CFF" />
+      <stop offset="0.72" stop-color="#8B5CFF" />
+      <stop offset="1" stop-color="#5532C9" />
+    </linearGradient>
+    <linearGradient id="hexFill" x1="76" y1="56" x2="238" y2="242" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9CEBFF" stop-opacity="0.32" />
+      <stop offset="0.48" stop-color="#9D7BFF" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#4F2BC7" stop-opacity="0.12" />
+    </linearGradient>
+    <linearGradient id="wire" x1="91" y1="74" x2="224" y2="225" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7BE8FF" />
+      <stop offset="0.48" stop-color="#F7F0FF" />
+      <stop offset="1" stop-color="#CF8CFF" />
+    </linearGradient>
+    <radialGradient id="leftGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(89 153) rotate(90) scale(86)">
+      <stop stop-color="#53E7FF" stop-opacity="0.95" />
+      <stop offset="1" stop-color="#53E7FF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="rightGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(218 141) rotate(90) scale(98)">
+      <stop stop-color="#C563FF" stop-opacity="0.92" />
+      <stop offset="1" stop-color="#C563FF" stop-opacity="0" />
+    </radialGradient>
+    <filter id="softGlow" x="-80" y="-80" width="480" height="480" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="14" />
+    </filter>
+    <filter id="nodeGlow" x="-30" y="-30" width="380" height="380" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4.5" />
+    </filter>
+  </defs>
+
+  <circle cx="96" cy="158" r="70" fill="url(#leftGlow)" filter="url(#softGlow)" />
+  <circle cx="222" cy="142" r="80" fill="url(#rightGlow)" filter="url(#softGlow)" />
+  <circle cx="244" cy="104" r="18" fill="#7BE8FF" fill-opacity="0.8" filter="url(#nodeGlow)" />
+  <circle cx="70" cy="196" r="16" fill="#7BE8FF" fill-opacity="0.9" filter="url(#nodeGlow)" />
+  <circle cx="154" cy="245" r="20" fill="#C975FF" fill-opacity="0.9" filter="url(#nodeGlow)" />
+
+  <path
+    d="M160 24L252 77V183L160 236L68 183V77L160 24Z"
+    fill="url(#hexFill)"
+    stroke="url(#hexStroke)"
+    stroke-width="6"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M160 236L160 286M68 183L160 236L252 183M68 183L68 78L160 25L252 78L252 183"
+    stroke="url(#hexStroke)"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.68"
+  />
+
+  <g stroke="url(#wire)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M160 80L108 110L108 176L160 206L212 176L212 110L160 80Z" />
+    <path d="M160 80V206" />
+    <path d="M108 110L160 140L212 110" />
+    <path d="M108 176L160 140L212 176" />
+    <path d="M160 48L160 80M84 92L108 110M236 92L212 110" opacity="0.9" />
+    <path d="M76 174L108 176M244 174L212 176M140 224L108 194" opacity="0.82" />
+  </g>
+
+  <g fill="#F9F6FF">
+    <circle cx="160" cy="80" r="9.5" />
+    <circle cx="108" cy="110" r="8" />
+    <circle cx="212" cy="110" r="8" />
+    <circle cx="160" cy="140" r="9" />
+    <circle cx="108" cy="176" r="8" />
+    <circle cx="212" cy="176" r="8" />
+    <circle cx="160" cy="206" r="8.5" />
+  </g>
+
+  <g fill="#F9F6FF" opacity="0.9">
+    <circle cx="52" cy="118" r="2.1" />
+    <circle cx="58" cy="143" r="1.6" />
+    <circle cx="252" cy="64" r="2.4" />
+    <circle cx="271" cy="92" r="1.8" />
+    <circle cx="38" cy="202" r="1.5" />
+    <circle cx="276" cy="159" r="1.5" />
+    <circle cx="225" cy="250" r="1.8" />
+    <circle cx="104" cy="36" r="1.6" />
+  </g>
+</svg>

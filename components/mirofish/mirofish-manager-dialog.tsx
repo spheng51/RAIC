@@ -427,6 +427,11 @@ export function MiroFishManagerDialog({
                             size="sm"
                             variant="outline"
                             disabled={busyAction !== null || participant.isRemoved}
+                            aria-label={
+                              participant.isSpotlighted
+                                ? `Clear spotlight for ${participant.displayName}`
+                                : `Spotlight ${participant.displayName}`
+                            }
                             onClick={() => {
                               void runCollaborationAction(
                                 participant.isSpotlighted ? 'clear_spotlight' : 'spotlight',
@@ -442,6 +447,7 @@ export function MiroFishManagerDialog({
                             size="sm"
                             variant="outline"
                             disabled={busyAction !== null || participant.isRemoved}
+                            aria-label={`Remove ${participant.displayName}`}
                             onClick={() => {
                               void runCollaborationAction(
                                 'remove_participant',
@@ -500,6 +506,11 @@ export function MiroFishManagerDialog({
                           size="sm"
                           variant={participant.isController ? 'secondary' : 'outline'}
                           disabled={busyAction !== null || !sharedSimulation}
+                          aria-label={
+                            participant.isController
+                              ? `${participant.displayName} currently controls the simulation`
+                              : `Grant control to ${participant.displayName}`
+                          }
                           onClick={async () => {
                             setBusyAction('grant');
                             try {

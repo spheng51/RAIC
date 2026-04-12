@@ -6,6 +6,7 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { ClassroomLaunchMode } from '@/lib/utils/classroom-launch';
 
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
@@ -25,6 +26,8 @@ export interface GenerationSessionState {
   // Web search context
   researchContext?: string;
   researchSources?: Array<{ title: string; url: string }>;
+  launchMode?: ClassroomLaunchMode;
+  homePath?: string;
 }
 
 export type GenerationStep = {

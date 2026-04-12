@@ -8,7 +8,7 @@
     "error": "Ошибка"
   },
   "home": {
-    "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
+    "slogan": "Responsive Assistance Interactive Classroom",
     "greetingWithName": "Привет, {{name}}"
   },
   "toolbar": {
@@ -274,7 +274,15 @@
     "delete": "Удалить",
     "rename": "Переименовать",
     "renamePlaceholder": "Введите название класса",
-    "renameFailed": "Не удалось переименовать класс"
+    "renameFailed": "Не удалось переименовать класс",
+    "teacherBackedBadge": "Teacher-backed classroom",
+    "localDemoBadge": "Local demo classroom",
+    "localDemoNotice": "MiroFish and other classroom controls require a teacher-backed classroom. This local demo classroom is limited to lesson playback.",
+    "teacherAccessMissing": "This teacher-backed classroom could not be loaded from the server. Open it again from Teacher Studio or sign in again.",
+    "serverAccessDenied": "You do not have access to this classroom.",
+    "classroomNotFound": "This classroom could not be found.",
+    "openTeacherStudio": "Open Teacher Studio",
+    "signInAgain": "Sign in again"
   },
   "upload": {
     "pdfSizeLimit": "Поддержка PDF до 50 МБ",
