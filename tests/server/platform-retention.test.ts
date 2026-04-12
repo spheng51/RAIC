@@ -13,7 +13,6 @@ type MockPostgresExecutor = {
   unsafe: <T>(query: string, params?: unknown[]) => Promise<T[]>;
   begin?: <T>(handler: (executor: MockPostgresExecutor) => Promise<T>) => Promise<T>;
 };
-
 function resetDbGlobals() {
   const globals = globalThis as DbGlobals;
   delete globals.__raicPlatformJsonLock;
@@ -29,7 +28,6 @@ function setMockPostgresState(client: MockPostgresExecutor) {
 
 const originalCwd = process.cwd();
 let testRoot = '';
-
 function createStoreFixture(): PlatformStore {
   return {
     ...structuredClone(EMPTY_PLATFORM_STORE),
