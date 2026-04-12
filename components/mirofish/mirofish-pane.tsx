@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Shield, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { PresentationSurface, SharedSimulationStatus } from '@/lib/types/stage';
+import { formatLeaseCountdown } from '@/lib/utils/classroom-presentation';
 
 export interface MiroFishHostEvent {
   type: 'ready' | 'runStatus' | 'reportReady' | 'error';
@@ -13,11 +14,15 @@ export interface MiroFishHostEvent {
 
 interface MiroFishPaneProps {
   readonly activeSurface: Extract<PresentationSurface, 'simulation' | 'report'>;
+  readonly simulationId: string;
+  readonly reportId: string | null;
   readonly runUrl: string | null;
   readonly reportUrl: string | null;
   readonly viewerHasSimulationControl: boolean;
   readonly viewerCanManageSimulation: boolean;
   readonly controllerRole: 'teacher' | 'student';
+  readonly controllerDisplayName: string;
+  readonly controlLeaseExpiresAt: string | null;
   readonly onEvent?: (event: MiroFishHostEvent) => void;
   readonly onReclaimControl?: () => void;
   readonly onRecoverToLesson?: (message: string) => void;
@@ -31,49 +36,113 @@ function pickMiroFishSource(
   return activeSurface === 'report' ? reportUrl : runUrl;
 }
 
+function getMiroFishSourceIdentity(
+  activeSurface: Extract<PresentationSurface, 'simulation' | 'report'>,
+  simulationId: string,
+  reportId: string | null,
+) {
+  return activeSurface === 'report'
+    ? `report:${simulationId}:${reportId ?? 'no-report'}`
+    : `simulation:${simulationId}`;
+}
+
 export function MiroFishPane({
   activeSurface,
+  simulationId,
+  reportId,
   runUrl,
   reportUrl,
   viewerHasSimulationControl,
   viewerCanManageSimulation,
   controllerRole,
+  controllerDisplayName,
+  controlLeaseExpiresAt,
   onEvent,
   onReclaimControl,
   onRecoverToLesson,
 }: MiroFishPaneProps) {
-  const src = pickMiroFishSource(activeSurface, runUrl, reportUrl);
+  const nextSource = pickMiroFishSource(activeSurface, runUrl, reportUrl);
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
-  const errorReportedRef = useRef(false);
+  const [leaseNowMs, setLeaseNowMs] = useState(() => Date.now());
+  const [pinnedSrc, setPinnedSrc] = useState<string | null>(() => nextSource);
+  const callbackRef = useRef<{
+    onEvent?: (event: MiroFishHostEvent) => void;
+    onRecoverToLesson?: (message: string) => void;
+  }>({
+    onEvent,
+    onRecoverToLesson,
+  });
+  const loadTimeoutRef = useRef<number | null>(null);
+  const recoveredAttemptRef = useRef<string | null>(null);
+  const sourceIdentity = useMemo(
+    () => getMiroFishSourceIdentity(activeSurface, simulationId, reportId),
+    [activeSurface, reportId, simulationId],
+  );
+  const attemptKey = `${sourceIdentity}:${reloadNonce}`;
 
   const allowedOrigins = useMemo(() => {
-    return [runUrl, reportUrl]
+    return [runUrl, reportUrl, pinnedSrc]
       .filter((value): value is string => Boolean(value))
       .map((value) => new URL(value).origin);
-  }, [reportUrl, runUrl]);
+  }, [pinnedSrc, reportUrl, runUrl]);
 
   useEffect(() => {
-    if (!src) {
-      return;
-    }
+    callbackRef.current = {
+      onEvent,
+      onRecoverToLesson,
+    };
+  }, [onEvent, onRecoverToLesson]);
 
-    const timeout = window.setTimeout(() => {
-      if (errorReportedRef.current) {
+  const clearLoadTimeout = useCallback(() => {
+    if (loadTimeoutRef.current !== null) {
+      window.clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+  }, []);
+
+  const markReady = useCallback(
+    (event: MiroFishHostEvent) => {
+      clearLoadTimeout();
+      recoveredAttemptRef.current = null;
+      setFrameState('ready');
+      setErrorMessage(null);
+      callbackRef.current.onEvent?.(event);
+    },
+    [clearLoadTimeout],
+  );
+
+  const recoverAttempt = useCallback(
+    (message: string, event: MiroFishHostEvent = { type: 'error', message }) => {
+      if (recoveredAttemptRef.current === attemptKey) {
         return;
       }
 
-      errorReportedRef.current = true;
-      const message = 'MiroFish took too long to load. Returning the classroom to the lesson view.';
+      recoveredAttemptRef.current = attemptKey;
+      clearLoadTimeout();
       setFrameState('error');
       setErrorMessage(message);
-      onEvent?.({ type: 'error', message });
-      onRecoverToLesson?.(message);
+      callbackRef.current.onEvent?.(event);
+      callbackRef.current.onRecoverToLesson?.(message);
+    },
+    [attemptKey, clearLoadTimeout],
+  );
+
+  useEffect(() => {
+    clearLoadTimeout();
+    recoveredAttemptRef.current = null;
+
+    if (!pinnedSrc) {
+      return;
+    }
+
+    loadTimeoutRef.current = window.setTimeout(() => {
+      recoverAttempt('MiroFish took too long to load. Returning the classroom to the lesson view.');
     }, 15_000);
 
-    return () => window.clearTimeout(timeout);
-  }, [onEvent, onRecoverToLesson, src]);
+    return clearLoadTimeout;
+  }, [attemptKey, clearLoadTimeout, pinnedSrc, recoverAttempt]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -97,9 +166,7 @@ export function MiroFishPane({
       }
 
       if (eventType === 'ready') {
-        setFrameState('ready');
-        setErrorMessage(null);
-        onEvent?.({ type: 'ready' });
+        markReady({ type: 'ready' });
         return;
       }
 
@@ -116,21 +183,16 @@ export function MiroFishPane({
             typeof payload?.message === 'string'
               ? payload.message
               : 'MiroFish reported a runtime error.';
-          setFrameState('error');
-          setErrorMessage(message);
-          onEvent?.({ type: 'runStatus', status, message });
-          onRecoverToLesson?.(message);
+          recoverAttempt(message, { type: 'runStatus', status, message });
           return;
         }
 
-        setFrameState('ready');
-        onEvent?.({ type: 'runStatus', status });
+        markReady({ type: 'runStatus', status });
         return;
       }
 
       if (eventType === 'reportReady') {
-        setFrameState('ready');
-        onEvent?.({ type: 'reportReady' });
+        markReady({ type: 'reportReady' });
         return;
       }
 
@@ -139,18 +201,31 @@ export function MiroFishPane({
           typeof payload?.message === 'string'
             ? payload.message
             : 'MiroFish reported an embed error.';
-        setFrameState('error');
-        setErrorMessage(message);
-        onEvent?.({ type: 'error', message });
-        onRecoverToLesson?.(message);
+        recoverAttempt(message);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [allowedOrigins, onEvent, onRecoverToLesson]);
+  }, [allowedOrigins, markReady, recoverAttempt]);
 
-  if (!src) {
+  useEffect(() => {
+    return clearLoadTimeout;
+  }, [clearLoadTimeout]);
+
+  useEffect(() => {
+    if (!controlLeaseExpiresAt || controllerRole !== 'student') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setLeaseNowMs(Date.now());
+    }, 1_000);
+
+    return () => window.clearInterval(interval);
+  }, [controlLeaseExpiresAt, controllerRole]);
+
+  if (!pinnedSrc) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
         <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-950">
@@ -168,20 +243,20 @@ export function MiroFishPane({
 
   const showReadOnlyBlocker = !viewerHasSimulationControl;
   const canReclaim = viewerCanManageSimulation && controllerRole === 'student';
+  const leaseCountdown = formatLeaseCountdown(controlLeaseExpiresAt, leaseNowMs);
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-slate-950">
       <iframe
-        key={`${src}:${reloadNonce}`}
-        src={src}
+        key={attemptKey}
+        src={pinnedSrc}
         title="MiroFish Classroom Pane"
         className="absolute inset-0 h-full w-full border-0 bg-white"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
         allow="fullscreen"
         onLoad={() => {
           if (frameState !== 'error') {
-            setFrameState('ready');
-            onEvent?.({ type: 'ready' });
+            markReady({ type: 'ready' });
           }
         }}
       />
@@ -204,9 +279,14 @@ export function MiroFishPane({
             </h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               {controllerRole === 'student'
-                ? 'A student currently has control of the shared simulation.'
-                : 'The teacher is controlling the shared simulation.'}
+                ? `${controllerDisplayName} currently has control of the shared simulation.`
+                : `${controllerDisplayName} is controlling the shared simulation.`}
             </p>
+            {controllerRole === 'student' && leaseCountdown && (
+              <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                Lease: {leaseCountdown}
+              </p>
+            )}
             {canReclaim && (
               <Button
                 type="button"
@@ -237,9 +317,11 @@ export function MiroFishPane({
                 type="button"
                 variant="outline"
                 onClick={() => {
+                  clearLoadTimeout();
+                  recoveredAttemptRef.current = null;
                   setFrameState('loading');
                   setErrorMessage(null);
-                  errorReportedRef.current = false;
+                  setPinnedSrc(nextSource);
                   setReloadNonce((value) => value + 1);
                 }}
               >

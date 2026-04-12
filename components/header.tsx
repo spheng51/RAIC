@@ -76,6 +76,8 @@ export function Header({ currentSceneTitle }: HeaderProps) {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <button
             onClick={() => router.push('/')}
+            type="button"
+            aria-label={t('generation.backToHome')}
             className="shrink-0 p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             title={t('generation.backToHome')}
           >
@@ -106,6 +108,8 @@ export function Header({ currentSceneTitle }: HeaderProps) {
               onClick={() => {
                 setThemeOpen(!themeOpen);
               }}
+              type="button"
+              aria-label={t('settings.theme')}
               className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
             >
               {theme === 'light' && <Sun className="w-4 h-4" />}
@@ -166,6 +170,8 @@ export function Header({ currentSceneTitle }: HeaderProps) {
           <div className="relative">
             <button
               onClick={() => setSettingsOpen(true)}
+              type="button"
+              aria-label={t('settings.title')}
               className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
             >
               <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
@@ -180,6 +186,10 @@ export function Header({ currentSceneTitle }: HeaderProps) {
               if (canExport && !isExporting) setExportMenuOpen(!exportMenuOpen);
             }}
             disabled={!canExport || isExporting}
+            type="button"
+            aria-label={canExport ? (isExporting ? t('export.exporting') : t('export.pptx')) : t('share.notReady')}
+            aria-haspopup="menu"
+            aria-expanded={exportMenuOpen}
             title={
               canExport
                 ? isExporting

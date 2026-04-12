@@ -23,6 +23,8 @@ interface CanvasAreaProps extends CanvasToolbarProps {
   readonly runUrl?: string | null;
   readonly reportUrl?: string | null;
   readonly viewerHasSimulationControl?: boolean;
+  readonly controllerDisplayName?: string;
+  readonly controlLeaseExpiresAt?: string | null;
   readonly presentationFallbackMessage?: string | null;
   readonly onMiroFishEvent?: (event: MiroFishHostEvent) => void;
   readonly onReclaimMiroFishControl?: () => void;
@@ -63,6 +65,8 @@ export function CanvasArea({
   runUrl,
   reportUrl,
   viewerHasSimulationControl,
+  controllerDisplayName,
+  controlLeaseExpiresAt,
   presentationFallbackMessage,
   onMiroFishEvent,
   onReclaimMiroFishControl,
@@ -149,13 +153,17 @@ export function CanvasArea({
 
           {!isLessonSurface && sharedSimulation && !whiteboardOpen && (
             <MiroFishPane
-              key={`${currentSurface}:${runUrl ?? 'no-run'}:${reportUrl ?? 'no-report'}`}
+              key={`${currentSurface}:${sharedSimulation.simulationId}:${sharedSimulation.reportId ?? 'no-report'}`}
               activeSurface={currentSurface === 'report' ? 'report' : 'simulation'}
+              simulationId={sharedSimulation.simulationId}
+              reportId={sharedSimulation.reportId ?? null}
               runUrl={runUrl ?? null}
               reportUrl={reportUrl ?? null}
               viewerHasSimulationControl={!!viewerHasSimulationControl}
               viewerCanManageSimulation={!!viewerCanManageSimulation}
               controllerRole={sharedSimulation.controllerRole}
+              controllerDisplayName={controllerDisplayName ?? 'Teacher'}
+              controlLeaseExpiresAt={controlLeaseExpiresAt ?? null}
               onEvent={onMiroFishEvent}
               onReclaimControl={onReclaimMiroFishControl}
               onRecoverToLesson={onRecoverToLesson}

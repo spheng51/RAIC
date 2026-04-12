@@ -10,15 +10,16 @@ const runtimeRequire = createRequire(import.meta.url);
 const PLATFORM_DATA_DIR = path.join(process.cwd(), 'data', 'platform');
 const PLATFORM_STORE_PATH = path.join(PLATFORM_DATA_DIR, 'platform-store.json');
 
-type PostgresClient = {
+export type PostgresExecutor = {
   unsafe<T>(query: string, params?: unknown[]): Promise<T[]>;
+  begin?<T>(handler: (executor: PostgresExecutor) => Promise<T>): Promise<T>;
 };
 
 export type PersistenceMode = 'postgres' | 'json';
 
 declare global {
   // eslint-disable-next-line no-var
-  var __raicPlatformSqlClient: PostgresClient | undefined;
+  var __raicPlatformSqlClient: PostgresExecutor | undefined;
   // eslint-disable-next-line no-var
   var __raicPlatformSchemaPromise: Promise<void> | undefined;
   // eslint-disable-next-line no-var
@@ -38,6 +39,15 @@ function normalizePlatformStore(value: unknown): PlatformStore {
   const sessions = Array.isArray(value.sessions) ? value.sessions : [];
   const joinTokens = Array.isArray(value.joinTokens) ? value.joinTokens : [];
   const auditLogs = Array.isArray(value.auditLogs) ? value.auditLogs : [];
+  const organizationAiPolicies = Array.isArray(value.organizationAiPolicies)
+    ? value.organizationAiPolicies
+    : [];
+  const organizationProviderConfigs = Array.isArray(value.organizationProviderConfigs)
+    ? value.organizationProviderConfigs
+    : [];
+  const userProviderOverrides = Array.isArray(value.userProviderOverrides)
+    ? value.userProviderOverrides
+    : [];
 
   return {
     users,
@@ -46,6 +56,9 @@ function normalizePlatformStore(value: unknown): PlatformStore {
     sessions,
     joinTokens,
     auditLogs,
+    organizationAiPolicies,
+    organizationProviderConfigs,
+    userProviderOverrides,
   } as PlatformStore;
 }
 
@@ -61,17 +74,17 @@ export function isPostgresConfigured() {
   return getDatabaseUrl() !== null;
 }
 
-async function getPostgresClient(): Promise<PostgresClient | null> {
+async function getPostgresClient(): Promise<PostgresExecutor | null> {
   const databaseUrl = getDatabaseUrl();
   if (!databaseUrl) return null;
 
   if (!globalThis.__raicPlatformSqlClient) {
-    let postgresFactory: ((url: string, options?: Record<string, unknown>) => PostgresClient) | null = null;
+    let postgresFactory: ((url: string, options?: Record<string, unknown>) => PostgresExecutor) | null = null;
     try {
       postgresFactory = runtimeRequire('postgres') as (
         url: string,
         options?: Record<string, unknown>,
-      ) => PostgresClient;
+      ) => PostgresExecutor;
     } catch (error) {
       throw new Error(
         `DATABASE_URL is configured, but the "postgres" driver could not be loaded: ${
@@ -111,7 +124,10 @@ async function ensurePostgresSchema() {
       for (const statement of PLATFORM_SCHEMA_SQL) {
         await client.unsafe(statement);
       }
-    })();
+    })().catch((error) => {
+      globalThis.__raicPlatformSchemaPromise = undefined;
+      throw error;
+    });
   }
 
   await globalThis.__raicPlatformSchemaPromise;
@@ -134,6 +150,23 @@ export async function runPostgresQuery<T>(query: string, params: unknown[] = [])
     throw new Error('DATABASE_URL is configured, but no Postgres client is available');
   }
   return client.unsafe<T>(query, params);
+}
+
+export async function runPostgresTransaction<T>(
+  handler: (executor: PostgresExecutor) => Promise<T>,
+): Promise<T | null> {
+  if (!isPostgresConfigured()) return null;
+  await ensurePostgresSchema();
+  const client = await getPostgresClient();
+  if (!client) {
+    throw new Error('DATABASE_URL is configured, but no Postgres client is available');
+  }
+
+  if (typeof client.begin !== 'function') {
+    return handler(client);
+  }
+
+  return client.begin((executor) => handler(executor));
 }
 
 export async function readPlatformStore(): Promise<PlatformStore> {

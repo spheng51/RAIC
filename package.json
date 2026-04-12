@@ -15,6 +15,8 @@
     "check": "prettier . --check",
     "format": "prettier . --write",
     "test": "vitest run",
+    "test:mirofish": "vitest run tests/server/mirofish.test.ts tests/server/classroom-access.test.ts tests/server/join-enter-route.test.ts tests/server/classroom-route.test.ts tests/server/classroom-control-route.test.ts tests/server/classroom-mirofish-attach-route.test.ts tests/server/classroom-presentation-route.test.ts tests/server/classroom-presentation-state-route.test.ts tests/server/classroom-presentation-events-route.test.ts tests/components/canvas-area.test.ts tests/components/mirofish-pane.test.ts tests/components/mirofish-manager-dialog.test.ts tests/components/use-classroom-presentation-state.test.ts",
+    "test:mirofish:gate": "vitest run tests/server/mirofish.test.ts tests/server/classroom-access.test.ts tests/server/join-enter-route.test.ts tests/server/classroom-route.test.ts tests/server/classroom-control-route.test.ts tests/server/classroom-mirofish-attach-route.test.ts tests/server/classroom-presentation-route.test.ts tests/server/classroom-presentation-state-route.test.ts tests/server/classroom-presentation-events-route.test.ts tests/components/canvas-area.test.ts tests/components/mirofish-pane.test.ts tests/components/mirofish-manager-dialog.test.ts tests/components/use-classroom-presentation-state.test.ts && tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -119,6 +121,7 @@
     "@types/tinycolor2": "^1.4.6",
     "eslint": "^9",
     "eslint-config-next": "16.1.2",
+    "jsdom": "^29.0.2",
     "prettier": "3.8.1",
     "rollup": "^4.35.0",
     "rollup-plugin-typescript2": "^0.36.0",

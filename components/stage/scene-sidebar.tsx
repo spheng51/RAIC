@@ -58,6 +58,22 @@ export function SceneSidebar({
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const isDraggingRef = useRef(false);
+  const selectScene = useCallback(
+    (sceneId: string) => {
+      if (onSceneSelect) {
+        onSceneSelect(sceneId);
+      } else {
+        setCurrentSceneId(sceneId);
+      }
+    },
+    [onSceneSelect, setCurrentSceneId],
+  );
+
+  const adjustSidebarWidth = useCallback((delta: number) => {
+    setSidebarWidth((currentWidth) =>
+      Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, currentWidth + delta)),
+    );
+  }, []);
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -88,6 +104,35 @@ export function SceneSidebar({
     [sidebarWidth],
   );
 
+  const handleResizeKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        adjustSidebarWidth(16);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        adjustSidebarWidth(-16);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setSidebarWidth(MIN_WIDTH);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setSidebarWidth(MAX_WIDTH);
+      }
+    },
+    [adjustSidebarWidth],
+  );
+
+  const handleInteractiveKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>, action: () => void) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        action();
+      }
+    },
+    [],
+  );
+
   const getSceneTypeIcon = (type: SceneType) => {
     const icons = {
       slide: BookOpen,
@@ -104,32 +149,44 @@ export function SceneSidebar({
     <div
       style={{
         width: displayWidth,
-        transition: isDraggingRef.current ? 'none' : 'width 0.3s ease',
+        transition: isDraggingRef.current
+          ? 'none'
+          : 'width var(--motion-duration-enter) var(--motion-ease-standard)',
       }}
       className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-gray-100 dark:border-gray-800 shadow-[2px_0_24px_rgba(0,0,0,0.02)] flex flex-col shrink-0 z-20 relative overflow-visible"
     >
       {/* Drag handle */}
       {!collapsed && (
-        <div
+        <button
+          type="button"
           onMouseDown={handleDragStart}
-          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors"
+          onKeyDown={handleResizeKeyDown}
+          aria-label="Resize scene sidebar"
+          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors focus-visible:outline-none focus-visible:bg-purple-400/30 dark:focus-visible:bg-purple-600/30"
         >
-          <div className="absolute right-0.5 top-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-purple-400 dark:group-hover:bg-purple-500 transition-colors" />
-        </div>
+          <div
+            aria-hidden="true"
+            className="absolute right-0.5 top-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-purple-400 dark:group-hover:bg-purple-500 transition-colors"
+          />
+        </button>
       )}
 
       <div className={cn('flex flex-col w-full h-full overflow-hidden', collapsed && 'hidden')}>
         {/* Logo Header */}
         <div className="h-10 flex items-center justify-between shrink-0 relative mt-3 mb-1 px-3">
           <button
+            type="button"
             onClick={() => router.push('/')}
+            aria-label={t('generation.backToHome')}
             className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 -mx-1.5 py-1 -my-1 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 active:scale-[0.97] transition-all duration-150"
             title={t('generation.backToHome')}
           >
             <img src="/logo-horizontal.png" alt="OpenMAIC" className="h-6" />
           </button>
           <button
+            type="button"
             onClick={() => onCollapseChange(true)}
+            aria-label="Collapse scene sidebar"
             className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gray-100/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 ring-1 ring-black/[0.04] dark:ring-white/[0.06] hover:bg-gray-200/90 dark:hover:bg-gray-700/90 hover:text-gray-700 dark:hover:text-gray-200 active:scale-90 transition-all duration-200"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -151,15 +208,13 @@ export function SceneSidebar({
               <div
                 key={scene.id}
                 data-testid="scene-item"
-                onClick={() => {
-                  if (onSceneSelect) {
-                    onSceneSelect(scene.id);
-                  } else {
-                    setCurrentSceneId(scene.id);
-                  }
-                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open scene ${index + 1}: ${scene.title}`}
+                onClick={() => selectScene(scene.id)}
+                onKeyDown={(e) => handleInteractiveKeyDown(e, () => selectScene(scene.id))}
                 className={cn(
-                  'group relative rounded-lg transition-all duration-200 cursor-pointer flex flex-col gap-1 p-1.5',
+                  'group relative rounded-lg transition-all duration-200 cursor-pointer flex flex-col gap-1 p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40',
                   isActive
                     ? 'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-200 dark:ring-purple-700'
                     : 'hover:bg-gray-50/80 dark:hover:bg-gray-800/50',
@@ -335,16 +390,25 @@ export function SceneSidebar({
               return (
                 <div
                   key={`generating-${outline.id}`}
+                  role={isFailed ? undefined : 'button'}
+                  tabIndex={isFailed ? -1 : 0}
+                  aria-disabled={isFailed || undefined}
+                  aria-label={
+                    isFailed
+                      ? `Generation failed for ${outline.title}`
+                      : `Open generating scene: ${outline.title}`
+                  }
                   onClick={() => {
                     if (isFailed) return;
-                    if (onSceneSelect) {
-                      onSceneSelect(PENDING_SCENE_ID);
-                    } else {
-                      setCurrentSceneId(PENDING_SCENE_ID);
-                    }
+                    selectScene(PENDING_SCENE_ID);
                   }}
+                  onKeyDown={
+                    isFailed
+                      ? undefined
+                      : (e) => handleInteractiveKeyDown(e, () => selectScene(PENDING_SCENE_ID))
+                  }
                   className={cn(
-                    'group relative rounded-lg flex flex-col gap-1 p-1.5 transition-all duration-200',
+                    'group relative rounded-lg flex flex-col gap-1 p-1.5 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40',
                     isFailed
                       ? 'opacity-100 cursor-default'
                       : 'cursor-pointer hover:bg-gray-50/80 dark:hover:bg-gray-800/50',
@@ -396,16 +460,21 @@ export function SceneSidebar({
                         <div className="flex items-center gap-1 text-xs font-medium text-red-500/90 dark:text-red-400">
                           {onRetryOutline ? (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRetryOutline(outline.id);
                               }}
                               disabled={isRetrying}
+                              aria-label={t('generation.retryScene')}
                               className="p-1 -ml-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                               title={t('generation.retryScene')}
                             >
                               <RefreshCw
-                                className={cn('w-3.5 h-3.5', isRetrying && 'animate-spin')}
+                                className={cn(
+                                  'w-3.5 h-3.5',
+                                  isRetrying && 'motion-safe:animate-spin motion-reduce:animate-none',
+                                )}
                               />
                             </button>
                           ) : (
@@ -422,13 +491,13 @@ export function SceneSidebar({
                           <div
                             className={cn(
                               'h-2 w-3/5 bg-gray-200 dark:bg-gray-700 rounded',
-                              !isPaused && 'animate-pulse',
+                              !isPaused && 'motion-safe:animate-pulse motion-reduce:animate-none',
                             )}
                           />
                           <div
                             className={cn(
                               'h-1.5 w-2/5 bg-gray-200 dark:bg-gray-700 rounded',
-                              !isPaused && 'animate-pulse',
+                              !isPaused && 'motion-safe:animate-pulse motion-reduce:animate-none',
                             )}
                           />
                           <span className="text-[9px] font-medium text-gray-400 dark:text-gray-500 mt-0.5">
@@ -438,7 +507,7 @@ export function SceneSidebar({
                       )}
                     </div>
                     {!isFailed && !isPaused && (
-                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" />
+                      <div className="absolute inset-0 -translate-x-full motion-safe:animate-[shimmer_2s_infinite] motion-reduce:animate-none bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" />
                     )}
                   </div>
                 </div>

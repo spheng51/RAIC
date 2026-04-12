@@ -33,7 +33,10 @@ function normalizeBaseUrl(rawUrl: string, envName: string) {
 }
 
 function createUrlFromBase(baseUrl: string, relativePath: string) {
-  return new URL(relativePath.replace(/^\/+/, ''), `${baseUrl}/`);
+  return new URL(
+    relativePath.replace(/^\/+/, ''),
+    baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+  );
 }
 
 export function getMiroFishConfig(): MiroFishConfig {
@@ -122,7 +125,8 @@ export function createMiroFishEmbedToken(input: MiroFishEmbedTokenInput) {
     return null;
   }
 
-  const validityWindowSeconds = 10 * 60;
+  // Keep embed tokens stable across polling and valid for a typical class session.
+  const validityWindowSeconds = 2 * 60 * 60;
   const nowSeconds = Math.floor(Date.now() / 1000);
   const exp =
     Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds +

@@ -2,9 +2,13 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { NextRequest } from 'next/server';
 import type { Scene, Stage } from '@/lib/types/stage';
+import { preserveStageSharedSimulation } from '@/lib/utils/classroom-presentation';
 
 export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
 export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
+const ATOMIC_WRITE_RETRY_CODES = new Set(['EACCES', 'EPERM']);
+const ATOMIC_WRITE_MAX_ATTEMPTS = 4;
+const ATOMIC_WRITE_RETRY_MS = 25;
 
 async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true });
@@ -18,14 +22,48 @@ export async function ensureClassroomJobsDir() {
   await ensureDir(CLASSROOM_JOBS_DIR);
 }
 
+function isRetryableAtomicWriteError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as NodeJS.ErrnoException).code === 'string' &&
+    ATOMIC_WRITE_RETRY_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+  );
+}
+
+async function waitForAtomicWriteRetry(attempt: number) {
+  await new Promise((resolve) => setTimeout(resolve, ATOMIC_WRITE_RETRY_MS * attempt));
+}
+
+async function replaceFileWithRetry(tempFilePath: string, filePath: string) {
+  for (let attempt = 1; attempt <= ATOMIC_WRITE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await fs.rename(tempFilePath, filePath);
+      return;
+    } catch (error) {
+      if (!isRetryableAtomicWriteError(error) || attempt === ATOMIC_WRITE_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      await fs.rm(filePath, { force: true }).catch(() => undefined);
+      await waitForAtomicWriteRetry(attempt);
+    }
+  }
+}
+
 export async function writeJsonFileAtomic(filePath: string, data: unknown) {
   const dir = path.dirname(filePath);
   await ensureDir(dir);
 
   const tempFilePath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   const content = JSON.stringify(data, null, 2);
-  await fs.writeFile(tempFilePath, content, 'utf-8');
-  await fs.rename(tempFilePath, filePath);
+  try {
+    await fs.writeFile(tempFilePath, content, 'utf-8');
+    await replaceFileWithRetry(tempFilePath, filePath);
+  } finally {
+    await fs.rm(tempFilePath, { force: true }).catch(() => undefined);
+  }
 }
 
 function normalizeAppBaseUrl(url: string): string {
@@ -43,9 +81,25 @@ export function buildRequestOrigin(req: NextRequest): string {
 
 export interface PersistedClassroomData {
   id: string;
+  ownerUserId: string | null;
+  organizationId: string | null;
   stage: Stage;
   scenes: Scene[];
   createdAt: string;
+}
+
+function normalizePersistedClassroomData(
+  value: PersistedClassroomData | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
+    ownerUserId?: string | null;
+    organizationId?: string | null;
+  }),
+): PersistedClassroomData {
+  return {
+    ...value,
+    ownerUserId: typeof value.ownerUserId === 'string' ? value.ownerUserId : null,
+    organizationId: typeof value.organizationId === 'string' ? value.organizationId : null,
+    stage: preserveStageSharedSimulation(value.stage, value.stage.sharedSimulation ?? null),
+  };
 }
 
 export function isValidClassroomId(id: string): boolean {
@@ -72,7 +126,7 @@ export async function readClassroom(id: string): Promise<PersistedClassroomData 
   const filePath = resolveClassroomJsonPath(id);
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(content) as PersistedClassroomData;
+    return normalizePersistedClassroomData(JSON.parse(content) as PersistedClassroomData);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null;
@@ -90,6 +144,8 @@ async function writePersistedClassroomData(data: PersistedClassroomData) {
 export async function persistClassroom(
   data: {
     id: string;
+    ownerUserId?: string | null;
+    organizationId?: string | null;
     stage: Stage;
     scenes: Scene[];
   },
@@ -97,7 +153,9 @@ export async function persistClassroom(
 ): Promise<PersistedClassroomData & { url: string }> {
   const classroomData: PersistedClassroomData = {
     id: data.id,
-    stage: data.stage,
+    ownerUserId: data.ownerUserId ?? null,
+    organizationId: data.organizationId ?? null,
+    stage: preserveStageSharedSimulation(data.stage, data.stage.sharedSimulation),
     scenes: data.scenes,
     createdAt: new Date().toISOString(),
   };
@@ -120,6 +178,19 @@ export async function updateClassroom(
   }
 
   const next = updater(existing);
-  await writePersistedClassroomData(next);
-  return next;
+  const preservedStage = preserveStageSharedSimulation(
+    next.stage,
+    next.stage.sharedSimulation ?? existing.stage.sharedSimulation ?? null,
+  );
+  const normalizedNext = normalizePersistedClassroomData(
+    preservedStage === next.stage
+      ? next
+      : {
+          ...next,
+          stage: preservedStage,
+        },
+  );
+
+  await writePersistedClassroomData(normalizedNext);
+  return normalizedNext;
 }

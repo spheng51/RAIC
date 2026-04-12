@@ -32,6 +32,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
   const videoModelId = useSettingsStore((state) => state.videoModelId);
   const videoProvidersConfig = useSettingsStore((state) => state.videoProvidersConfig);
   const setVideoProviderConfig = useSettingsStore((state) => state.setVideoProviderConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
@@ -59,6 +60,8 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
     [currentConfig?.customModels],
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
+  const canOverrideBaseUrl =
+    !currentConfig?.hasOrganizationConfig || aiPolicy.allowPersonalCustomBaseUrls;
 
   const handleApiKeyChange = (apiKey: string) => {
     setVideoProviderConfig(selectedProviderId, { apiKey });
@@ -232,6 +235,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
             t('settings.enterCustomBaseUrl')
           }
           className="h-8"
+          disabled={!canOverrideBaseUrl}
         />
         {(() => {
           const effectiveBaseUrl =

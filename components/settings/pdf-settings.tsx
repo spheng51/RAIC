@@ -39,10 +39,13 @@ export function PDFSettings({ selectedProviderId }: PDFSettingsProps) {
 
   const pdfProvidersConfig = useSettingsStore((state) => state.pdfProvidersConfig);
   const setPDFProviderConfig = useSettingsStore((state) => state.setPDFProviderConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   const pdfProvider = PDF_PROVIDERS[selectedProviderId];
   const isServerConfigured = !!pdfProvidersConfig[selectedProviderId]?.isServerConfigured;
   const providerConfig = pdfProvidersConfig[selectedProviderId];
+  const canOverrideBaseUrl =
+    !providerConfig?.hasOrganizationConfig || aiPolicy.allowPersonalCustomBaseUrls;
   const hasBaseUrl = !!providerConfig?.baseUrl;
   const needsRemoteConfig = selectedProviderId === 'mineru';
 
@@ -117,6 +120,7 @@ export function PDFSettings({ selectedProviderId }: PDFSettingsProps) {
                     setPDFProviderConfig(selectedProviderId, { baseUrl: e.target.value })
                   }
                   className="text-sm"
+                  disabled={!canOverrideBaseUrl}
                 />
                 <Button
                   variant="outline"

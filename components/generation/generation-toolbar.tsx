@@ -130,6 +130,8 @@ export function GenerationToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label={t('toolbar.configureProvider')}
               onClick={() => onSettingsOpen('providers')}
               className={cn(
                 pillCls,
@@ -149,25 +151,36 @@ export function GenerationToolbar({
       <div className="w-px h-4 bg-border/60 mx-1" />
 
       {/* ── PDF (parser + upload) combined Popover ── */}
-      <Popover>
+        <Popover>
         <PopoverTrigger asChild>
           {pdfFile ? (
-            <button className={pillActive}>
-              <Paperclip className="size-3.5" />
-              <span className="max-w-[100px] truncate">{pdfFile.name}</span>
-              <span
-                role="button"
-                className="size-4 rounded-full inline-flex items-center justify-center hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors"
+            <div className="relative inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-label={t('toolbar.currentPdf', { name: pdfFile.name })}
+                className={pillActive}
+              >
+                <Paperclip className="size-3.5" />
+                <span className="max-w-[100px] truncate">{pdfFile.name}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={t('toolbar.removePdf')}
                 onClick={(e) => {
                   e.stopPropagation();
                   onPdfFileChange(null);
                 }}
+                className="size-4 rounded-full inline-flex items-center justify-center hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50"
               >
                 <X className="size-2.5" />
-              </span>
-            </button>
+              </button>
+            </div>
           ) : (
-            <button className={pillMuted}>
+            <button
+              type="button"
+              aria-label={t('toolbar.uploadPdf')}
+              className={pillMuted}
+            >
               <Paperclip className="size-3.5" />
             </button>
           )}
@@ -221,8 +234,8 @@ export function GenerationToolbar({
               }}
             />
             {pdfFile ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                   <div className="size-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
                     <FileText className="size-4 text-violet-600 dark:text-violet-400" />
                   </div>
@@ -234,6 +247,7 @@ export function GenerationToolbar({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => onPdfFileChange(null)}
                   className="w-full text-xs text-destructive hover:underline text-left"
                 >
@@ -241,9 +255,12 @@ export function GenerationToolbar({
                 </button>
               </div>
             ) : (
-              <div
+              <button
+                type="button"
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label={t('toolbar.pdfUpload')}
                 className={cn(
-                  'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors cursor-pointer',
+                  'w-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors cursor-pointer',
                   isDragging
                     ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20'
                     : 'border-muted-foreground/20 hover:border-violet-300',
@@ -266,7 +283,7 @@ export function GenerationToolbar({
                 <p className="text-[10px] text-muted-foreground/60 mt-0.5">
                   {t('upload.pdfSizeLimit')}
                 </p>
-              </div>
+              </button>
             )}
           </div>
         </PopoverContent>
@@ -276,7 +293,11 @@ export function GenerationToolbar({
       {webSearchAvailable ? (
         <Popover>
           <PopoverTrigger asChild>
-            <button className={webSearch ? pillActive : pillMuted}>
+            <button
+              type="button"
+              aria-label={webSearch ? t('toolbar.webSearchOn') : t('toolbar.webSearchOff')}
+              className={webSearch ? pillActive : pillMuted}
+            >
               <Globe2 className={cn('size-3.5', webSearch && 'animate-pulse')} />
               {webSearch && (
                 <span>{WEB_SEARCH_PROVIDERS[webSearchProviderId]?.name || 'Search'}</span>
@@ -286,7 +307,9 @@ export function GenerationToolbar({
           <PopoverContent align="start" className="w-64 p-3 space-y-3">
             {/* Toggle */}
             <button
+              aria-label={webSearch ? t('toolbar.webSearchOn') : t('toolbar.webSearchOff')}
               onClick={() => onWebSearchChange(!webSearch)}
+              type="button"
               className={cn(
                 'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all',
                 webSearch
@@ -350,7 +373,12 @@ export function GenerationToolbar({
       ) : (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button className={cn(pillCls, 'text-muted-foreground/40 cursor-not-allowed')} disabled>
+            <button
+              type="button"
+              aria-label={t('toolbar.webSearchNoProvider')}
+              className={cn(pillCls, 'text-muted-foreground/40 cursor-not-allowed')}
+              disabled
+            >
               <Globe2 className="size-3.5" />
             </button>
           </TooltipTrigger>
@@ -361,11 +389,13 @@ export function GenerationToolbar({
       {/* ── Language pill ── */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
-            className={pillMuted}
-          >
-            <Globe className="size-3.5" />
+            <button
+              type="button"
+              aria-label={t('toolbar.languageHint')}
+              onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
+              className={pillMuted}
+            >
+              <Globe className="size-3.5" />
             <span>{language === 'zh-CN' ? '中文' : 'EN'}</span>
           </button>
         </TooltipTrigger>
@@ -426,6 +456,8 @@ function ModelSelectorPopover({
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <button
+              type="button"
+              aria-label={currentModelId ? `${currentProviderConfig?.name} / ${currentModelId}` : t('settings.selectModel')}
               className={cn(
                 'inline-flex items-center justify-center size-7 rounded-full transition-all cursor-pointer select-none',
                 'ring-1 ring-border/60 hover:ring-border hover:bg-muted/60',
@@ -467,10 +499,11 @@ function ModelSelectorPopover({
             {configuredProviders.map((provider) => {
               const isActive = currentProviderId === provider.id;
               return (
-                <button
-                  key={provider.id}
-                  onClick={() => setDrillProvider(provider.id)}
-                  className={cn(
+              <button
+                key={provider.id}
+                type="button"
+                onClick={() => setDrillProvider(provider.id)}
+                className={cn(
                     'w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors border-b border-border/30',
                     isActive ? 'bg-violet-50/50 dark:bg-violet-950/10' : 'hover:bg-muted/50',
                   )}
@@ -511,6 +544,8 @@ function ModelSelectorPopover({
           <div className="max-h-72 overflow-y-auto">
             {/* Back header */}
             <button
+              type="button"
+              aria-label={t('toolbar.selectProvider')}
               onClick={() => setDrillProvider(null)}
               className="w-full flex items-center gap-2 px-3 py-2 border-b bg-muted/40 hover:bg-muted/60 transition-colors"
             >
@@ -536,11 +571,13 @@ function ModelSelectorPopover({
             {activeProvider.models.map((model) => {
               const isSelected = currentProviderId === drillProvider && currentModelId === model.id;
               return (
-                <button
-                  key={model.id}
-                  onClick={() => {
-                    setModel(drillProvider, model.id);
-                    setPopoverOpen(false);
+              <button
+                key={model.id}
+                type="button"
+                aria-label={`${activeProvider.name} ${model.name}`}
+                onClick={() => {
+                  setModel(drillProvider, model.id);
+                  setPopoverOpen(false);
                   }}
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-left transition-colors border-b border-border/30',

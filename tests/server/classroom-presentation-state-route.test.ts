@@ -10,11 +10,15 @@ vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
 }));
 
-vi.mock('@/lib/server/classroom-presentation', () => ({
-  getClassroomPresentationSnapshot: getClassroomPresentationSnapshotMock,
-  canSessionControlPresentation: canSessionControlPresentationMock,
-  doesSessionOwnSimulationControl: doesSessionOwnSimulationControlMock,
-}));
+vi.mock('@/lib/server/classroom-presentation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/classroom-presentation')>();
+  return {
+    ...actual,
+    getClassroomPresentationSnapshot: getClassroomPresentationSnapshotMock,
+    canSessionControlPresentation: canSessionControlPresentationMock,
+    doesSessionOwnSimulationControl: doesSessionOwnSimulationControlMock,
+  };
+});
 
 describe('GET /api/classroom/[id]/presentation-state', () => {
   beforeEach(() => {

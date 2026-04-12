@@ -27,6 +27,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
   const ttsProvidersConfig = useSettingsStore((state) => state.ttsProvidersConfig);
   const setTTSProviderConfig = useSettingsStore((state) => state.setTTSProviderConfig);
   const activeProviderId = useSettingsStore((state) => state.ttsProviderId);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   // When testing a non-active provider, use that provider's default voice
   // instead of the active provider's voice (which may be incompatible).
@@ -37,6 +38,9 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
 
   const ttsProvider = TTS_PROVIDERS[selectedProviderId] ?? TTS_PROVIDERS['openai-tts'];
   const isServerConfigured = !!ttsProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const canOverrideBaseUrl =
+    !ttsProvidersConfig[selectedProviderId]?.hasOrganizationConfig ||
+    aiPolicy.allowPersonalCustomBaseUrls;
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testText, setTestText] = useState(t('settings.ttsTestTextDefault'));
@@ -225,6 +229,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
                   })
                 }
                 className="text-sm"
+                disabled={!canOverrideBaseUrl}
               />
             </div>
           </div>

@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRequestRole } from '@/lib/auth/authorize';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import {
   getClassroomPresentationSnapshot,
   resetSharedSimulationControl,
 } from '@/lib/server/classroom-presentation';
-import { apiError, apiSuccess, API_ERROR_CODES } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  API_ERROR_CODES,
+} from '@/lib/server/api-response';
 import { isValidClassroomId, updateClassroom } from '@/lib/server/classroom-storage';
+import { recordAuditEvent } from '@/lib/server/audit-log';
+import { createLogger } from '@/lib/logger';
 
 interface ControlBody {
   action?: 'grant' | 'revoke';
   targetSessionId?: string;
   leaseMinutes?: number;
 }
+
+const log = createLogger('Classroom Presentation Control');
 
 export async function PATCH(
   request: NextRequest,
@@ -24,21 +33,58 @@ export async function PATCH(
 
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+  }
+
+  const access = await requireClassroomAccess(request, id);
+  if (access instanceof NextResponse) {
+    return access;
   }
 
   const snapshot = await getClassroomPresentationSnapshot(id);
   if (!snapshot) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
   }
 
   if (!snapshot.sharedSimulation) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'No MiroFish simulation is attached');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'No MiroFish simulation is attached',
+    );
   }
 
   const body = (await request.json()) as ControlBody;
   if (body.action !== 'grant' && body.action !== 'revoke') {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid action');
+    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid action');
+  }
+
+  const targetSessionId = body.targetSessionId?.trim();
+  const requestedLeaseMinutes = Math.min(Math.max(body.leaseMinutes ?? 10, 1), 120);
+
+  if (body.action === 'grant') {
+    const targetParticipant = snapshot.participants.find(
+      (participant) => participant.sessionId === targetSessionId,
+    );
+    if (!targetSessionId || !targetParticipant) {
+      log.warn('Control update rejected', {
+        classroomId: id,
+        simulationId: snapshot.sharedSimulation.simulationId,
+        reportId: snapshot.sharedSimulation.reportId ?? null,
+        actorSessionId: auth.session.id,
+        actorUserId: auth.user.id,
+        targetSessionId: targetSessionId ?? null,
+        leaseMinutes: requestedLeaseMinutes,
+        result: 'invalid_target',
+      });
+      return apiErrorWithRequestSession(
+        request,
+        API_ERROR_CODES.INVALID_REQUEST,
+        400,
+        'targetSessionId must match an active classroom session',
+      );
+    }
   }
 
   const updated = await updateClassroom(id, (current) => {
@@ -57,15 +103,6 @@ export async function PATCH(
       };
     }
 
-    const targetSessionId = body.targetSessionId?.trim();
-    const targetParticipant = snapshot.participants.find(
-      (participant) => participant.sessionId === targetSessionId,
-    );
-    if (!targetSessionId || !targetParticipant) {
-      return current;
-    }
-
-    const leaseMinutes = Math.min(Math.max(body.leaseMinutes ?? 10, 1), 120);
     return {
       ...current,
       stage: {
@@ -74,7 +111,9 @@ export async function PATCH(
           ...sharedSimulation,
           controllerSessionId: targetSessionId,
           controllerRole: 'student',
-          controlLeaseExpiresAt: new Date(Date.now() + leaseMinutes * 60 * 1000).toISOString(),
+          controlLeaseExpiresAt: new Date(
+            Date.now() + requestedLeaseMinutes * 60 * 1000,
+          ).toISOString(),
         },
       },
     };
@@ -82,24 +121,47 @@ export async function PATCH(
 
   const nextSharedSimulation = updated?.stage.sharedSimulation;
   if (!nextSharedSimulation) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'No MiroFish simulation is attached');
-  }
-
-  if (body.action === 'grant') {
-    const targetSessionId = body.targetSessionId?.trim();
-    const targetParticipant = snapshot.participants.find(
-      (participant) => participant.sessionId === targetSessionId,
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'No MiroFish simulation is attached',
     );
-    if (!targetSessionId || !targetParticipant) {
-      return apiError(
-        API_ERROR_CODES.INVALID_REQUEST,
-        400,
-        'targetSessionId must match an active classroom session',
-      );
-    }
   }
 
-  return apiSuccess({
+  await recordAuditEvent({
+    organizationId: auth.session.organizationId,
+    userId: auth.user.id,
+    actorRole: auth.session.role,
+    action:
+      body.action === 'grant'
+        ? 'classroom.presentation_control.granted'
+        : 'classroom.presentation_control.revoked',
+    resourceType: 'classroom',
+    resourceId: id,
+    metadata: {
+      actorSessionId: auth.session.id,
+      targetSessionId: targetSessionId ?? null,
+      leaseMinutes: body.action === 'grant' ? requestedLeaseMinutes : null,
+      nextControllerSessionId: nextSharedSimulation.controllerSessionId ?? null,
+      controllerRole: nextSharedSimulation.controllerRole,
+    },
+  });
+
+  log.info('Control updated', {
+    classroomId: id,
+    simulationId: nextSharedSimulation.simulationId,
+    reportId: nextSharedSimulation.reportId ?? null,
+    actorSessionId: auth.session.id,
+    actorUserId: auth.user.id,
+    targetSessionId: targetSessionId ?? null,
+    leaseMinutes: body.action === 'grant' ? requestedLeaseMinutes : null,
+    nextControllerSessionId: nextSharedSimulation.controllerSessionId ?? null,
+    controllerRole: nextSharedSimulation.controllerRole,
+    result: body.action === 'grant' ? 'granted' : 'revoked',
+  });
+
+  return apiSuccessWithRequestSession(request, {
     sharedSimulation: nextSharedSimulation,
     updatedByUserId: auth.user.id,
   });

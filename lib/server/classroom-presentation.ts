@@ -9,8 +9,21 @@ import {
   type PersistedClassroomData,
 } from '@/lib/server/classroom-storage';
 import { withMiroFishEmbedToken } from '@/lib/server/mirofish';
-import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
+import type {
+  ClassroomPresentationParticipant,
+  ClassroomPresentationStatePayload,
+} from '@/lib/types/classroom-presentation';
 import type { SharedSimulation } from '@/lib/types/stage';
+import {
+  getSharedSimulationFingerprint,
+  getStageSharedSimulation,
+  hasAttachedSharedSimulation,
+  hasSharedSimulationReport,
+  hasStudentControlLease,
+  normalizeSharedSimulationControl,
+  preserveStageSharedSimulation,
+  resetSharedSimulationControl,
+} from '@/lib/utils/classroom-presentation';
 
 export interface ClassroomPresentationSnapshot {
   classroom: PersistedClassroomData;
@@ -20,28 +33,7 @@ export interface ClassroomPresentationSnapshot {
   runUrl: string | null;
   reportUrl: string | null;
 }
-
-export function resetSharedSimulationControl(sharedSimulation: SharedSimulation): SharedSimulation {
-  return {
-    ...sharedSimulation,
-    controllerSessionId: undefined,
-    controllerRole: 'teacher',
-    controlLeaseExpiresAt: undefined,
-  };
-}
-
-export function hasStudentControlLease(sharedSimulation: SharedSimulation | null): boolean {
-  if (!sharedSimulation || sharedSimulation.controllerRole !== 'student') {
-    return false;
-  }
-
-  if (!sharedSimulation.controllerSessionId || !sharedSimulation.controlLeaseExpiresAt) {
-    return false;
-  }
-
-  const leaseExpiry = new Date(sharedSimulation.controlLeaseExpiresAt).getTime();
-  return !Number.isNaN(leaseExpiry) && leaseExpiry > Date.now();
-}
+export { hasStudentControlLease, resetSharedSimulationControl };
 
 export function canSessionControlPresentation(
   sharedSimulation: SharedSimulation | null,
@@ -71,9 +63,12 @@ export function doesSessionOwnSimulationControl(
   }
 
   return (
-    hasStudentControlLease(sharedSimulation) &&
-    sharedSimulation.controllerSessionId === session.id
+    hasStudentControlLease(sharedSimulation) && sharedSimulation.controllerSessionId === session.id
   );
+}
+
+export function canSessionManageSimulation(session: SessionRecord): boolean {
+  return session.kind === 'web' && session.role !== 'student';
 }
 
 async function listClassroomPresentationParticipants(
@@ -103,34 +98,33 @@ export async function getClassroomPresentationSnapshot(
     return null;
   }
 
-  let sharedSimulation = classroom.stage.sharedSimulation ?? null;
+  let sharedSimulation = getStageSharedSimulation(classroom.stage);
   let participants = await listClassroomPresentationParticipants(classroomId, sharedSimulation);
+  const normalizedSharedSimulation = normalizeSharedSimulationControl(
+    sharedSimulation,
+    participants.map((participant) => participant.sessionId),
+  );
 
-  if (sharedSimulation?.controllerRole === 'student') {
-    const activeSessionIds = new Set(participants.map((participant) => participant.sessionId));
-    if (
-      !hasStudentControlLease(sharedSimulation) ||
-      !sharedSimulation.controllerSessionId ||
-      !activeSessionIds.has(sharedSimulation.controllerSessionId)
-    ) {
-      const normalized = resetSharedSimulationControl(sharedSimulation);
-      const updated = await updateClassroom(classroomId, (current) => ({
-        ...current,
-        stage: {
-          ...current.stage,
-          sharedSimulation: normalized,
-        },
-      }));
+  if (
+    sharedSimulation &&
+    normalizedSharedSimulation &&
+    normalizedSharedSimulation !== sharedSimulation
+  ) {
+    const updated = await updateClassroom(classroomId, (current) => ({
+      ...current,
+      stage: preserveStageSharedSimulation(current.stage, normalizedSharedSimulation),
+    }));
 
-      if (updated) {
-        classroom = updated;
-        sharedSimulation = normalized;
-        participants = await listClassroomPresentationParticipants(classroomId, sharedSimulation);
-      }
+    if (updated) {
+      classroom = updated;
+      sharedSimulation = getStageSharedSimulation(updated.stage);
+      participants = await listClassroomPresentationParticipants(classroomId, sharedSimulation);
     }
+  } else {
+    sharedSimulation = normalizedSharedSimulation;
   }
 
-  const runUrl = sharedSimulation
+  const runUrl = hasAttachedSharedSimulation(sharedSimulation)
     ? withMiroFishEmbedToken(sharedSimulation.runUrl, {
         classroomId,
         simulationId: sharedSimulation.simulationId,
@@ -150,8 +144,77 @@ export async function getClassroomPresentationSnapshot(
     classroom,
     sharedSimulation,
     participants,
-    reportAvailable: Boolean(sharedSimulation?.reportId && sharedSimulation.reportUrl),
+    reportAvailable: hasSharedSimulationReport(sharedSimulation),
     runUrl,
     reportUrl,
   };
+}
+
+export function buildClassroomPresentationStatePayload(
+  snapshot: ClassroomPresentationSnapshot,
+  session: SessionRecord,
+): ClassroomPresentationStatePayload {
+  const viewerCanManageSimulation = canSessionManageSimulation(session);
+  const viewerCanControlPresentation = canSessionControlPresentation(
+    snapshot.sharedSimulation,
+    session,
+  );
+  const viewerHasSimulationControl = doesSessionOwnSimulationControl(
+    snapshot.sharedSimulation,
+    session,
+  );
+
+  return {
+    activeSurface: snapshot.sharedSimulation?.activeSurface ?? 'lesson',
+    controllerSessionId: snapshot.sharedSimulation?.controllerSessionId ?? null,
+    controllerRole: snapshot.sharedSimulation?.controllerRole ?? 'teacher',
+    controlLeaseExpiresAt: snapshot.sharedSimulation?.controlLeaseExpiresAt ?? null,
+    simulationStatus: snapshot.sharedSimulation?.status ?? null,
+    reportAvailable: hasSharedSimulationReport(snapshot.sharedSimulation),
+    sharedSimulation: snapshot.sharedSimulation
+      ? {
+          ...snapshot.sharedSimulation,
+          runUrl: snapshot.runUrl ?? snapshot.sharedSimulation.runUrl,
+          reportUrl: snapshot.reportUrl ?? snapshot.sharedSimulation.reportUrl,
+        }
+      : null,
+    runUrl: snapshot.runUrl,
+    reportUrl: snapshot.reportUrl,
+    viewerSessionId: session.id,
+    viewerRole: session.role,
+    viewerKind: session.kind,
+    viewerCanManageSimulation,
+    viewerCanControlPresentation,
+    viewerHasSimulationControl,
+    participants: snapshot.participants,
+  };
+}
+
+export function getClassroomPresentationFingerprint(
+  payload: ClassroomPresentationStatePayload,
+): string {
+  return JSON.stringify({
+    activeSurface: payload.activeSurface,
+    controllerSessionId: payload.controllerSessionId,
+    controllerRole: payload.controllerRole,
+    controlLeaseExpiresAt: payload.controlLeaseExpiresAt,
+    simulationStatus: payload.simulationStatus,
+    reportAvailable: payload.reportAvailable,
+    runUrl: payload.runUrl,
+    reportUrl: payload.reportUrl,
+    sharedSimulation: getSharedSimulationFingerprint(payload.sharedSimulation),
+    viewerSessionId: payload.viewerSessionId,
+    viewerRole: payload.viewerRole,
+    viewerKind: payload.viewerKind,
+    viewerCanManageSimulation: payload.viewerCanManageSimulation,
+    viewerCanControlPresentation: payload.viewerCanControlPresentation,
+    viewerHasSimulationControl: payload.viewerHasSimulationControl,
+    participants: payload.participants.map((participant) => ({
+      sessionId: participant.sessionId,
+      userId: participant.userId,
+      displayName: participant.displayName,
+      role: participant.role,
+      isController: participant.isController,
+    })),
+  });
 }

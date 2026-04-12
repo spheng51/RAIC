@@ -114,7 +114,7 @@ describe('proxy-media helpers and route', () => {
         'content-length': '11',
         'content-type': 'image/png',
       }),
-      body: { getReader } as ReadableStream<Uint8Array>,
+      body: ({ getReader } as unknown) as ReadableStream<Uint8Array>,
     });
 
     const { POST } = await import('@/app/api/proxy-media/route');

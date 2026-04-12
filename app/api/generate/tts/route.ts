@@ -9,10 +9,18 @@
 
 import { NextRequest } from 'next/server';
 import { generateTTS } from '@/lib/audio/tts-providers';
-import { resolveTTSApiKey, resolveTTSBaseUrl } from '@/lib/server/provider-config';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('TTS API');
@@ -41,7 +49,8 @@ export async function POST(req: NextRequest) {
 
     // Validate required fields
     if (!text || !audioId || !ttsProviderId || !ttsVoice) {
-      return apiError(
+      return apiErrorWithRequestSession(
+        req,
         'MISSING_REQUIRED_FIELD',
         400,
         'Missing required fields: text, audioId, ttsProviderId, ttsVoice',
@@ -50,32 +59,40 @@ export async function POST(req: NextRequest) {
 
     // Reject browser-native TTS — must be handled client-side
     if (ttsProviderId === 'browser-native-tts') {
-      return apiError('INVALID_REQUEST', 400, 'browser-native-tts must be handled client-side');
+      return apiErrorWithRequestSession(
+        req,
+        'INVALID_REQUEST',
+        400,
+        'browser-native-tts must be handled client-side',
+      );
     }
 
     const clientBaseUrl = ttsBaseUrl || undefined;
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
+        return apiErrorWithRequestSession(req, 'INVALID_URL', 403, ssrfError);
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? ttsApiKey || ''
-      : resolveTTSApiKey(ttsProviderId, ttsApiKey || undefined);
-    const baseUrl = clientBaseUrl
-      ? clientBaseUrl
-      : resolveTTSBaseUrl(ttsProviderId, ttsBaseUrl || undefined);
+    const auth = await getRequestAuth(req);
+    const resolved = await resolveGovernedProviderConfig({
+      auth,
+      family: 'tts',
+      providerId: ttsProviderId,
+      requestedSecret: ttsApiKey || undefined,
+      requestedBaseUrl: clientBaseUrl,
+      requestedModel: ttsModelId || undefined,
+    });
 
     // Build TTS config
     const config = {
       providerId: ttsProviderId as TTSProviderId,
-      modelId: ttsModelId,
+      modelId: resolved.modelId || ttsModelId,
       voice: ttsVoice,
       speed: ttsSpeed ?? 1.0,
-      apiKey,
-      baseUrl,
+      apiKey: resolved.apiKey,
+      baseUrl: resolved.baseUrl,
     };
 
     log.info(
@@ -88,13 +105,19 @@ export async function POST(req: NextRequest) {
     // Convert to base64
     const base64 = Buffer.from(audio).toString('base64');
 
-    return apiSuccess({ audioId, base64, format });
+    return apiSuccessWithRequestSession(req, { audioId, base64, format });
   } catch (error) {
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+
     log.error(
       `TTS generation failed [provider=${ttsProviderId ?? 'unknown'}, voice=${ttsVoice ?? 'unknown'}, audioId=${audioId ?? 'unknown'}]:`,
       error,
     );
-    return apiError(
+    return apiErrorWithRequestSession(
+      req,
       'GENERATION_FAILED',
       500,
       error instanceof Error ? error.message : String(error),

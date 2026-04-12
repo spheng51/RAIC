@@ -5,6 +5,7 @@ const requireClassroomAccessMock = vi.fn();
 const getClassroomPresentationSnapshotMock = vi.fn();
 const canSessionControlPresentationMock = vi.fn();
 const updateClassroomMock = vi.fn();
+const recordAuditEventMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -23,6 +24,10 @@ vi.mock('@/lib/server/classroom-storage', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/server/audit-log', () => ({
+  recordAuditEvent: recordAuditEventMock,
+}));
+
 describe('PATCH /api/classroom/[id]/presentation', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -30,6 +35,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     getClassroomPresentationSnapshotMock.mockReset();
     canSessionControlPresentationMock.mockReset();
     updateClassroomMock.mockReset();
+    recordAuditEventMock.mockReset();
   });
 
   it('rejects invalid activeSurface values', async () => {
@@ -215,10 +221,92 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
 
     expect(response.status).toBe(200);
     expect(updateClassroomMock).toHaveBeenCalledWith('room-1', expect.any(Function));
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'classroom.presentation.surface_changed',
+        resourceId: 'room-1',
+        actorRole: 'teacher',
+        metadata: expect.objectContaining({
+          activeSurface: 'report',
+          previousSurface: 'lesson',
+          status: 'completed',
+          previousStatus: 'attached',
+          actorSessionId: 'teacher-session',
+          actorKind: 'web',
+        }),
+      }),
+    );
     expect(json.sharedSimulation).toEqual(
       expect.objectContaining({
         activeSurface: 'report',
         status: 'completed',
+      }),
+    );
+  });
+
+  it('records recovery-to-lesson when a simulation error falls back the classroom view', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        session: { id: 'teacher-session', kind: 'web', role: 'teacher' },
+        user: { id: 'teacher-1' },
+      },
+      source: 'web',
+    });
+    getClassroomPresentationSnapshotMock.mockResolvedValue({
+      sharedSimulation: {
+        provider: 'mirofish',
+        simulationId: 'sim-1',
+        reportId: 'report-1',
+        activeSurface: 'simulation',
+        controllerRole: 'teacher',
+        status: 'running',
+      },
+      reportAvailable: true,
+    });
+    canSessionControlPresentationMock.mockReturnValue(true);
+    updateClassroomMock.mockImplementation(async (_id, updater) =>
+      updater({
+        stage: {
+          sharedSimulation: {
+            provider: 'mirofish',
+            simulationId: 'sim-1',
+            reportId: 'report-1',
+            activeSurface: 'simulation',
+            controllerRole: 'teacher',
+            status: 'running',
+          },
+        },
+      }),
+    );
+
+    const { PATCH } = await import('@/app/api/classroom/[id]/presentation/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation', {
+        method: 'PATCH',
+        body: JSON.stringify({ activeSurface: 'lesson', status: 'error' }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'classroom.presentation.recovered_to_lesson',
+        resourceId: 'room-1',
+        metadata: expect.objectContaining({
+          activeSurface: 'lesson',
+          previousSurface: 'simulation',
+          status: 'error',
+          previousStatus: 'running',
+          actorSessionId: 'teacher-session',
+        }),
+      }),
+    );
+    expect(json.sharedSimulation).toEqual(
+      expect.objectContaining({
+        activeSurface: 'lesson',
+        status: 'error',
       }),
     );
   });

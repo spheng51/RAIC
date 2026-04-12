@@ -236,13 +236,42 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       [width, onWidthChange],
     );
 
+    const adjustWidth = useCallback(
+      (delta: number) => {
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width + delta));
+        onWidthChange?.(newWidth);
+      },
+      [width, onWidthChange],
+    );
+
+    const handleResizeKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          adjustWidth(16);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          adjustWidth(-16);
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          onWidthChange?.(MIN_WIDTH);
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          onWidthChange?.(MAX_WIDTH);
+        }
+      },
+      [adjustWidth, onWidthChange],
+    );
+
     const displayWidth = collapsed ? 0 : width;
 
     return (
       <div
         style={{
           width: displayWidth,
-          transition: isDragging ? 'none' : 'width 0.3s ease',
+          transition: isDragging
+            ? 'none'
+            : 'width var(--motion-duration-enter) var(--motion-ease-standard)',
         }}
         className={cn(
           'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-gray-100 dark:border-gray-800 shadow-[-2px_0_24px_rgba(0,0,0,0.02)] flex flex-col shrink-0 z-20 relative overflow-visible',
@@ -251,12 +280,18 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       >
         {/* Drag handle */}
         {!collapsed && (
-          <div
+          <button
+            type="button"
             onMouseDown={handleDragStart}
-            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors"
+            onKeyDown={handleResizeKeyDown}
+            aria-label="Resize chat panel"
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors focus-visible:outline-none focus-visible:bg-purple-400/30 dark:focus-visible:bg-purple-600/30"
           >
-            <div className="absolute left-0.5 top-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-purple-400 dark:group-hover:bg-purple-500 transition-colors" />
-          </div>
+            <div
+              aria-hidden="true"
+              className="absolute left-0.5 top-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-purple-400 dark:group-hover:bg-purple-500 transition-colors"
+            />
+          </button>
         )}
 
         <div className={cn('flex flex-col w-full h-full overflow-hidden', collapsed && 'hidden')}>
@@ -278,7 +313,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
                   {/* Amber pulse dot when there's an active chat session and user is on Notes tab */}
                   {hasActiveChatSession && activeTab === 'lecture' && (
                     <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                      <span className="motion-safe:animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
                     </span>
                   )}
@@ -287,8 +322,11 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
 
               {onCollapseChange && (
                 <button
+                  type="button"
                   onClick={() => onCollapseChange(true)}
-                  className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gray-100/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 ring-1 ring-black/[0.04] dark:ring-white/[0.06] hover:bg-gray-200/90 dark:hover:bg-gray-700/90 hover:text-gray-700 dark:hover:text-gray-200 active:scale-90 transition-all duration-200"
+                  aria-label="Collapse chat panel"
+                  title="Collapse chat panel"
+                  className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gray-100/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 ring-1 ring-black/[0.04] dark:ring-white/[0.06] hover:bg-gray-200/90 dark:hover:bg-gray-700/90 hover:text-gray-700 dark:hover:text-gray-200 active:scale-90 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40"
                 >
                   <PanelRightClose className="w-4 h-4" />
                 </button>

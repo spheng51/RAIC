@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
 import type { PresentationSurface, SharedSimulation } from '@/lib/types/stage';
+import { formatLeaseCountdown, getControllerDisplayName } from '@/lib/utils/classroom-presentation';
 import { toast } from 'sonner';
 
 interface MiroFishManagerDialogProps {
@@ -28,7 +29,7 @@ interface MiroFishManagerDialogProps {
     reportId?: string;
     defaultSurface: 'lesson' | 'simulation';
   }) => Promise<void>;
-  readonly onGrantControl: (targetSessionId: string) => Promise<void>;
+  readonly onGrantControl: (targetSessionId: string, leaseMinutes: number) => Promise<void>;
   readonly onRevokeControl: () => Promise<void>;
 }
 
@@ -44,7 +45,10 @@ export function MiroFishManagerDialog({
   const [simulationId, setSimulationId] = useState('');
   const [reportId, setReportId] = useState('');
   const [defaultSurface, setDefaultSurface] = useState<'lesson' | 'simulation'>('lesson');
+  const [leaseMinutes, setLeaseMinutes] = useState(10);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'attach' | 'grant' | 'revoke' | null>(null);
+  const [leaseNowMs, setLeaseNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!open) {
@@ -54,22 +58,26 @@ export function MiroFishManagerDialog({
     setSimulationId(sharedSimulation?.simulationId ?? '');
     setReportId(sharedSimulation?.reportId ?? '');
     setDefaultSurface(sharedSimulation?.activeSurface === 'simulation' ? 'simulation' : 'lesson');
+    setLeaseMinutes(10);
+    setAttachError(null);
   }, [open, sharedSimulation]);
 
   const controllerLabel = useMemo(() => {
-    if (!sharedSimulation) {
-      return 'Teacher';
-    }
-
-    if (sharedSimulation.controllerRole === 'teacher') {
-      return 'Teacher';
-    }
-
-    const controllerParticipant = participants.find(
-      (participant) => participant.sessionId === sharedSimulation.controllerSessionId,
-    );
-    return controllerParticipant?.displayName || 'Student controller';
+    return getControllerDisplayName(sharedSimulation, participants);
   }, [participants, sharedSimulation]);
+
+  useEffect(() => {
+    if (!open || !sharedSimulation?.controlLeaseExpiresAt) {
+      return;
+    }
+
+    setLeaseNowMs(Date.now());
+    const interval = window.setInterval(() => {
+      setLeaseNowMs(Date.now());
+    }, 1_000);
+
+    return () => window.clearInterval(interval);
+  }, [open, sharedSimulation?.controlLeaseExpiresAt]);
 
   const activeSurfaceLabel = (surface: PresentationSurface | undefined) => {
     switch (surface) {
@@ -81,6 +89,8 @@ export function MiroFishManagerDialog({
         return 'Lesson';
     }
   };
+
+  const leaseCountdown = formatLeaseCountdown(sharedSimulation?.controlLeaseExpiresAt, leaseNowMs);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,7 +110,10 @@ export function MiroFishManagerDialog({
               <Input
                 id="mirofish-simulation-id"
                 value={simulationId}
-                onChange={(event) => setSimulationId(event.target.value)}
+                onChange={(event) => {
+                  setSimulationId(event.target.value);
+                  setAttachError(null);
+                }}
                 placeholder="prepared-simulation-id"
               />
             </div>
@@ -110,7 +123,10 @@ export function MiroFishManagerDialog({
               <Input
                 id="mirofish-report-id"
                 value={reportId}
-                onChange={(event) => setReportId(event.target.value)}
+                onChange={(event) => {
+                  setReportId(event.target.value);
+                  setAttachError(null);
+                }}
                 placeholder="optional-report-id"
               />
             </div>
@@ -122,7 +138,10 @@ export function MiroFishManagerDialog({
                   <button
                     key={surface}
                     type="button"
-                    onClick={() => setDefaultSurface(surface)}
+                    onClick={() => {
+                      setDefaultSurface(surface);
+                      setAttachError(null);
+                    }}
                     className={`rounded-full border px-3 py-1.5 text-sm transition ${
                       defaultSurface === surface
                         ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
@@ -135,6 +154,26 @@ export function MiroFishManagerDialog({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Control lease</Label>
+              <div className="flex flex-wrap gap-2">
+                {[5, 10, 30].map((minutes) => (
+                  <button
+                    key={minutes}
+                    type="button"
+                    onClick={() => setLeaseMinutes(minutes)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      leaseMinutes === minutes
+                        ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300'
+                    }`}
+                  >
+                    {minutes} minutes
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Button
               type="button"
               className="w-full"
@@ -142,13 +181,14 @@ export function MiroFishManagerDialog({
               onClick={async () => {
                 setBusyAction('attach');
                 try {
+                  setAttachError(null);
                   await onAttach({
                     simulationId: simulationId.trim(),
                     reportId: reportId.trim() || undefined,
                     defaultSurface,
                   });
                 } catch (error) {
-                  toast.error(
+                  setAttachError(
                     error instanceof Error ? error.message : 'Failed to attach MiroFish.',
                   );
                 } finally {
@@ -159,6 +199,9 @@ export function MiroFishManagerDialog({
               {busyAction === 'attach' && <Loader2 className="h-4 w-4 animate-spin" />}
               {sharedSimulation ? 'Update attached MiroFish' : 'Attach MiroFish'}
             </Button>
+            {attachError && (
+              <p className="text-sm text-rose-600 dark:text-rose-400">{attachError}</p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -177,10 +220,13 @@ export function MiroFishManagerDialog({
                 </Badge>
               </div>
               {sharedSimulation?.controlLeaseExpiresAt && (
-                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                  Student lease expires at{' '}
-                  {new Date(sharedSimulation.controlLeaseExpiresAt).toLocaleTimeString()}.
-                </p>
+                <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                  <p>
+                    Student lease expires at{' '}
+                    {new Date(sharedSimulation.controlLeaseExpiresAt).toLocaleTimeString()}.
+                  </p>
+                  {leaseCountdown && <p>Countdown: {leaseCountdown}</p>}
+                </div>
               )}
             </div>
 
@@ -210,6 +256,11 @@ export function MiroFishManagerDialog({
                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                           Last active {new Date(participant.lastSeenAt).toLocaleTimeString()}
                         </p>
+                        {participant.isController && leaseCountdown && (
+                          <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Lease: {leaseCountdown}
+                          </p>
+                        )}
                       </div>
                       <Button
                         type="button"
@@ -219,7 +270,7 @@ export function MiroFishManagerDialog({
                         onClick={async () => {
                           setBusyAction('grant');
                           try {
-                            await onGrantControl(participant.sessionId);
+                            await onGrantControl(participant.sessionId, leaseMinutes);
                           } catch (error) {
                             toast.error(
                               error instanceof Error ? error.message : 'Failed to grant control.',

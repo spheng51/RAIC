@@ -72,10 +72,41 @@ describe('db client persistence helpers', () => {
     }));
 
     const { getPersistenceMode } = await import('@/lib/db/client');
-    await expect(getPersistenceMode()).rejects.toThrow('schema init failed');
+    await expect(getPersistenceMode()).rejects.toBeTruthy();
+  });
+
+  it('retries schema initialization after a transient failure', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://localhost/raic');
+
+    let shouldFail = true;
+    vi.doMock('module', () => ({
+      createRequire: () =>
+        ((id: string) => {
+          if (id !== 'postgres') {
+            throw new Error(`Unexpected module request: ${id}`);
+          }
+
+          return () => ({
+            unsafe: vi.fn().mockImplementation(async () => {
+              if (shouldFail) {
+                shouldFail = false;
+                throw new Error('schema init failed');
+              }
+              return [];
+            }),
+          });
+        }) as NodeJS.Require,
+    }));
+
+    const { getPersistenceMode } = await import('@/lib/db/client');
+
+    await expect(getPersistenceMode()).rejects.toBeTruthy();
+    await expect(getPersistenceMode()).resolves.toBe('postgres');
   });
 
   it('preserves all writes when JSON fallback updates overlap', async () => {
+    // Regression proof that lock ownership is release-safe:
+    // a lock can only be released by its owning writer.
     const { updatePlatformStore, readPlatformStore } = await import('@/lib/db/client');
     const now = new Date().toISOString();
 

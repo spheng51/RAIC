@@ -1,5 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import type { AuthContext } from '@/lib/auth/current-user';
+import type { PlatformRole } from '@/lib/db/schema';
 import type {
   ClassroomGenerationProgress,
   ClassroomGenerationStep,
@@ -14,6 +16,12 @@ import {
 
 export type ClassroomGenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
+export interface ClassroomGenerationJobOwner {
+  organizationId: string | null;
+  userId: string | null;
+  actorRole: PlatformRole | null;
+}
+
 export interface ClassroomGenerationJob {
   id: string;
   status: ClassroomGenerationJobStatus;
@@ -22,6 +30,7 @@ export interface ClassroomGenerationJob {
   message: string;
   createdAt: string;
   updatedAt: string;
+  owner: ClassroomGenerationJobOwner;
   startedAt?: string;
   completedAt?: string;
   inputSummary: {
@@ -102,6 +111,7 @@ export function isValidClassroomJobId(jobId: string): boolean {
 export async function createClassroomGenerationJob(
   jobId: string,
   input: GenerateClassroomInput,
+  owner: ClassroomGenerationJobOwner,
 ): Promise<ClassroomGenerationJob> {
   const now = new Date().toISOString();
   const job: ClassroomGenerationJob = {
@@ -112,6 +122,7 @@ export async function createClassroomGenerationJob(
     message: 'Classroom generation job queued',
     createdAt: now,
     updatedAt: now,
+    owner,
     inputSummary: buildInputSummary(input),
     scenesGenerated: 0,
   };
@@ -223,4 +234,23 @@ export async function markClassroomGenerationJobFailed(
     completedAt: new Date().toISOString(),
     error,
   });
+}
+
+export function canAccessClassroomGenerationJob(
+  job: ClassroomGenerationJob,
+  auth: AuthContext | null,
+): boolean {
+  if (!auth) {
+    return false;
+  }
+
+  if (job.owner.organizationId && auth.organization?.id !== job.owner.organizationId) {
+    return false;
+  }
+
+  if (auth.session.role === 'teacher' && job.owner.userId && auth.user.id !== job.owner.userId) {
+    return false;
+  }
+
+  return true;
 }

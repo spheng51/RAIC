@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server';
 import { generateText } from 'ai';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
 import { resolveModel } from '@/lib/server/resolve-model';
 const log = createLogger('Verify Model');
 
@@ -11,9 +17,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { apiKey, baseUrl, providerType } = body;
     model = body.model;
+    const auth = await getRequestAuth(req);
 
     if (!model) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Model name is required');
+      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Model name is required');
     }
 
     // Parse model string and resolve server-side fallback
@@ -24,13 +31,24 @@ export async function POST(req: NextRequest) {
         apiKey: apiKey || '',
         baseUrl: baseUrl || undefined,
         providerType,
+        auth,
       });
       languageModel = result.model;
     } catch (error) {
-      return apiError(
-        'INVALID_REQUEST',
-        401,
-        error instanceof Error ? error.message : String(error),
+      return (
+        (await (async () => {
+          const governanceError = toGovernedProviderApiErrorResponse(error);
+          if (governanceError) {
+            return withRequestWebSession(req, governanceError);
+          }
+
+          return apiErrorWithRequestSession(
+            req,
+            'INVALID_REQUEST',
+            401,
+            error instanceof Error ? error.message : String(error),
+          );
+        })())
       );
     }
 
@@ -40,7 +58,7 @@ export async function POST(req: NextRequest) {
       prompt: 'Say "OK" if you can hear me.',
     });
 
-    return apiSuccess({
+    return apiSuccessWithRequestSession(req, {
       message: 'Connection successful',
       response: text,
     });
@@ -65,6 +83,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return apiError('INTERNAL_ERROR', 500, errorMessage);
+    return apiErrorWithRequestSession(req, 'INTERNAL_ERROR', 500, errorMessage);
   }
 }

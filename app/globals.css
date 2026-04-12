@@ -80,6 +80,11 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --motion-duration-enter: 220ms;
+  --motion-duration-exit: 160ms;
+  --motion-duration-ambient: 4800ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -192,5 +197,27 @@
   }
   100% {
     transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-enter: 120ms;
+    --motion-duration-exit: 120ms;
+    --motion-duration-ambient: 0.01ms;
+  }
+
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--motion-duration-exit) !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -5,6 +5,7 @@ import { useStageStore } from '@/lib/store';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
+import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-presentation-state';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { SceneSidebar } from './stage/scene-sidebar';
 import { Header } from './header';
@@ -20,8 +21,17 @@ import { useDiscussionTTS } from '@/lib/hooks/use-discussion-tts';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
 import type { ClassroomPresentationStatePayload } from '@/lib/types/classroom-presentation';
-import type { PresentationSurface, SharedSimulation, SharedSimulationStatus } from '@/lib/types/stage';
+import type {
+  PresentationSurface,
+  SharedSimulation,
+  SharedSimulationStatus,
+} from '@/lib/types/stage';
 import { cn } from '@/lib/utils';
+import {
+  getControllerDisplayName,
+  hasSharedSimulationReport,
+  preserveStageSharedSimulation,
+} from '@/lib/utils/classroom-presentation';
 // Playback state persistence removed — refresh always starts from the beginning
 import { ChatArea, type ChatAreaRef } from '@/components/chat/chat-area';
 import { agentsToParticipants, useAgentRegistry } from '@/lib/orchestration/registry/store';
@@ -58,7 +68,7 @@ function getInitialPresentationState(
     controllerRole: sharedSimulation.controllerRole,
     controlLeaseExpiresAt: sharedSimulation.controlLeaseExpiresAt ?? null,
     simulationStatus: sharedSimulation.status,
-    reportAvailable: Boolean(sharedSimulation.reportId && sharedSimulation.reportUrl),
+    reportAvailable: hasSharedSimulationReport(sharedSimulation),
     sharedSimulation,
     runUrl: sharedSimulation.runUrl,
     reportUrl: sharedSimulation.reportUrl ?? null,
@@ -135,9 +145,10 @@ export function Stage({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPresentationInteractionActive, setIsPresentationInteractionActive] = useState(false);
   const [miroFishManagerOpen, setMiroFishManagerOpen] = useState(false);
-  const [presentationState, setPresentationState] = useState<ClassroomPresentationStatePayload | null>(
-    () => getInitialPresentationState(stage?.sharedSimulation),
-  );
+  const [presentationState, setPresentationState] =
+    useState<ClassroomPresentationStatePayload | null>(() =>
+      getInitialPresentationState(stage?.sharedSimulation),
+    );
   const [presentationFallbackMessage, setPresentationFallbackMessage] = useState<string | null>(
     null,
   );
@@ -203,7 +214,6 @@ export function Stage({
   const discussionAbortRef = useRef<AbortController | null>(null);
   const presentationIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const presentationFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const presentationPollInFlightRef = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   // Guard to prevent double flash when manual stop triggers onDiscussionEnd
   const manualStopRef = useRef(false);
@@ -345,10 +355,7 @@ export function Stage({
       }
 
       return {
-        stage: {
-          ...state.stage,
-          sharedSimulation: sharedSimulation ?? undefined,
-        },
+        stage: preserveStageSharedSimulation(state.stage, sharedSimulation),
       };
     });
   }, []);
@@ -372,44 +379,10 @@ export function Stage({
     }, 6000);
   }, []);
 
-  const refreshPresentationState = useCallback(
-    async (silent = false) => {
-      if (!stage?.id || presentationPollInFlightRef.current) {
-        return;
-      }
-
-      presentationPollInFlightRef.current = true;
-      try {
-        const response = await fetch(
-          `/api/classroom/${encodeURIComponent(stage.id)}/presentation-state`,
-          {
-            cache: 'no-store',
-          },
-        );
-        const json = (await response.json().catch(() => null)) as
-          | ({ success: true } & ClassroomPresentationStatePayload)
-          | { success?: false; error?: string }
-          | null;
-        const errorMessage = json && 'error' in json ? json.error : undefined;
-
-        if (!response.ok || !json?.success) {
-          if (!silent) {
-            toast.error(errorMessage || 'Failed to refresh classroom presentation state.');
-          }
-          return;
-        }
-
-        syncPresentationState(json);
-      } catch (error) {
-        if (!silent) {
-          toast.error(error instanceof Error ? error.message : 'Failed to refresh classroom.');
-        }
-      } finally {
-        presentationPollInFlightRef.current = false;
-      }
-    },
-    [stage?.id, syncPresentationState],
-  );
+  const { refreshPresentationState } = useClassroomPresentationState({
+    classroomId: stage?.id,
+    onStateChange: syncPresentationState,
+  });
 
   const patchPresentationState = useCallback(
     async (
@@ -427,9 +400,10 @@ export function Stage({
         },
         body: JSON.stringify(body),
       });
-      const json = (await response.json().catch(() => null)) as
-        | { success?: boolean; error?: string }
-        | null;
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
       const errorMessage = json && 'error' in json ? json.error : undefined;
 
       if (!response.ok || !json?.success) {
@@ -464,9 +438,10 @@ export function Stage({
           body: JSON.stringify(input),
         },
       );
-      const json = (await response.json().catch(() => null)) as
-        | { success?: boolean; error?: string }
-        | null;
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
       const errorMessage = json && 'error' in json ? json.error : undefined;
 
       if (!response.ok || !json?.success) {
@@ -494,7 +469,7 @@ export function Stage({
   );
 
   const handleGrantMiroFishControl = useCallback(
-    async (targetSessionId: string) => {
+    async (targetSessionId: string, leaseMinutes: number) => {
       if (!stage?.id) {
         return;
       }
@@ -507,11 +482,13 @@ export function Stage({
         body: JSON.stringify({
           action: 'grant',
           targetSessionId,
+          leaseMinutes,
         }),
       });
-      const json = (await response.json().catch(() => null)) as
-        | { success?: boolean; error?: string }
-        | null;
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
       const errorMessage = json && 'error' in json ? json.error : undefined;
 
       if (!response.ok || !json?.success) {
@@ -538,9 +515,10 @@ export function Stage({
         action: 'revoke',
       }),
     });
-    const json = (await response.json().catch(() => null)) as
-      | { success?: boolean; error?: string }
-      | null;
+    const json = (await response.json().catch(() => null)) as {
+      success?: boolean;
+      error?: string;
+    } | null;
     const errorMessage = json && 'error' in json ? json.error : undefined;
 
     if (!response.ok || !json?.success) {
@@ -553,7 +531,7 @@ export function Stage({
 
   const handleMiroFishEvent = useCallback(
     (event: MiroFishHostEvent) => {
-      if (!presentationState) {
+      if (!presentationState || !presentationState.viewerCanControlPresentation) {
         return;
       }
 
@@ -567,6 +545,7 @@ export function Stage({
       if (
         event.type === 'runStatus' &&
         event.status &&
+        event.status !== 'error' &&
         event.status !== presentationState.simulationStatus
       ) {
         void patchPresentationState({ status: event.status }, { silent: true });
@@ -576,10 +555,6 @@ export function Stage({
       if (event.type === 'reportReady' && presentationState.simulationStatus !== 'completed') {
         void patchPresentationState({ status: 'completed' }, { silent: true });
         return;
-      }
-
-      if (event.type === 'error' && presentationState.simulationStatus !== 'error') {
-        void patchPresentationState({ status: 'error' }, { silent: true });
       }
     },
     [patchPresentationState, presentationState],
@@ -591,7 +566,7 @@ export function Stage({
 
       if (
         presentationState &&
-        (presentationState.viewerCanManageSimulation || presentationState.viewerHasSimulationControl) &&
+        presentationState.viewerCanControlPresentation &&
         presentationState.activeSurface !== 'lesson'
       ) {
         await patchPresentationState(
@@ -616,21 +591,10 @@ export function Stage({
 
   useEffect(() => {
     setPresentationFallbackMessage(null);
-    setPresentationState(getInitialPresentationState(useStageStore.getState().stage?.sharedSimulation));
+    setPresentationState(
+      getInitialPresentationState(useStageStore.getState().stage?.sharedSimulation),
+    );
   }, [stage?.id]);
-
-  useEffect(() => {
-    if (!stage?.id) {
-      return;
-    }
-
-    void refreshPresentationState(true);
-    const interval = window.setInterval(() => {
-      void refreshPresentationState(true);
-    }, 1500);
-
-    return () => window.clearInterval(interval);
-  }, [refreshPresentationState, stage?.id]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -1231,15 +1195,17 @@ export function Stage({
   const activePresentationSurface =
     presentationState?.activeSurface ?? sharedSimulation?.activeSurface ?? 'lesson';
   const miroFishRunUrl = presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null;
-  const miroFishReportUrl =
-    presentationState?.reportUrl ?? sharedSimulation?.reportUrl ?? null;
+  const miroFishReportUrl = presentationState?.reportUrl ?? sharedSimulation?.reportUrl ?? null;
   const reportAvailable =
-    presentationState?.reportAvailable ??
-    Boolean(sharedSimulation?.reportId && sharedSimulation?.reportUrl);
+    presentationState?.reportAvailable ?? hasSharedSimulationReport(sharedSimulation);
   const viewerCanManageSimulation = presentationState?.viewerCanManageSimulation ?? false;
   const viewerCanControlPresentation = presentationState?.viewerCanControlPresentation ?? false;
   const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
   const presentationParticipants = presentationState?.participants ?? [];
+  const controllerDisplayName = getControllerDisplayName(
+    sharedSimulation,
+    presentationParticipants,
+  );
 
   // Map engine mode to the CanvasArea's expected engine state
   const canvasEngineState = (() => {
@@ -1338,12 +1304,16 @@ export function Stage({
             runUrl={miroFishRunUrl}
             reportUrl={miroFishReportUrl}
             viewerHasSimulationControl={viewerHasSimulationControl}
+            controllerDisplayName={controllerDisplayName}
+            controlLeaseExpiresAt={sharedSimulation?.controlLeaseExpiresAt ?? null}
             presentationFallbackMessage={presentationFallbackMessage}
             onMiroFishEvent={handleMiroFishEvent}
             onReclaimMiroFishControl={() => {
               void handleRevokeMiroFishControl().catch((error) => {
                 toast.error(
-                  error instanceof Error ? error.message : 'Failed to return control to the teacher.',
+                  error instanceof Error
+                    ? error.message
+                    : 'Failed to return control to the teacher.',
                 );
               });
             }}
