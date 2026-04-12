@@ -128,9 +128,9 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 - If `RAIC_SECRET_ENCRYPTION_KEY` is missing, bootstrap config still works, but `/api/admin/ai/config` and `/api/me/ai/overrides` fail closed for secret storage
 - Public `/` demo keeps the legacy local-storage flow for this release window, while authenticated `/studio` and `/admin` use the governed path
 
-Operator rollout notes, smoke checks, and release-gate steps live in [docs/ai-governance-rollout.md](docs/ai-governance-rollout.md).
+Operator rollout notes, smoke checks, and release-gate steps are maintained as deployment runbooks alongside release operations.
 
-MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps live in [docs/mirofish-classroom-rollout.md](docs/mirofish-classroom-rollout.md).
+MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps follow the same release-operations runbook process.
 
 MiniMax quick examples:
 
@@ -518,4 +518,3 @@ If you find OpenMAIC useful in your research, please consider citing:
 ## 📄 License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
-
