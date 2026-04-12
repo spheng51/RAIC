@@ -264,7 +264,8 @@ export function LiveClassroomCockpit({
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Scene {currentSceneNumber}/{Math.max(totalScenesCount, 1)}: {currentSceneTitle || 'Untitled scene'}
+              Scene {currentSceneNumber}/{Math.max(totalScenesCount, 1)}:{' '}
+              {currentSceneTitle || 'Untitled scene'}
             </span>
             <Badge variant="outline" className="border-gray-200 bg-white/70 text-gray-700">
               {activeSurfaceLabel}
@@ -439,13 +440,17 @@ export function LiveClassroomCockpit({
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Students</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Students
+                  </div>
                   <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {studentCount}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Hands</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Hands
+                  </div>
                   <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {handRaiseCount}
                   </div>
@@ -457,7 +462,9 @@ export function LiveClassroomCockpit({
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Controller</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Controller
+                  </div>
                   <div className="mt-2 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {controllerDisplayName}
                   </div>

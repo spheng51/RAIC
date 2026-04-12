@@ -5,6 +5,7 @@ import path from 'path';
 import type { APIRequestContext, BrowserContext } from '@playwright/test';
 import type {
   AuditLogRecord,
+  JoinTokenRecord,
   MembershipRecord,
   OrganizationAIPolicyRecord,
   OrganizationKind,
@@ -25,6 +26,12 @@ const CLASSROOMS_DIR = path.join(DATA_DIR, 'classrooms');
 const CLASSROOM_JOBS_DIR = path.join(DATA_DIR, 'classroom-jobs');
 const ENCRYPTION_VERSION = 'v1';
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const TEST_SLIDE_THEME = {
+  backgroundColor: '#ffffff',
+  themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4'],
+  fontColor: '#333333',
+  fontName: 'Inter',
+};
 
 export interface SeededAuthSession {
   token: string;
@@ -111,7 +118,10 @@ export function createAuthSession(params: {
   const organizationName = params.organizationName ?? 'Governed School';
   const organizationSlug =
     params.organizationSlug ??
-    organizationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    organizationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   const token = `${params.userId}-session-token`;
 
   const user: UserRecord = {
@@ -241,6 +251,33 @@ export function createUserProviderOverride(params: {
   };
 }
 
+export function createJoinToken(params: {
+  classroomId: string;
+  createdByUserId: string;
+  organizationId?: string | null;
+  displayName: string;
+  rawToken: string;
+  expiresAt?: string;
+}) {
+  const createdAt = nowIso();
+  const expiresAt = params.expiresAt ?? futureIso(1);
+
+  return {
+    rawToken: params.rawToken,
+    record: {
+      id: randomUUID(),
+      classroomId: params.classroomId,
+      createdByUserId: params.createdByUserId,
+      organizationId: params.organizationId ?? null,
+      displayName: params.displayName,
+      tokenHash: hashToken(params.rawToken),
+      createdAt,
+      expiresAt,
+      consumedAt: null,
+    } satisfies JoinTokenRecord,
+  };
+}
+
 export async function resetRaicData() {
   await Promise.all([
     fs.rm(path.dirname(PLATFORM_STORE_PATH), { recursive: true, force: true }),
@@ -251,6 +288,7 @@ export async function resetRaicData() {
 
 export async function writePlatformStore(params: {
   sessions: SeededAuthSession[];
+  joinTokens?: JoinTokenRecord[];
   organizationAiPolicies?: OrganizationAIPolicyRecord[];
   organizationProviderConfigs?: OrganizationProviderConfigRecord[];
   userProviderOverrides?: UserProviderOverrideRecord[];
@@ -273,7 +311,7 @@ export async function writePlatformStore(params: {
     organizations: [...organizations.values()],
     memberships: [...memberships.values()],
     sessions: [...sessions.values()],
-    joinTokens: [],
+    joinTokens: [...(params.joinTokens ?? [])],
     auditLogs: [...(params.auditLogs ?? [])],
     organizationAiPolicies: [...(params.organizationAiPolicies ?? [])],
     organizationProviderConfigs: [...(params.organizationProviderConfigs ?? [])],
@@ -287,6 +325,73 @@ export async function writePlatformStore(params: {
 export async function readPlatformStore(): Promise<PlatformStore> {
   const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf8');
   return JSON.parse(content) as PlatformStore;
+}
+
+export async function writeClassroomData(params: {
+  classroomId: string;
+  ownerUserId: string | null;
+  organizationId?: string | null;
+  stageName: string;
+  sceneTitles: string[];
+}) {
+  const createdAtIso = nowIso();
+  const createdAtMs = Date.now();
+  const stage = {
+    id: params.classroomId,
+    name: params.stageName,
+    description: `${params.stageName} classroom`,
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+    language: 'en-US',
+    style: 'professional',
+  };
+  const scenes = params.sceneTitles.map((title, index) => ({
+    id: `${params.classroomId}-scene-${index + 1}`,
+    stageId: params.classroomId,
+    type: 'slide' as const,
+    title,
+    order: index,
+    content: {
+      type: 'slide' as const,
+      canvas: {
+        id: `${params.classroomId}-slide-${index + 1}`,
+        viewportSize: 1000,
+        viewportRatio: 0.5625,
+        theme: TEST_SLIDE_THEME,
+        elements: [
+          {
+            type: 'text',
+            id: `${params.classroomId}-title-${index + 1}`,
+            content: title,
+            left: 50,
+            top: 50,
+            width: 900,
+            height: 100,
+          },
+        ],
+      },
+    },
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+  }));
+
+  const classroom = {
+    id: params.classroomId,
+    ownerUserId: params.ownerUserId,
+    organizationId: params.organizationId ?? null,
+    stage,
+    scenes,
+    createdAt: createdAtIso,
+  };
+
+  await fs.mkdir(CLASSROOMS_DIR, { recursive: true });
+  await fs.writeFile(
+    path.join(CLASSROOMS_DIR, `${params.classroomId}.json`),
+    JSON.stringify(classroom, null, 2),
+    'utf8',
+  );
+
+  return classroom;
 }
 
 export async function addSessionCookie(context: BrowserContext, token: string) {
@@ -345,9 +450,8 @@ export async function startMockOpenAIServer() {
     hits.push({
       method: req.method ?? 'GET',
       path: req.url ?? '/',
-      authorization: typeof req.headers.authorization === 'string'
-        ? req.headers.authorization
-        : undefined,
+      authorization:
+        typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
       body,
     });
 

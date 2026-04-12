@@ -1,7 +1,8 @@
 import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
 
-process.env.RAIC_SECRET_ENCRYPTION_KEY ??= '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+process.env.RAIC_SECRET_ENCRYPTION_KEY ??=
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const nodeBinDir = path.dirname(process.execPath);
 const webServerPath = `${nodeBinDir}${path.delimiter}${process.env.PATH ?? ''}`;
 

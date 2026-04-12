@@ -18,26 +18,16 @@ vi.mock('@/components/ui/dialog', async () => {
       children?: React.ReactNode;
       onOpenChange?: (open: boolean) => void;
     }) => (open ? React.createElement('div', { 'data-testid': 'dialog' }, children) : null),
-    DialogContent: ({
-      children,
-      className,
-    }: {
-      children?: React.ReactNode;
-      className?: string;
-    }) => React.createElement('div', { className }, children),
+    DialogContent: ({ children, className }: { children?: React.ReactNode; className?: string }) =>
+      React.createElement('div', { className }, children),
     DialogHeader: ({ children }: { children?: React.ReactNode }) =>
       React.createElement('div', null, children),
     DialogTitle: ({ children }: { children?: React.ReactNode }) =>
       React.createElement('h2', null, children),
     DialogDescription: ({ children }: { children?: React.ReactNode }) =>
       React.createElement('p', null, children),
-    DialogFooter: ({
-      children,
-      className,
-    }: {
-      children?: React.ReactNode;
-      className?: string;
-    }) => React.createElement('div', { className }, children),
+    DialogFooter: ({ children, className }: { children?: React.ReactNode; className?: string }) =>
+      React.createElement('div', { className }, children),
   };
 });
 
@@ -104,7 +94,10 @@ interface ManagerDialogTestProps {
   }) => Promise<void>;
   readonly onGrantControl: (targetSessionId: string, leaseMinutes: number) => Promise<void>;
   readonly onRevokeControl: () => Promise<void>;
-  readonly onCollaborationAction?: (input: { action: string; targetSessionId?: string }) => Promise<void>;
+  readonly onCollaborationAction?: (input: {
+    action: string;
+    targetSessionId?: string;
+  }) => Promise<void>;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -176,8 +169,9 @@ async function mountDialog(
 
 describe('MiroFishManagerDialog', () => {
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterEach(async () => {
@@ -357,7 +351,10 @@ describe('MiroFishManagerDialog', () => {
       freezeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(onCollaborationAction).toHaveBeenCalledWith({ action: 'freeze', targetSessionId: undefined });
+    expect(onCollaborationAction).toHaveBeenCalledWith({
+      action: 'freeze',
+      targetSessionId: undefined,
+    });
     expect(mounted.container.textContent).toContain('Mode: Multi-user');
     expect(mounted.container.textContent).toContain('Collaboration: live');
   });

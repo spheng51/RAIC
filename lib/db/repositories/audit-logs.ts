@@ -35,15 +35,18 @@ function mapAuditLogRow(row: AuditLogRow): AuditLogRecord {
   };
 }
 
-export async function appendAuditLog(input: {
-  organizationId?: string | null;
-  userId?: string | null;
-  actorRole?: PlatformRole | null;
-  action: string;
-  resourceType?: string | null;
-  resourceId?: string | null;
-  metadata?: Record<string, unknown>;
-}, executor?: PostgresExecutor): Promise<AuditLogRecord> {
+export async function appendAuditLog(
+  input: {
+    organizationId?: string | null;
+    userId?: string | null;
+    actorRole?: PlatformRole | null;
+    action: string;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+  executor?: PostgresExecutor,
+): Promise<AuditLogRecord> {
   const createdAt = new Date().toISOString();
   const metadata = input.metadata ?? {};
 
@@ -75,7 +78,7 @@ export async function appendAuditLog(input: {
         ],
       )
     : await runPostgresQuery<AuditLogRow>(
-    `INSERT INTO audit_logs (
+        `INSERT INTO audit_logs (
         id,
         organization_id,
         user_id,
@@ -88,18 +91,18 @@ export async function appendAuditLog(input: {
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
       RETURNING id, organization_id, user_id, actor_role, action, resource_type, resource_id, metadata, created_at`,
-    [
-      randomUUID(),
-      input.organizationId ?? null,
-      input.userId ?? null,
-      input.actorRole ?? null,
-      input.action,
-      input.resourceType ?? null,
-      input.resourceId ?? null,
-      JSON.stringify(metadata),
-      createdAt,
-    ],
-  );
+        [
+          randomUUID(),
+          input.organizationId ?? null,
+          input.userId ?? null,
+          input.actorRole ?? null,
+          input.action,
+          input.resourceType ?? null,
+          input.resourceId ?? null,
+          JSON.stringify(metadata),
+          createdAt,
+        ],
+      );
 
   if (rows) {
     return mapAuditLogRow(rows[0]);

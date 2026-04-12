@@ -11,10 +11,7 @@ import {
 } from '@/lib/server/api-response';
 import { isValidClassroomId } from '@/lib/server/classroom-storage';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
     return apiErrorWithRequestSession(

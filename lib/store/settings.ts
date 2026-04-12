@@ -19,7 +19,11 @@ import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
 import { validateProvider, validateModel } from '@/lib/store/settings-validation';
-import type { AIPolicySettings, AIProviderSource, EffectiveAIOptionsResponse } from '@/lib/types/ai-governance';
+import type {
+  AIPolicySettings,
+  AIProviderSource,
+  EffectiveAIOptionsResponse,
+} from '@/lib/types/ai-governance';
 
 const log = createLogger('Settings');
 
@@ -274,14 +278,14 @@ const getDefaultProvidersConfig = (): ProvidersConfig => {
 // Initialize default audio config
 const getDefaultAudioConfig = () => ({
   ttsProviderId: 'browser-native-tts' as TTSProviderId,
-        ttsVoice: 'default',
-        ttsSpeed: 1.0,
-        asrProviderId: 'browser-native' as ASRProviderId,
-        asrLanguage: 'zh',
-        aiPolicy: {
-          allowPersonalOverrides: false,
-          allowPersonalCustomBaseUrls: false,
-        },
+  ttsVoice: 'default',
+  ttsSpeed: 1.0,
+  asrProviderId: 'browser-native' as ASRProviderId,
+  asrLanguage: 'zh',
+  aiPolicy: {
+    allowPersonalOverrides: false,
+    allowPersonalCustomBaseUrls: false,
+  },
   ttsProvidersConfig: {
     'openai-tts': { apiKey: '', baseUrl: '', enabled: true },
     'azure-tts': { apiKey: '', baseUrl: '', enabled: false },
@@ -778,7 +782,9 @@ export const useSettingsStore = create<SettingsState>()(
           try {
             const res = await fetch('/api/ai/options');
             if (!res.ok) return;
-            const payload = (await res.json()) as { success?: boolean } & EffectiveAIOptionsResponse;
+            const payload = (await res.json()) as {
+              success?: boolean;
+            } & EffectiveAIOptionsResponse;
             const providerOptions = payload.providers;
             const data = {
               policy: payload.policy,
@@ -1095,7 +1101,7 @@ export const useSettingsStore = create<SettingsState>()(
               }
 
               const llmModels = validLLMProvider
-                ? newProvidersConfig[validLLMProvider as ProviderId]?.models ?? []
+                ? (newProvidersConfig[validLLMProvider as ProviderId]?.models ?? [])
                 : [];
               const validLLMModel = validLLMProvider
                 ? validateModel(state.modelId, llmModels) ||
@@ -1368,8 +1374,7 @@ export const useSettingsStore = create<SettingsState>()(
         }
         // Migrate MiniMax's model field to modelId
         for (const [, cfg] of Object.entries(
-          ((state.ttsProvidersConfig as unknown as Record<string, Record<string, unknown>>) ||
-            {}),
+          (state.ttsProvidersConfig as unknown as Record<string, Record<string, unknown>>) || {},
         )) {
           if (cfg.model && !cfg.modelId) {
             cfg.modelId = cfg.model;

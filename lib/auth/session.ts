@@ -8,7 +8,12 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_IDLE_HOURS,
 } from '@/lib/auth/constants';
-import { createSessionRecord, findSessionByTokenHash, revokeSessionById, touchSession } from '@/lib/db/repositories/sessions';
+import {
+  createSessionRecord,
+  findSessionByTokenHash,
+  revokeSessionById,
+  touchSession,
+} from '@/lib/db/repositories/sessions';
 import type { PlatformRole, SessionRecord } from '@/lib/db/schema';
 
 export function createOpaqueToken() {
@@ -75,10 +80,7 @@ export async function createClassroomSession(input: {
     throw new Error('Classroom session expiration is invalid');
   }
 
-  const absoluteLimit = Math.min(
-    hardLimit,
-    issuedAt + SESSION_ABSOLUTE_DAYS * 24 * 60 * 60 * 1000,
-  );
+  const absoluteLimit = Math.min(hardLimit, issuedAt + SESSION_ABSOLUTE_DAYS * 24 * 60 * 60 * 1000);
   const idleLimit = Math.min(hardLimit, issuedAt + SESSION_IDLE_HOURS * 60 * 60 * 1000);
   const rawToken = createOpaqueToken();
 
@@ -139,11 +141,7 @@ function isSecureCookieRequest() {
   return process.env.NODE_ENV === 'production';
 }
 
-export function attachSessionCookie(
-  response: NextResponse,
-  token: string,
-  expiresAt: string,
-) {
+export function attachSessionCookie(response: NextResponse, token: string, expiresAt: string) {
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: token,

@@ -164,7 +164,7 @@ export function CanvasArea({
           )}
 
           {!isLessonSurface && sharedSimulation && !whiteboardOpen && (
-          <MiroFishPane
+            <MiroFishPane
               key={`${currentSurface}:${sharedSimulation.simulationId}:${sharedSimulation.reportId ?? 'no-report'}`}
               activeSurface={currentSurface === 'report' ? 'report' : 'simulation'}
               simulationId={sharedSimulation.simulationId}
@@ -174,7 +174,9 @@ export function CanvasArea({
               collaborationMode={sharedSimulation.collaborationMode ?? 'single-controller'}
               viewerCanInteract={viewerCanInteractWithSimulation ?? !!viewerHasSimulationControl}
               viewerCanManageSimulation={!!viewerCanManageSimulation}
-              collaborationState={collaboration?.collaborationState ?? sharedSimulation.collaborationState}
+              collaborationState={
+                collaboration?.collaborationState ?? sharedSimulation.collaborationState
+              }
               viewerInteractionReason={viewerInteractionReason ?? null}
               spotlightDisplayName={spotlightDisplayName ?? null}
               controllerRole={sharedSimulation.controllerRole}

@@ -80,8 +80,9 @@ async function mountMiroFishPane(
 
 describe('MiroFishPane', () => {
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterEach(async () => {
@@ -241,7 +242,9 @@ describe('MiroFishPane', () => {
     });
 
     expect(mounted.container.textContent).toContain('Read-only collaboration view');
-    expect(mounted.container.textContent).toContain('The teacher has temporarily frozen student interaction.');
+    expect(mounted.container.textContent).toContain(
+      'The teacher has temporarily frozen student interaction.',
+    );
     expect(mounted.container.textContent).toContain('State: frozen');
     expect(mounted.container.textContent).toContain('Spotlight: Student Two');
     expect(mounted.container.textContent).not.toContain('Lease:');

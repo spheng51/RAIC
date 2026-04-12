@@ -27,10 +27,7 @@ vi.mock('@/components/ui/button', async () => {
 vi.mock('@/components/ui/badge', async () => {
   const React = await import('react');
   return {
-    Badge: ({
-      children,
-      ...props
-    }: HTMLAttributes<HTMLSpanElement> & { children?: ReactNode }) =>
+    Badge: ({ children, ...props }: HTMLAttributes<HTMLSpanElement> & { children?: ReactNode }) =>
       React.createElement('span', props, children),
   };
 });
@@ -53,7 +50,9 @@ vi.mock('@/components/ui/separator', async () => {
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 
 async function mountCockpit(
-  initialOverrides: Partial<ComponentProps<typeof import('@/components/stage/live-classroom-cockpit').LiveClassroomCockpit>> = {},
+  initialOverrides: Partial<
+    ComponentProps<typeof import('@/components/stage/live-classroom-cockpit').LiveClassroomCockpit>
+  > = {},
 ) {
   const { LiveClassroomCockpit } = await import('@/components/stage/live-classroom-cockpit');
 
@@ -136,8 +135,9 @@ async function mountCockpit(
 
 describe('LiveClassroomCockpit', () => {
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterEach(async () => {
@@ -214,8 +214,8 @@ describe('LiveClassroomCockpit', () => {
       'Slow down and recap the scene in one sentence.',
     );
 
-    const interventionTextarea = Array.from(container.querySelectorAll('textarea')).find((textarea) =>
-      textarea.placeholder?.includes('Ask the AI teacher'),
+    const interventionTextarea = Array.from(container.querySelectorAll('textarea')).find(
+      (textarea) => textarea.placeholder?.includes('Ask the AI teacher'),
     );
     expect(interventionTextarea).toBeTruthy();
 

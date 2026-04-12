@@ -187,7 +187,13 @@ export function Header({ currentSceneTitle }: HeaderProps) {
             }}
             disabled={!canExport || isExporting}
             type="button"
-            aria-label={canExport ? (isExporting ? t('export.exporting') : t('export.pptx')) : t('share.notReady')}
+            aria-label={
+              canExport
+                ? isExporting
+                  ? t('export.exporting')
+                  : t('export.pptx')
+                : t('share.notReady')
+            }
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             title={

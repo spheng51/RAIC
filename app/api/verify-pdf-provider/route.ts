@@ -23,7 +23,12 @@ export async function POST(req: NextRequest) {
     const auth = await getRequestAuth(req);
 
     if (!providerId) {
-      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Provider ID is required');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Provider ID is required',
+      );
     }
 
     const clientBaseUrl = (baseUrl as string | undefined) || undefined;
@@ -59,7 +64,12 @@ export async function POST(req: NextRequest) {
     });
 
     if (response.status >= 300 && response.status < 400) {
-      return apiErrorWithRequestSession(req, 'REDIRECT_NOT_ALLOWED', 403, 'Redirects are not allowed');
+      return apiErrorWithRequestSession(
+        req,
+        'REDIRECT_NOT_ALLOWED',
+        403,
+        'Redirects are not allowed',
+      );
     }
 
     // MinerU's FastAPI root returns 404 (no root route), but the server is reachable.

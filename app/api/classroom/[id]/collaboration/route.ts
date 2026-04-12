@@ -24,10 +24,7 @@ interface CollaborationBody {
 
 const log = createLogger('Classroom MiroFish Collaboration');
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
     return auth;

@@ -44,13 +44,19 @@ export async function GET(
   // Validate path segments — no traversal
   const joined = pathSegments.join('/');
   if (joined.includes('..') || pathSegments.some((s) => s.includes('\0'))) {
-    return withRequestWebSession(req, NextResponse.json({ error: 'Invalid path' }, { status: 400 }));
+    return withRequestWebSession(
+      req,
+      NextResponse.json({ error: 'Invalid path' }, { status: 400 }),
+    );
   }
 
   // Only allow media/ and audio/ subdirectories
   const subDir = pathSegments[0];
   if (subDir !== 'media' && subDir !== 'audio') {
-    return withRequestWebSession(req, NextResponse.json({ error: 'Invalid path' }, { status: 404 }));
+    return withRequestWebSession(
+      req,
+      NextResponse.json({ error: 'Invalid path' }, { status: 404 }),
+    );
   }
 
   const filePath = path.join(CLASSROOMS_DIR, classroomId, ...pathSegments);
@@ -103,6 +109,9 @@ export async function GET(
       `Classroom media serving failed [classroomId=${classroomId}, path=${joined}]:`,
       error,
     );
-    return withRequestWebSession(req, NextResponse.json({ error: 'Internal error' }, { status: 500 }));
+    return withRequestWebSession(
+      req,
+      NextResponse.json({ error: 'Internal error' }, { status: 500 }),
+    );
   }
 }

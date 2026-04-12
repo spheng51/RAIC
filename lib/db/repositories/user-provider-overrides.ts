@@ -79,12 +79,15 @@ export async function listUserProviderOverrides(input: {
   );
 }
 
-export async function findUserProviderOverride(input: {
-  organizationId: string;
-  userId: string;
-  family: AIProviderFamily;
-  providerId: string;
-}, executor?: PostgresExecutor): Promise<UserProviderOverrideRecord | null> {
+export async function findUserProviderOverride(
+  input: {
+    organizationId: string;
+    userId: string;
+    family: AIProviderFamily;
+    providerId: string;
+  },
+  executor?: PostgresExecutor,
+): Promise<UserProviderOverrideRecord | null> {
   const rows = executor
     ? await executor.unsafe<UserProviderOverrideRow>(
         `SELECT
@@ -108,7 +111,7 @@ export async function findUserProviderOverride(input: {
         [input.organizationId, input.userId, input.family, input.providerId],
       )
     : await runPostgresQuery<UserProviderOverrideRow>(
-    `SELECT
+        `SELECT
        id,
        organization_id,
        user_id,
@@ -126,8 +129,8 @@ export async function findUserProviderOverride(input: {
        AND family = $3
        AND provider_id = $4
      LIMIT 1`,
-    [input.organizationId, input.userId, input.family, input.providerId],
-  );
+        [input.organizationId, input.userId, input.family, input.providerId],
+      );
 
   if (rows) {
     return rows[0] ? mapRow(rows[0]) : null;
@@ -145,16 +148,19 @@ export async function findUserProviderOverride(input: {
   );
 }
 
-export async function upsertUserProviderOverride(input: {
-  organizationId: string;
-  userId: string;
-  family: AIProviderFamily;
-  providerId: string;
-  encryptedSecret?: string | null;
-  baseUrl?: string | null;
-  preferredModel?: string | null;
-  enabled: boolean;
-}, executor?: PostgresExecutor): Promise<UserProviderOverrideRecord> {
+export async function upsertUserProviderOverride(
+  input: {
+    organizationId: string;
+    userId: string;
+    family: AIProviderFamily;
+    providerId: string;
+    encryptedSecret?: string | null;
+    baseUrl?: string | null;
+    preferredModel?: string | null;
+    enabled: boolean;
+  },
+  executor?: PostgresExecutor,
+): Promise<UserProviderOverrideRecord> {
   const now = new Date().toISOString();
 
   const rows = executor
@@ -205,7 +211,7 @@ export async function upsertUserProviderOverride(input: {
         ],
       )
     : await runPostgresQuery<UserProviderOverrideRow>(
-    `INSERT INTO user_provider_overrides (
+        `INSERT INTO user_provider_overrides (
        id,
        organization_id,
        user_id,
@@ -237,19 +243,19 @@ export async function upsertUserProviderOverride(input: {
        enabled,
        created_at,
        updated_at`,
-    [
-      randomUUID(),
-      input.organizationId,
-      input.userId,
-      input.family,
-      input.providerId,
-      input.encryptedSecret ?? null,
-      input.baseUrl ?? null,
-      input.preferredModel ?? null,
-      input.enabled,
-      now,
-    ],
-  );
+        [
+          randomUUID(),
+          input.organizationId,
+          input.userId,
+          input.family,
+          input.providerId,
+          input.encryptedSecret ?? null,
+          input.baseUrl ?? null,
+          input.preferredModel ?? null,
+          input.enabled,
+          now,
+        ],
+      );
 
   if (rows) {
     return mapRow(rows[0]);

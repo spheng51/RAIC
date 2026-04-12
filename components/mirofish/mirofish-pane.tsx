@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Shield, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type {
-  ClassroomCollaborationInteractionReason,
-} from '@/lib/types/classroom-collaboration';
+import type { ClassroomCollaborationInteractionReason } from '@/lib/types/classroom-collaboration';
 import type {
   PresentationSurface,
   SharedSimulationCollaborationMode,

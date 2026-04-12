@@ -134,9 +134,9 @@ export function normalizeSharedSimulationState(
   }
 
   const sessionIds = new Set(activeSessionIds);
-  const removedParticipantSessionIds = getSharedSimulationRemovedSessionIds(sharedSimulation).filter(
-    (sessionId) => sessionIds.has(sessionId),
-  );
+  const removedParticipantSessionIds = getSharedSimulationRemovedSessionIds(
+    sharedSimulation,
+  ).filter((sessionId) => sessionIds.has(sessionId));
   const spotlightSessionId =
     sharedSimulation.spotlightSessionId &&
     sessionIds.has(sharedSimulation.spotlightSessionId) &&
@@ -258,7 +258,8 @@ export function canSessionInteractWithSharedSimulation(
     }
 
     return (
-      hasStudentControlLease(sharedSimulation) && sharedSimulation.controllerSessionId === session.id
+      hasStudentControlLease(sharedSimulation) &&
+      sharedSimulation.controllerSessionId === session.id
     );
   }
 

@@ -51,12 +51,14 @@ vi.mock('@/lib/server/encrypted-secrets', () => ({
 vi.mock('@/lib/db/client', () => ({
   runPostgresQuery: vi.fn(async () => null),
   runPostgresTransaction: vi.fn(async () => null),
-  updatePlatformStore: vi.fn(async (updater: (store: PlatformStore) => Promise<unknown> | unknown) => {
-    const nextStore = structuredClone(platformStore);
-    const result = await updater(nextStore);
-    platformStore = nextStore;
-    return result;
-  }),
+  updatePlatformStore: vi.fn(
+    async (updater: (store: PlatformStore) => Promise<unknown> | unknown) => {
+      const nextStore = structuredClone(platformStore);
+      const result = await updater(nextStore);
+      platformStore = nextStore;
+      return result;
+    },
+  ),
   readPlatformStore: vi.fn(async () => structuredClone(platformStore)),
 }));
 
@@ -198,11 +200,9 @@ describe('PUT /api/me/ai/overrides', () => {
 
   it('does not persist a partial override batch when a later save fails', async () => {
     await seedApprovedProviders();
-    encryptSecretMock
-      .mockReturnValueOnce('enc:first')
-      .mockImplementationOnce(() => {
-        throw new Error('override encryption exploded');
-      });
+    encryptSecretMock.mockReturnValueOnce('enc:first').mockImplementationOnce(() => {
+      throw new Error('override encryption exploded');
+    });
 
     const { PUT } = await import('@/app/api/me/ai/overrides/route');
     const { readPlatformStore } = await import('@/lib/db/client');

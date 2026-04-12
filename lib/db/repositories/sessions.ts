@@ -185,7 +185,11 @@ export async function listRecentClassroomSessions(
   const now = new Date(nowIso).getTime();
   return store.sessions
     .filter((session) => {
-      if (session.classroomId !== classroomId || session.kind !== 'classroom' || session.revokedAt) {
+      if (
+        session.classroomId !== classroomId ||
+        session.kind !== 'classroom' ||
+        session.revokedAt
+      ) {
         return false;
       }
       const expiresAt = new Date(session.expiresAt).getTime();

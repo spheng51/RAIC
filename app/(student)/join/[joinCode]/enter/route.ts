@@ -19,7 +19,9 @@ export async function GET(
   const joinToken = await findValidJoinToken(joinCode);
 
   if (!joinToken) {
-    const response = NextResponse.redirect(new URL(`/join/${encodeURIComponent(joinCode)}`, request.url));
+    const response = NextResponse.redirect(
+      new URL(`/join/${encodeURIComponent(joinCode)}`, request.url),
+    );
     clearClassroomAccessCookie(response);
     return response;
   }
@@ -31,7 +33,9 @@ export async function GET(
     existingClassroomAuth?.session.kind === 'classroom' &&
     existingClassroomAuth.session.classroomId === joinToken.classroomId
   ) {
-    const response = NextResponse.redirect(new URL(`/classroom/${joinToken.classroomId}`, request.url));
+    const response = NextResponse.redirect(
+      new URL(`/classroom/${joinToken.classroomId}`, request.url),
+    );
     attachClassroomAccessCookie(
       response,
       existingClassroomToken,
@@ -77,7 +81,9 @@ export async function GET(
     },
   });
 
-  const response = NextResponse.redirect(new URL(`/classroom/${joinToken.classroomId}`, request.url));
+  const response = NextResponse.redirect(
+    new URL(`/classroom/${joinToken.classroomId}`, request.url),
+  );
   attachClassroomAccessCookie(response, classroomSessionToken, session.absoluteExpiresAt);
   return response;
 }

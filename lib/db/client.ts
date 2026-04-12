@@ -79,7 +79,9 @@ async function getPostgresClient(): Promise<PostgresExecutor | null> {
   if (!databaseUrl) return null;
 
   if (!globalThis.__raicPlatformSqlClient) {
-    let postgresFactory: ((url: string, options?: Record<string, unknown>) => PostgresExecutor) | null = null;
+    let postgresFactory:
+      | ((url: string, options?: Record<string, unknown>) => PostgresExecutor)
+      | null = null;
     try {
       postgresFactory = runtimeRequire('postgres') as (
         url: string,
@@ -142,7 +144,10 @@ export async function getPersistenceMode(): Promise<PersistenceMode> {
   return 'postgres';
 }
 
-export async function runPostgresQuery<T>(query: string, params: unknown[] = []): Promise<T[] | null> {
+export async function runPostgresQuery<T>(
+  query: string,
+  params: unknown[] = [],
+): Promise<T[] | null> {
   if (!isPostgresConfigured()) return null;
   await ensurePostgresSchema();
   const client = await getPostgresClient();
