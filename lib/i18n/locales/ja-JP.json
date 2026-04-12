@@ -8,7 +8,7 @@
     "error": "エラー"
   },
   "home": {
-    "slogan": "マルチエージェント対話型教室で生成的に学ぶ",
+    "slogan": "応答支援の対話型教室",
     "greetingWithName": "こんにちは、{{name}}さん"
   },
   "toolbar": {

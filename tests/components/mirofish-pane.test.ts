@@ -100,7 +100,7 @@ describe('MiroFishPane', () => {
     }
   });
 
-  it('keeps the current iframe source pinned across token-only URL updates', async () => {
+  it('updates the iframe source when the tokenized URL changes', async () => {
     const mounted = await mountMiroFishPane();
     const initialIframe = mounted.container.querySelector('iframe');
     expect(initialIframe?.getAttribute('src')).toBe(
@@ -114,11 +114,11 @@ describe('MiroFishPane', () => {
     const updatedIframe = mounted.container.querySelector('iframe');
     expect(updatedIframe).toBe(initialIframe);
     expect(updatedIframe?.getAttribute('src')).toBe(
-      'https://mirofish.example/simulation/sim-1/start?embed=1&classroomToken=token-a',
+      'https://mirofish.example/simulation/sim-1/start?embed=1&classroomToken=token-b',
     );
   });
 
-  it('uses the latest token on retry and starts a fresh watchdog attempt', async () => {
+  it('uses the latest token automatically and starts a fresh watchdog attempt', async () => {
     vi.useFakeTimers();
     const onRecoverToLesson = vi.fn();
     const mounted = await mountMiroFishPane({ onRecoverToLesson });
@@ -134,15 +134,6 @@ describe('MiroFishPane', () => {
     });
 
     onRecoverToLesson.mockClear();
-
-    const retryButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Retry MiroFish'),
-    );
-    expect(retryButton).toBeTruthy();
-
-    await act(async () => {
-      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
 
     const iframe = mounted.container.querySelector('iframe');
     expect(iframe?.getAttribute('src')).toBe(

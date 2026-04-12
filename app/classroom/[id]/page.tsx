@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/lib/hooks/use-theme';
 import { useStageStore } from '@/lib/store';
 import { loadImageMapping } from '@/lib/utils/image-storage';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSceneGenerator } from '@/lib/hooks/use-scene-generator';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useWhiteboardHistoryStore } from '@/lib/store/whiteboard-history';
@@ -13,11 +13,26 @@ import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { stageExists } from '@/lib/utils/stage-storage';
+import {
+  canUseLocalClassroomFallback,
+  clearClassroomLaunchContext,
+  getHomePathForLaunchMode,
+  isTeacherServerLaunchContext,
+  readClassroomLaunchContext,
+  type ClassroomLaunchMode,
+} from '@/lib/utils/classroom-launch';
 
 const log = createLogger('Classroom');
 
+interface ClassroomErrorAction {
+  readonly href: string;
+  readonly label: string;
+}
+
 export default function ClassroomDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const classroomId = params?.id as string;
   const { t } = useI18n();
 
@@ -25,6 +40,8 @@ export default function ClassroomDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<ClassroomErrorAction | null>(null);
+  const [classroomSource, setClassroomSource] = useState<ClassroomLaunchMode | null>(null);
 
   const generationStartedRef = useRef(false);
   const retryButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -35,10 +52,75 @@ export default function ClassroomDetailPage() {
     },
   });
 
+  const homePath = classroomSource
+    ? getHomePathForLaunchMode(classroomSource)
+    : getHomePathForLaunchMode('public-demo');
+  const classroomNotice =
+    classroomSource === 'public-demo' ? t('classroom.localDemoNotice') : null;
+
+  const buildClassroomErrorState = useCallback(
+    (
+      status?: number,
+      options?: { preferTeacherStudio?: boolean },
+    ): { message: string; action: ClassroomErrorAction | null } => {
+      const preferTeacherStudio = options?.preferTeacherStudio ?? false;
+
+      if (status === 401) {
+        return {
+          message: t('classroom.teacherAccessMissing'),
+          action: {
+            href: '/sign-in',
+            label: t('classroom.signInAgain'),
+          },
+        };
+      }
+
+      if (status === 403) {
+        return {
+          message: t('classroom.serverAccessDenied'),
+          action: {
+            href: '/studio',
+            label: t('classroom.openTeacherStudio'),
+          },
+        };
+      }
+
+      if (status === 404) {
+        return {
+          message: preferTeacherStudio
+            ? t('classroom.teacherAccessMissing')
+            : t('classroom.classroomNotFound'),
+          action: preferTeacherStudio
+            ? {
+                href: '/studio',
+                label: t('classroom.openTeacherStudio'),
+              }
+            : {
+                href: '/',
+                label: t('generation.backToHome'),
+              },
+        };
+      }
+
+      return {
+        message: t('classroom.classroomNotFound'),
+        action: {
+          href: '/',
+          label: t('generation.backToHome'),
+        },
+      };
+    },
+    [t],
+  );
+
   const loadClassroom = useCallback(async () => {
+    const launchContext = readClassroomLaunchContext();
+    const expectServerBacked = isTeacherServerLaunchContext(launchContext, classroomId);
+
     try {
       let hasServerRecord = false;
       let shouldFallbackToStorage = false;
+      let resolvedSource: ClassroomLaunchMode | null = null;
 
       try {
         const res = await fetch(`/api/classroom?id=${encodeURIComponent(classroomId)}`);
@@ -50,11 +132,24 @@ export default function ClassroomDetailPage() {
         }
 
         if (res.status === 404) {
-          shouldFallbackToStorage = true;
-          log.info(
-            'Classroom not found in server storage, trying local IndexedDB for:',
-            classroomId,
-          );
+          const hasLocalStage = await stageExists(classroomId);
+          shouldFallbackToStorage = canUseLocalClassroomFallback({
+            expectServerBacked,
+            hasLocalStage,
+          });
+
+          if (shouldFallbackToStorage) {
+            log.info(
+              'Classroom not found in server storage, trying local IndexedDB for:',
+              classroomId,
+            );
+          } else {
+            const notFoundError = new Error(
+              expectServerBacked ? t('classroom.teacherAccessMissing') : t('classroom.classroomNotFound'),
+            ) as Error & { status?: number };
+            notFoundError.status = 404;
+            throw notFoundError;
+          }
         } else if (res.ok) {
           const json = await res.json();
           if (json.success && json.classroom) {
@@ -65,6 +160,7 @@ export default function ClassroomDetailPage() {
               currentSceneId: scenes[0]?.id ?? null,
             });
             hasServerRecord = true;
+            resolvedSource = 'teacher-server';
             log.info('Loaded from server-side storage:', classroomId);
 
             // Hydrate server-generated agents into IndexedDB + registry.
@@ -87,8 +183,10 @@ export default function ClassroomDetailPage() {
           fetchErr instanceof Error &&
           ((fetchErr as Error & { status?: number }).status === 401 ||
             (fetchErr as Error & { status?: number }).status === 403 ||
-            fetchErr.message === 'Classroom access denied' ||
+            (fetchErr as Error & { status?: number }).status === 404 ||
             fetchErr.message === 'Classroom payload is missing' ||
+            fetchErr.message === t('classroom.teacherAccessMissing') ||
+            fetchErr.message === t('classroom.classroomNotFound') ||
             !classroomId)
         ) {
           throw fetchErr;
@@ -96,11 +194,17 @@ export default function ClassroomDetailPage() {
 
         if (!shouldFallbackToStorage) {
           log.warn('Server-side storage check failed:', fetchErr);
+          throw fetchErr;
         }
       }
 
       if (!hasServerRecord && shouldFallbackToStorage) {
         await loadFromStorage(classroomId);
+        const localStage = useStageStore.getState().stage;
+        if (!localStage?.id) {
+          throw new Error(t('classroom.classroomNotFound'));
+        }
+        resolvedSource = 'public-demo';
       }
 
       // Restore completed media generation tasks from IndexedDB
@@ -133,16 +237,27 @@ export default function ClassroomDetailPage() {
             cleanIds && cleanIds.length > 0 ? cleanIds : ['default-1', 'default-2', 'default-3'],
           );
       }
+
+      setClassroomSource(resolvedSource);
+      setErrorAction(null);
+      clearClassroomLaunchContext(classroomId);
     } catch (err) {
       log.error('Failed to load classroom:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load classroom');
+      const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
+      const nextErrorState = buildClassroomErrorState(status, {
+        preferTeacherStudio: expectServerBacked,
+      });
+      setError(err instanceof Error ? err.message || nextErrorState.message : nextErrorState.message);
+      setErrorAction(nextErrorState.action);
+      setClassroomSource(null);
     } finally {
       setLoading(false);
     }
-  }, [classroomId, loadFromStorage]);
+  }, [buildClassroomErrorState, classroomId, loadFromStorage, t]);
 
   const handleRetry = useCallback(() => {
     setError(null);
+    setErrorAction(null);
     setLoading(true);
     void loadClassroom();
   }, [loadClassroom]);
@@ -152,6 +267,8 @@ export default function ClassroomDetailPage() {
     // preventing stale data from syncing back to the new course
     setLoading(true);
     setError(null);
+    setErrorAction(null);
+    setClassroomSource(null);
     generationStartedRef.current = false;
 
     // Clear previous classroom's media tasks to prevent cross-classroom contamination.
@@ -254,10 +371,24 @@ export default function ClassroomDetailPage() {
                 >
                   {t('common.retry')}
                 </button>
+                {errorAction ? (
+                  <button
+                    type="button"
+                    onClick={() => router.push(errorAction.href)}
+                    className="ml-3 px-4 py-2 rounded-md border border-border bg-background text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    {errorAction.label}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : (
-            <Stage onRetryOutline={retrySingleOutline} />
+            <Stage
+              onRetryOutline={retrySingleOutline}
+              classroomSource={classroomSource}
+              classroomNotice={classroomNotice}
+              homePath={homePath}
+            />
           )}
         </div>
       </MediaStageProvider>

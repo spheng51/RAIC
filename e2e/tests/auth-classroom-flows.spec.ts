@@ -56,7 +56,7 @@ test('protected routes redirect unauthenticated users and authenticated users sk
   try {
     await page.goto(`${APP_BASE_URL}/studio`);
     await page.waitForURL(/\/sign-in\?next=%2Fstudio$/);
-    await expect(page.getByText('Teacher and admin sign-in')).toBeVisible();
+    await expect(page.getByText('Teacher sign-in')).toBeVisible();
 
     const teacherSession = createAuthSession({
       role: 'teacher',

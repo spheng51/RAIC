@@ -8,7 +8,7 @@
     "error": "Error"
   },
   "home": {
-    "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
+    "slogan": "Responsive Assistance Interactive Classroom",
     "greetingWithName": "Hi, {{name}}"
   },
   "toolbar": {

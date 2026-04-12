@@ -24,6 +24,7 @@ interface SceneSidebarProps {
   readonly onCollapseChange: (collapsed: boolean) => void;
   readonly onSceneSelect?: (sceneId: string) => void;
   readonly onRetryOutline?: (outlineId: string) => Promise<void>;
+  readonly homePath?: string;
 }
 
 const DEFAULT_WIDTH = 220;
@@ -35,6 +36,7 @@ export function SceneSidebar({
   onCollapseChange,
   onSceneSelect,
   onRetryOutline,
+  homePath,
 }: SceneSidebarProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -176,12 +178,15 @@ export function SceneSidebar({
         <div className="h-10 flex items-center justify-between shrink-0 relative mt-3 mb-1 px-3">
           <button
             type="button"
-            onClick={() => router.push('/')}
+            onClick={() => router.push(homePath || '/')}
             aria-label={t('generation.backToHome')}
             className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 -mx-1.5 py-1 -my-1 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 active:scale-[0.97] transition-all duration-150"
             title={t('generation.backToHome')}
           >
-            <img src="/logo-horizontal.png" alt="OpenMAIC" className="h-6" />
+            <img src="/openraic-mark.svg" alt="" className="size-6" />
+            <span className="text-sm font-semibold tracking-[0.08em] text-gray-700 dark:text-gray-200">
+              OpenRAIC
+            </span>
           </button>
           <button
             type="button"

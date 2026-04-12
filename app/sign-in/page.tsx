@@ -48,7 +48,10 @@ export default async function SignInPage({
             {[
               ['Teacher studio', 'Protected lesson creation, preview, and launch'],
               ['Student join links', 'Share time-boxed classroom entry without exposing settings'],
-              ['Admin readiness', 'Role-aware foundations for policy, audit, and school rollout'],
+              [
+                'Server-backed classrooms',
+                'Teacher sessions keep classroom launches and controls on the governed path',
+              ],
             ].map(([title, description]) => (
               <div key={title} className="rounded-2xl border border-border/60 bg-background/70 p-4">
                 <p className="text-sm font-semibold text-foreground">{title}</p>
@@ -63,10 +66,12 @@ export default async function SignInPage({
             <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <ShieldCheck className="size-5" />
             </div>
-            <CardTitle>Teacher and admin sign-in</CardTitle>
-            <CardDescription>
-              Use your Google account to enter the protected RAIC studio. Student participation
-              stays on a separate join-token flow.
+            <CardTitle>Teacher sign-in</CardTitle>
+              <CardDescription>
+               Use your Google account to enter the protected RAIC studio. Student participation
+               stays on a separate join-token flow, and org-admin rollout can stay disabled until
+               you are ready to assign it explicitly.
+              </CardDescription>
             </CardDescription>
           </CardHeader>
           <CardContent>

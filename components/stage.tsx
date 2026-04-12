@@ -59,6 +59,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
 import { toast } from 'sonner';
@@ -130,8 +131,14 @@ function getInitialCollaborationState(
 
 export function Stage({
   onRetryOutline,
+  classroomSource,
+  classroomNotice,
+  homePath,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
+  classroomSource?: 'public-demo' | 'teacher-server' | null;
+  classroomNotice?: string | null;
+  homePath?: string;
 }) {
   const { t } = useI18n();
   const stage = useStageStore.use.stage();
@@ -1651,12 +1658,29 @@ export function Stage({
         onCollapseChange={setSidebarCollapsed}
         onSceneSelect={gatedSceneSwitch}
         onRetryOutline={onRetryOutline}
+        homePath={homePath}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
         {/* Header */}
-        {!isPresenting && <Header currentSceneTitle={currentScene?.title || ''} />}
+        {!isPresenting && (
+          <Header
+            currentSceneTitle={currentScene?.title || ''}
+            classroomSource={classroomSource}
+            homePath={homePath}
+          />
+        )}
+
+        {!isPresenting && classroomNotice ? (
+          <div className="px-6 pb-2">
+            <Alert className="border-blue-200/70 bg-white/80 dark:border-blue-900/50 dark:bg-slate-950/80">
+              <AlertTriangle className="size-4 text-blue-500 dark:text-blue-300" />
+              <AlertTitle>{t('classroom.localDemoBadge')}</AlertTitle>
+              <AlertDescription>{classroomNotice}</AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
 
         {/* Canvas Area */}
         <div
