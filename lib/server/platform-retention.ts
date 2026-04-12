@@ -203,10 +203,7 @@ interface IdRow {
   id: string;
 }
 
-async function selectPostgresIds(
-  query: string,
-  params: unknown[],
-): Promise<string[]> {
+async function selectPostgresIds(query: string, params: unknown[]): Promise<string[]> {
   const rows = await runPostgresQuery<IdRow>(query, params);
   return rows?.map((row) => row.id) ?? [];
 }
@@ -265,7 +262,9 @@ async function collectPostgresCandidateIds(
   };
 }
 
-function countsFromCandidateIds(candidateIds: PlatformRetentionCandidateIds): PlatformRetentionCounts {
+function countsFromCandidateIds(
+  candidateIds: PlatformRetentionCandidateIds,
+): PlatformRetentionCounts {
   return {
     sessions: candidateIds.sessionIds.length,
     joinTokens: candidateIds.joinTokenIds.length,
@@ -284,7 +283,9 @@ async function deleteJsonCandidates(candidateIds: PlatformRetentionCandidateIds)
     store.sessions = store.sessions.filter((session) => !sessionIds.has(session.id));
     store.joinTokens = store.joinTokens.filter((joinToken) => !joinTokenIds.has(joinToken.id));
     store.auditLogs = store.auditLogs.filter((auditLog) => !auditLogIds.has(auditLog.id));
-    store.memberships = store.memberships.filter((membership) => !guestUserIds.has(membership.userId));
+    store.memberships = store.memberships.filter(
+      (membership) => !guestUserIds.has(membership.userId),
+    );
     store.users = store.users.filter((user) => !guestUserIds.has(user.id));
   });
 }

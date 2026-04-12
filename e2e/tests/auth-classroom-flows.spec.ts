@@ -30,7 +30,10 @@ async function getCookieValue(context: BrowserContext, name: string) {
   return cookies.find((cookie) => cookie.name === name)?.value ?? null;
 }
 
-function countClassroomSessions(store: Awaited<ReturnType<typeof readPlatformStore>>, classroomId: string) {
+function countClassroomSessions(
+  store: Awaited<ReturnType<typeof readPlatformStore>>,
+  classroomId: string,
+) {
   return store.sessions.filter(
     (session) => session.kind === 'classroom' && session.classroomId === classroomId,
   ).length;
@@ -115,7 +118,9 @@ test('logout clears both web and classroom cookies', async ({ browser }) => {
 
     await expect
       .poll(async () => {
-        const cookieNames = (await teacher.context.cookies(APP_BASE_URL)).map((cookie) => cookie.name);
+        const cookieNames = (await teacher.context.cookies(APP_BASE_URL)).map(
+          (cookie) => cookie.name,
+        );
         return {
           hasSessionCookie: cookieNames.includes(SESSION_COOKIE_NAME),
           hasClassroomCookie: cookieNames.includes(CLASSROOM_COOKIE_NAME),
