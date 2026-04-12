@@ -53,6 +53,10 @@ export function clearClassroomAccessCookie(response: NextResponse) {
 export async function findValidJoinToken(rawToken: string) {
   if (!rawToken) return null;
 
+  // Classroom join links remain reusable until expiry in v1. We intentionally
+  // validate against expiry here without consuming the token so students can
+  // re-enter from the same browser and teachers can share one live link across
+  // a classroom window. consumedAt is reserved for a future single-use mode.
   const joinToken = await findJoinTokenByHash(hashToken(rawToken));
   if (!joinToken) return null;
 

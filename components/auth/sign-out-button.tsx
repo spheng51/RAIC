@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { LoaderCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -18,7 +17,6 @@ export function SignOutButton({
   variant = 'ghost',
   className,
 }: SignOutButtonProps) {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   return (
@@ -35,8 +33,10 @@ export function SignOutButton({
             credentials: 'same-origin',
           });
         } finally {
-          router.push(redirectTo);
-          router.refresh();
+          if (typeof window !== 'undefined') {
+            window.location.assign(redirectTo);
+            return;
+          }
           setIsLoading(false);
         }
       }}
