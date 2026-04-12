@@ -57,6 +57,7 @@ test('protected routes redirect unauthenticated users and authenticated users sk
     await page.goto(`${APP_BASE_URL}/studio`);
     await page.waitForURL(/\/sign-in\?next=%2Fstudio$/);
     await expect(page.getByText('Teacher sign-in')).toBeVisible();
+    await expect(page.getByText('Teacher sign-in')).toBeVisible();
 
     const teacherSession = createAuthSession({
       role: 'teacher',
@@ -118,6 +119,9 @@ test('logout clears both web and classroom cookies', async ({ browser }) => {
 
     await expect
       .poll(async () => {
+        const cookieNames = (await teacher.context.cookies(APP_BASE_URL)).map(
+          (cookie) => cookie.name,
+        );
         const cookieNames = (await teacher.context.cookies(APP_BASE_URL)).map(
           (cookie) => cookie.name,
         );

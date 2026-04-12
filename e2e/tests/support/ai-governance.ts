@@ -422,6 +422,73 @@ export async function writeClassroomData(params: {
   return classroom;
 }
 
+export async function writeClassroomData(params: {
+  classroomId: string;
+  ownerUserId: string | null;
+  organizationId?: string | null;
+  stageName: string;
+  sceneTitles: string[];
+}) {
+  const createdAtIso = nowIso();
+  const createdAtMs = Date.now();
+  const stage = {
+    id: params.classroomId,
+    name: params.stageName,
+    description: `${params.stageName} classroom`,
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+    language: 'en-US',
+    style: 'professional',
+  };
+  const scenes = params.sceneTitles.map((title, index) => ({
+    id: `${params.classroomId}-scene-${index + 1}`,
+    stageId: params.classroomId,
+    type: 'slide' as const,
+    title,
+    order: index,
+    content: {
+      type: 'slide' as const,
+      canvas: {
+        id: `${params.classroomId}-slide-${index + 1}`,
+        viewportSize: 1000,
+        viewportRatio: 0.5625,
+        theme: TEST_SLIDE_THEME,
+        elements: [
+          {
+            type: 'text',
+            id: `${params.classroomId}-title-${index + 1}`,
+            content: title,
+            left: 50,
+            top: 50,
+            width: 900,
+            height: 100,
+          },
+        ],
+      },
+    },
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+  }));
+
+  const classroom = {
+    id: params.classroomId,
+    ownerUserId: params.ownerUserId,
+    organizationId: params.organizationId ?? null,
+    stage,
+    scenes,
+    createdAt: createdAtIso,
+  };
+
+  await fs.mkdir(CLASSROOMS_DIR, { recursive: true });
+  await fs.writeFile(
+    path.join(CLASSROOMS_DIR, `${params.classroomId}.json`),
+    JSON.stringify(classroom, null, 2),
+    'utf8',
+  );
+
+  return classroom;
+}
+
 export async function addSessionCookie(context: BrowserContext, token: string) {
   await context.addCookies([
     {

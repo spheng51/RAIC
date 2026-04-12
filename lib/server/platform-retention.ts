@@ -286,6 +286,9 @@ async function deleteJsonCandidates(candidateIds: PlatformRetentionCandidateIds)
     store.memberships = store.memberships.filter(
       (membership) => !guestUserIds.has(membership.userId),
     );
+    store.memberships = store.memberships.filter(
+      (membership) => !guestUserIds.has(membership.userId),
+    );
     store.users = store.users.filter((user) => !guestUserIds.has(user.id));
   });
 }
