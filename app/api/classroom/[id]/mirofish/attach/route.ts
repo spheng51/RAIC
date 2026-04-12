@@ -12,15 +12,17 @@ import { createLogger } from '@/lib/logger';
 import {
   buildMiroFishReportUrl,
   buildMiroFishRunUrl,
+  isMiroFishMultiUserEnabled,
   validateMiroFishReport,
   validateMiroFishSimulation,
 } from '@/lib/server/mirofish';
-import type { SharedSimulation } from '@/lib/types/stage';
+import type { SharedSimulation, SharedSimulationCollaborationMode } from '@/lib/types/stage';
 
 interface AttachMiroFishBody {
   simulationId?: string;
   reportId?: string;
   defaultSurface?: 'lesson' | 'simulation';
+  collaborationMode?: SharedSimulationCollaborationMode;
 }
 
 const log = createLogger('Classroom MiroFish Attach');
@@ -53,6 +55,8 @@ export async function POST(
   const simulationId = body.simulationId?.trim();
   const reportId = body.reportId?.trim() || undefined;
   const defaultSurface = body.defaultSurface === 'simulation' ? 'simulation' : 'lesson';
+  const requestedCollaborationMode =
+    body.collaborationMode === 'multi-user' ? 'multi-user' : 'single-controller';
 
   if (!simulationId) {
     return apiErrorWithRequestSession(
@@ -60,6 +64,15 @@ export async function POST(
       API_ERROR_CODES.MISSING_REQUIRED_FIELD,
       400,
       'simulationId is required',
+    );
+  }
+
+  if (requestedCollaborationMode === 'multi-user' && !isMiroFishMultiUserEnabled()) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'MiroFish multi-user mode is not enabled for this deployment',
     );
   }
 
@@ -97,6 +110,12 @@ export async function POST(
     reportUrl: reportId ? buildMiroFishReportUrl(reportId) : undefined,
     activeSurface: defaultSurface,
     controllerRole: 'teacher',
+    collaborationMode: requestedCollaborationMode,
+    collaborationState: 'inactive',
+    allowStudentInteraction: requestedCollaborationMode === 'multi-user',
+    participantCount: 0,
+    lastCollaborationSyncAt: new Date().toISOString(),
+    removedParticipantSessionIds: undefined,
     status: 'attached',
   };
 
@@ -125,6 +144,7 @@ export async function POST(
       simulationId,
       reportId,
       defaultSurface,
+      collaborationMode: requestedCollaborationMode,
       classroomId: id,
       source: 'web',
       actorSessionId: auth.session.id,

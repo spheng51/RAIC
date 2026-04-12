@@ -3,12 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Shield, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { PresentationSurface, SharedSimulationStatus } from '@/lib/types/stage';
+import type {
+  ClassroomCollaborationInteractionReason,
+} from '@/lib/types/classroom-collaboration';
+import type {
+  PresentationSurface,
+  SharedSimulationCollaborationMode,
+  SharedSimulationCollaborationState,
+  SharedSimulationStatus,
+} from '@/lib/types/stage';
 import { formatLeaseCountdown } from '@/lib/utils/classroom-presentation';
 
 export interface MiroFishHostEvent {
-  type: 'ready' | 'runStatus' | 'reportReady' | 'error';
+  type: 'ready' | 'runStatus' | 'reportReady' | 'presenceSummary' | 'sessionStatus' | 'error';
   status?: SharedSimulationStatus;
+  collaborationState?: SharedSimulationCollaborationState;
+  participantCount?: number;
   message?: string;
 }
 
@@ -18,14 +28,26 @@ interface MiroFishPaneProps {
   readonly reportId: string | null;
   readonly runUrl: string | null;
   readonly reportUrl: string | null;
-  readonly viewerHasSimulationControl: boolean;
+  readonly collaborationMode: SharedSimulationCollaborationMode;
+  readonly viewerCanInteract: boolean;
   readonly viewerCanManageSimulation: boolean;
+  readonly collaborationState?: SharedSimulationCollaborationState | null;
+  readonly viewerInteractionReason?: ClassroomCollaborationInteractionReason;
+  readonly spotlightDisplayName?: string | null;
   readonly controllerRole: 'teacher' | 'student';
   readonly controllerDisplayName: string;
   readonly controlLeaseExpiresAt: string | null;
   readonly onEvent?: (event: MiroFishHostEvent) => void;
   readonly onReclaimControl?: () => void;
   readonly onRecoverToLesson?: (message: string) => void;
+}
+
+interface MiroFishPaneState {
+  readonly sourceIdentity: string;
+  readonly pinnedSrc: string | null;
+  readonly frameState: 'loading' | 'ready' | 'error';
+  readonly errorMessage: string | null;
+  readonly reloadNonce: number;
 }
 
 function pickMiroFishSource(
@@ -46,14 +68,31 @@ function getMiroFishSourceIdentity(
     : `simulation:${simulationId}`;
 }
 
+function createMiroFishPaneState(
+  sourceIdentity: string,
+  nextSource: string | null,
+): MiroFishPaneState {
+  return {
+    sourceIdentity,
+    pinnedSrc: nextSource,
+    frameState: 'loading',
+    errorMessage: null,
+    reloadNonce: 0,
+  };
+}
+
 export function MiroFishPane({
   activeSurface,
   simulationId,
   reportId,
   runUrl,
   reportUrl,
-  viewerHasSimulationControl,
+  collaborationMode,
+  viewerCanInteract,
   viewerCanManageSimulation,
+  collaborationState,
+  viewerInteractionReason,
+  spotlightDisplayName,
   controllerRole,
   controllerDisplayName,
   controlLeaseExpiresAt,
@@ -62,11 +101,14 @@ export function MiroFishPane({
   onRecoverToLesson,
 }: MiroFishPaneProps) {
   const nextSource = pickMiroFishSource(activeSurface, runUrl, reportUrl);
-  const [frameState, setFrameState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [reloadNonce, setReloadNonce] = useState(0);
+  const sourceIdentity = useMemo(
+    () => getMiroFishSourceIdentity(activeSurface, simulationId, reportId),
+    [activeSurface, reportId, simulationId],
+  );
+  const [paneState, setPaneState] = useState<MiroFishPaneState>(() =>
+    createMiroFishPaneState(sourceIdentity, nextSource),
+  );
   const [leaseNowMs, setLeaseNowMs] = useState(() => Date.now());
-  const [pinnedSrc, setPinnedSrc] = useState<string | null>(() => nextSource);
   const callbackRef = useRef<{
     onEvent?: (event: MiroFishHostEvent) => void;
     onRecoverToLesson?: (message: string) => void;
@@ -76,10 +118,11 @@ export function MiroFishPane({
   });
   const loadTimeoutRef = useRef<number | null>(null);
   const recoveredAttemptRef = useRef<string | null>(null);
-  const sourceIdentity = useMemo(
-    () => getMiroFishSourceIdentity(activeSurface, simulationId, reportId),
-    [activeSurface, reportId, simulationId],
-  );
+  const resolvedPaneState =
+    paneState.sourceIdentity === sourceIdentity
+      ? paneState
+      : createMiroFishPaneState(sourceIdentity, nextSource);
+  const { errorMessage, frameState, pinnedSrc, reloadNonce } = resolvedPaneState;
   const attemptKey = `${sourceIdentity}:${reloadNonce}`;
 
   const allowedOrigins = useMemo(() => {
@@ -95,6 +138,14 @@ export function MiroFishPane({
     };
   }, [onEvent, onRecoverToLesson]);
 
+  const resolvePaneState = useCallback(
+    (current: MiroFishPaneState) =>
+      current.sourceIdentity === sourceIdentity
+        ? current
+        : createMiroFishPaneState(sourceIdentity, nextSource),
+    [nextSource, sourceIdentity],
+  );
+
   const clearLoadTimeout = useCallback(() => {
     if (loadTimeoutRef.current !== null) {
       window.clearTimeout(loadTimeoutRef.current);
@@ -106,11 +157,17 @@ export function MiroFishPane({
     (event: MiroFishHostEvent) => {
       clearLoadTimeout();
       recoveredAttemptRef.current = null;
-      setFrameState('ready');
-      setErrorMessage(null);
+      setPaneState((current) => {
+        const base = resolvePaneState(current);
+        return {
+          ...base,
+          frameState: 'ready',
+          errorMessage: null,
+        };
+      });
       callbackRef.current.onEvent?.(event);
     },
-    [clearLoadTimeout],
+    [clearLoadTimeout, resolvePaneState],
   );
 
   const recoverAttempt = useCallback(
@@ -121,12 +178,18 @@ export function MiroFishPane({
 
       recoveredAttemptRef.current = attemptKey;
       clearLoadTimeout();
-      setFrameState('error');
-      setErrorMessage(message);
+      setPaneState((current) => {
+        const base = resolvePaneState(current);
+        return {
+          ...base,
+          frameState: 'error',
+          errorMessage: message,
+        };
+      });
       callbackRef.current.onEvent?.(event);
       callbackRef.current.onRecoverToLesson?.(message);
     },
-    [attemptKey, clearLoadTimeout],
+    [attemptKey, clearLoadTimeout, resolvePaneState],
   );
 
   useEffect(() => {
@@ -196,6 +259,33 @@ export function MiroFishPane({
         return;
       }
 
+      if (eventType === 'presenceSummary') {
+        callbackRef.current.onEvent?.({
+          type: 'presenceSummary',
+          participantCount:
+            typeof payload?.participantCount === 'number' ? payload.participantCount : undefined,
+        });
+        return;
+      }
+
+      if (eventType === 'sessionStatus') {
+        const nextCollaborationState =
+          payload?.status === 'inactive' ||
+          payload?.status === 'live' ||
+          payload?.status === 'frozen' ||
+          payload?.status === 'closed' ||
+          payload?.status === 'error'
+            ? (payload.status as SharedSimulationCollaborationState)
+            : undefined;
+
+        callbackRef.current.onEvent?.({
+          type: 'sessionStatus',
+          collaborationState: nextCollaborationState,
+          message: typeof payload?.message === 'string' ? payload.message : undefined,
+        });
+        return;
+      }
+
       if (eventType === 'error') {
         const message =
           typeof payload?.message === 'string'
@@ -241,9 +331,31 @@ export function MiroFishPane({
     );
   }
 
-  const showReadOnlyBlocker = !viewerHasSimulationControl;
-  const canReclaim = viewerCanManageSimulation && controllerRole === 'student';
+  const isInteractiveSurface = activeSurface === 'simulation';
+  const isMultiUser = collaborationMode === 'multi-user';
+  const showReadOnlyBlocker = isInteractiveSurface && !viewerCanInteract;
+  const canReclaim = !isMultiUser && viewerCanManageSimulation && controllerRole === 'student';
   const leaseCountdown = formatLeaseCountdown(controlLeaseExpiresAt, leaseNowMs);
+  const overlayTitle = isMultiUser ? 'Read-only collaboration view' : 'Read-only classroom view';
+  const overlayMessage = (() => {
+    if (!isMultiUser) {
+      return controllerRole === 'student'
+        ? `${controllerDisplayName} currently has control of the shared simulation.`
+        : `${controllerDisplayName} is controlling the shared simulation.`;
+    }
+
+    switch (viewerInteractionReason) {
+      case 'removed':
+        return 'The teacher removed this session from live interaction. You can keep watching the shared simulation.';
+      case 'frozen':
+        return 'The teacher has temporarily frozen student interaction. You can keep watching while collaboration is paused.';
+      case 'closed':
+        return 'The shared simulation is closed right now. The classroom can still watch until the teacher reopens collaboration.';
+      case 'inactive':
+      default:
+        return 'The shared simulation is not live yet. You can keep watching until the teacher opens collaboration.';
+    }
+  })();
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-slate-950">
@@ -265,8 +377,14 @@ export function MiroFishPane({
         <div className="absolute inset-0 flex items-center justify-center bg-white/85 backdrop-blur-sm dark:bg-slate-950/85">
           <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading MiroFish…
+            Loading MiroFish...
           </div>
+        </div>
+      )}
+
+      {isInteractiveSurface && isMultiUser && spotlightDisplayName && (
+        <div className="absolute left-4 top-4 z-10 rounded-full border border-white/60 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 dark:text-slate-200">
+          Spotlight: {spotlightDisplayName}
         </div>
       )}
 
@@ -275,16 +393,17 @@ export function MiroFishPane({
           <div className="max-w-sm rounded-2xl border border-white/60 bg-white/92 p-5 text-center shadow-xl dark:border-slate-800 dark:bg-slate-950/92">
             <Shield className="mx-auto mb-3 h-8 w-8 text-slate-600 dark:text-slate-300" />
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Read-only classroom view
+              {overlayTitle}
             </h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              {controllerRole === 'student'
-                ? `${controllerDisplayName} currently has control of the shared simulation.`
-                : `${controllerDisplayName} is controlling the shared simulation.`}
-            </p>
-            {controllerRole === 'student' && leaseCountdown && (
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{overlayMessage}</p>
+            {!isMultiUser && controllerRole === 'student' && leaseCountdown && (
               <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                 Lease: {leaseCountdown}
+              </p>
+            )}
+            {isMultiUser && collaborationState && (
+              <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                State: {collaborationState}
               </p>
             )}
             {canReclaim && (
@@ -319,10 +438,16 @@ export function MiroFishPane({
                 onClick={() => {
                   clearLoadTimeout();
                   recoveredAttemptRef.current = null;
-                  setFrameState('loading');
-                  setErrorMessage(null);
-                  setPinnedSrc(nextSource);
-                  setReloadNonce((value) => value + 1);
+                  setPaneState((current) => {
+                    const base = resolvePaneState(current);
+                    return {
+                      ...base,
+                      pinnedSrc: nextSource,
+                      frameState: 'loading',
+                      errorMessage: null,
+                      reloadNonce: base.reloadNonce + 1,
+                    };
+                  });
                 }}
               >
                 Retry MiroFish

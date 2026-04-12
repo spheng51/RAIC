@@ -15,12 +15,14 @@ import type {
 } from '@/lib/types/classroom-presentation';
 import type { SharedSimulation } from '@/lib/types/stage';
 import {
+  canSessionInteractWithSharedSimulation,
+  getSharedSimulationCollaborationMode,
   getSharedSimulationFingerprint,
   getStageSharedSimulation,
   hasAttachedSharedSimulation,
   hasSharedSimulationReport,
   hasStudentControlLease,
-  normalizeSharedSimulationControl,
+  normalizeSharedSimulationState,
   preserveStageSharedSimulation,
   resetSharedSimulationControl,
 } from '@/lib/utils/classroom-presentation';
@@ -39,6 +41,10 @@ export function canSessionControlPresentation(
   sharedSimulation: SharedSimulation | null,
   session: SessionRecord,
 ): boolean {
+  if (getSharedSimulationCollaborationMode(sharedSimulation) === 'multi-user') {
+    return session.kind === 'web' && session.role !== 'student';
+  }
+
   if (session.kind === 'web' && session.role !== 'student') {
     return true;
   }
@@ -56,6 +62,10 @@ export function doesSessionOwnSimulationControl(
 ): boolean {
   if (!sharedSimulation) {
     return false;
+  }
+
+  if (getSharedSimulationCollaborationMode(sharedSimulation) === 'multi-user') {
+    return canSessionInteractWithSharedSimulation(sharedSimulation, session);
   }
 
   if (sharedSimulation.controllerRole === 'teacher') {
@@ -85,6 +95,7 @@ async function listClassroomPresentationParticipants(
     role: session.role,
     lastSeenAt: session.lastSeenAt,
     isController:
+      getSharedSimulationCollaborationMode(sharedSimulation) === 'single-controller' &&
       sharedSimulation?.controllerRole === 'student' &&
       sharedSimulation.controllerSessionId === session.id,
   }));
@@ -100,7 +111,7 @@ export async function getClassroomPresentationSnapshot(
 
   let sharedSimulation = getStageSharedSimulation(classroom.stage);
   let participants = await listClassroomPresentationParticipants(classroomId, sharedSimulation);
-  const normalizedSharedSimulation = normalizeSharedSimulationControl(
+  const normalizedSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
     participants.map((participant) => participant.sessionId),
   );

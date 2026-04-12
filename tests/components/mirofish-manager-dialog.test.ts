@@ -3,6 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ClassroomCollaborationStatePayload } from '@/lib/types/classroom-collaboration';
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
 import type { SharedSimulation } from '@/lib/types/stage';
 
@@ -93,13 +94,17 @@ interface ManagerDialogTestProps {
   readonly open: boolean;
   readonly sharedSimulation: SharedSimulation | null;
   readonly participants: ClassroomPresentationParticipant[];
+  readonly collaboration: ClassroomCollaborationStatePayload | null;
+  readonly multiUserEnabled?: boolean;
   readonly onAttach: (input: {
     simulationId: string;
     reportId?: string;
     defaultSurface: 'lesson' | 'simulation';
+    collaborationMode?: 'single-controller' | 'multi-user';
   }) => Promise<void>;
   readonly onGrantControl: (targetSessionId: string, leaseMinutes: number) => Promise<void>;
   readonly onRevokeControl: () => Promise<void>;
+  readonly onCollaborationAction?: (input: { action: string; targetSessionId?: string }) => Promise<void>;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -115,6 +120,9 @@ function buildSharedSimulation(overrides: Partial<SharedSimulation> = {}): Share
     controllerSessionId: 'student-controller',
     controllerRole: 'student',
     controlLeaseExpiresAt: '2026-04-11T00:05:00.000Z',
+    collaborationMode: 'single-controller',
+    collaborationState: 'inactive',
+    allowStudentInteraction: false,
     status: 'running',
     ...overrides,
   };
@@ -133,9 +141,11 @@ async function mountDialog(
     open: true,
     sharedSimulation: null,
     participants: [],
+    collaboration: null,
     onAttach: vi.fn(async () => {}),
     onGrantControl: vi.fn(async () => {}),
     onRevokeControl: vi.fn(async () => {}),
+    onCollaborationAction: vi.fn(async () => {}),
     ...initialOverrides,
   };
 
@@ -217,6 +227,7 @@ describe('MiroFishManagerDialog', () => {
       simulationId: 'sim-404',
       reportId: undefined,
       defaultSurface: 'lesson',
+      collaborationMode: 'single-controller',
     });
     expect(mounted.container.textContent).toContain('Simulation not found');
   });
@@ -274,5 +285,80 @@ describe('MiroFishManagerDialog', () => {
 
     expect(onGrantControl).toHaveBeenCalledWith('student-target', 30);
     expect(mounted.container.textContent).toContain('Lease: 5m 00s remaining');
+  });
+
+  it('passes multi-user mode and collaboration actions through the manager UI', async () => {
+    const onAttach = vi.fn(async () => {});
+    const onCollaborationAction = vi.fn(async () => {});
+    const mounted = await mountDialog({
+      multiUserEnabled: true,
+      onAttach,
+      onCollaborationAction,
+      sharedSimulation: buildSharedSimulation({
+        collaborationMode: 'multi-user',
+        collaborationState: 'live',
+        allowStudentInteraction: true,
+        controllerSessionId: undefined,
+        controllerRole: 'teacher',
+        controlLeaseExpiresAt: undefined,
+      }),
+      collaboration: {
+        collaborationMode: 'multi-user',
+        collaborationState: 'live',
+        allowStudentInteraction: true,
+        spotlightSessionId: null,
+        participantCount: 1,
+        participants: [
+          {
+            sessionId: 'student-target',
+            userId: 'student-2',
+            displayName: 'Student Two',
+            role: 'student',
+            lastSeenAt: '2026-04-11T00:00:00.000Z',
+            isRemoved: false,
+            isSpotlighted: false,
+            canInteract: true,
+          },
+        ],
+        mirofishSessionId: 'miro-session-1',
+        lastCollaborationSyncAt: '2026-04-11T00:00:00.000Z',
+        viewerSessionId: 'teacher-session',
+        viewerRole: 'teacher',
+        viewerKind: 'web',
+        viewerCanModerateCollaboration: true,
+        viewerCanInteract: true,
+        viewerIsRemoved: false,
+        viewerInteractionReason: null,
+        multiUserEnabled: true,
+      },
+    });
+
+    const attachButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Update attached MiroFish'),
+    );
+    expect(attachButton).toBeTruthy();
+
+    await act(async () => {
+      attachButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onAttach).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collaborationMode: 'multi-user',
+      }),
+    );
+
+    const freezeButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Freeze'),
+    );
+    expect(freezeButton).toBeTruthy();
+
+    await act(async () => {
+      freezeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onCollaborationAction).toHaveBeenCalledWith({ action: 'freeze', targetSessionId: undefined });
+    expect(mounted.container.textContent).toContain('Mode: Multi-user');
+    expect(mounted.container.textContent).toContain('Collaboration: live');
   });
 });

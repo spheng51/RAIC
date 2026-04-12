@@ -1,5 +1,11 @@
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
-import type { PresentationSurface, SharedSimulation, Stage } from '@/lib/types/stage';
+import type {
+  PresentationSurface,
+  SharedSimulation,
+  SharedSimulationCollaborationMode,
+  SharedSimulationCollaborationState,
+  Stage,
+} from '@/lib/types/stage';
 
 export function hasAttachedSharedSimulation(
   sharedSimulation: SharedSimulation | null | undefined,
@@ -30,6 +36,32 @@ export function getActivePresentationSurface(
   return sharedSimulation?.activeSurface ?? 'lesson';
 }
 
+export function getSharedSimulationCollaborationMode(
+  sharedSimulation: SharedSimulation | null | undefined,
+): SharedSimulationCollaborationMode {
+  return sharedSimulation?.collaborationMode === 'multi-user' ? 'multi-user' : 'single-controller';
+}
+
+export function isMultiUserSharedSimulation(
+  sharedSimulation: SharedSimulation | null | undefined,
+): boolean {
+  return getSharedSimulationCollaborationMode(sharedSimulation) === 'multi-user';
+}
+
+export function getSharedSimulationCollaborationState(
+  sharedSimulation: SharedSimulation | null | undefined,
+): SharedSimulationCollaborationState {
+  return sharedSimulation?.collaborationState ?? 'inactive';
+}
+
+export function getSharedSimulationRemovedSessionIds(
+  sharedSimulation: SharedSimulation | null | undefined,
+): string[] {
+  return Array.from(
+    new Set((sharedSimulation?.removedParticipantSessionIds ?? []).filter((value) => value.trim())),
+  );
+}
+
 export function resetSharedSimulationControl(sharedSimulation: SharedSimulation): SharedSimulation {
   return {
     ...sharedSimulation,
@@ -43,6 +75,10 @@ export function hasStudentControlLease(
   sharedSimulation: SharedSimulation | null | undefined,
   nowMs = Date.now(),
 ): boolean {
+  if (isMultiUserSharedSimulation(sharedSimulation)) {
+    return false;
+  }
+
   if (!sharedSimulation || sharedSimulation.controllerRole !== 'student') {
     return false;
   }
@@ -64,6 +100,10 @@ export function normalizeSharedSimulationControl(
     return null;
   }
 
+  if (isMultiUserSharedSimulation(sharedSimulation)) {
+    return sharedSimulation;
+  }
+
   if (sharedSimulation.controllerRole !== 'student') {
     return sharedSimulation;
   }
@@ -78,6 +118,47 @@ export function normalizeSharedSimulationControl(
   }
 
   return sharedSimulation;
+}
+
+export function normalizeSharedSimulationState(
+  sharedSimulation: SharedSimulation | null | undefined,
+  activeSessionIds: Iterable<string>,
+  nowMs = Date.now(),
+): SharedSimulation | null {
+  if (!sharedSimulation) {
+    return null;
+  }
+
+  if (!isMultiUserSharedSimulation(sharedSimulation)) {
+    return normalizeSharedSimulationControl(sharedSimulation, activeSessionIds, nowMs);
+  }
+
+  const sessionIds = new Set(activeSessionIds);
+  const removedParticipantSessionIds = getSharedSimulationRemovedSessionIds(sharedSimulation).filter(
+    (sessionId) => sessionIds.has(sessionId),
+  );
+  const spotlightSessionId =
+    sharedSimulation.spotlightSessionId &&
+    sessionIds.has(sharedSimulation.spotlightSessionId) &&
+    !removedParticipantSessionIds.includes(sharedSimulation.spotlightSessionId)
+      ? sharedSimulation.spotlightSessionId
+      : undefined;
+
+  const changed =
+    spotlightSessionId !== sharedSimulation.spotlightSessionId ||
+    removedParticipantSessionIds.length !==
+      getSharedSimulationRemovedSessionIds(sharedSimulation).length;
+
+  if (!changed) {
+    return sharedSimulation;
+  }
+
+  return {
+    ...sharedSimulation,
+    spotlightSessionId,
+    removedParticipantSessionIds:
+      removedParticipantSessionIds.length > 0 ? removedParticipantSessionIds : undefined,
+  };
 }
 
 export function preserveStageSharedSimulation(
@@ -161,6 +242,76 @@ export function getControllerDisplayName(
       (participant) => participant.sessionId === sharedSimulation.controllerSessionId,
     )?.displayName || 'Student controller'
   );
+}
+
+export function canSessionInteractWithSharedSimulation(
+  sharedSimulation: SharedSimulation | null | undefined,
+  session: Pick<{ id: string; kind: 'web' | 'classroom'; role: string }, 'id' | 'kind' | 'role'>,
+): boolean {
+  if (!sharedSimulation) {
+    return false;
+  }
+
+  if (!isMultiUserSharedSimulation(sharedSimulation)) {
+    if (sharedSimulation.controllerRole === 'teacher') {
+      return session.kind === 'web' && session.role !== 'student';
+    }
+
+    return (
+      hasStudentControlLease(sharedSimulation) && sharedSimulation.controllerSessionId === session.id
+    );
+  }
+
+  const isTeacherViewer = session.kind === 'web' && session.role !== 'student';
+  const collaborationState = getSharedSimulationCollaborationState(sharedSimulation);
+
+  if (isTeacherViewer) {
+    return collaborationState !== 'closed';
+  }
+
+  if (session.kind !== 'classroom' || session.role !== 'student') {
+    return false;
+  }
+
+  if (getSharedSimulationRemovedSessionIds(sharedSimulation).includes(session.id)) {
+    return false;
+  }
+
+  if (collaborationState !== 'live') {
+    return false;
+  }
+
+  return sharedSimulation.allowStudentInteraction !== false;
+}
+
+export function getSharedSimulationInteractionReason(
+  sharedSimulation: SharedSimulation | null | undefined,
+  session: Pick<{ id: string; kind: 'web' | 'classroom'; role: string }, 'id' | 'kind' | 'role'>,
+) {
+  if (!sharedSimulation || !isMultiUserSharedSimulation(sharedSimulation)) {
+    return null;
+  }
+
+  const isTeacherViewer = session.kind === 'web' && session.role !== 'student';
+  if (isTeacherViewer) {
+    return getSharedSimulationCollaborationState(sharedSimulation) === 'closed' ? 'closed' : null;
+  }
+
+  if (getSharedSimulationRemovedSessionIds(sharedSimulation).includes(session.id)) {
+    return 'removed' as const;
+  }
+
+  switch (getSharedSimulationCollaborationState(sharedSimulation)) {
+    case 'frozen':
+      return 'frozen' as const;
+    case 'closed':
+      return 'closed' as const;
+    case 'inactive':
+    case 'error':
+      return 'inactive' as const;
+    default:
+      return sharedSimulation.allowStudentInteraction === false ? ('frozen' as const) : null;
+  }
 }
 
 export function formatLeaseCountdown(

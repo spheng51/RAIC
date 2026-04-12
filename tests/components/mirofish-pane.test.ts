@@ -15,8 +15,12 @@ interface MiroFishPaneTestProps {
   readonly reportId: string | null;
   readonly runUrl: string | null;
   readonly reportUrl: string | null;
-  readonly viewerHasSimulationControl: boolean;
+  readonly collaborationMode: 'single-controller' | 'multi-user';
+  readonly viewerCanInteract: boolean;
   readonly viewerCanManageSimulation: boolean;
+  readonly collaborationState?: 'inactive' | 'live' | 'frozen' | 'closed' | 'error' | null;
+  readonly viewerInteractionReason?: 'inactive' | 'frozen' | 'closed' | 'removed' | null;
+  readonly spotlightDisplayName?: string | null;
   readonly controllerRole: 'teacher' | 'student';
   readonly controllerDisplayName: string;
   readonly controlLeaseExpiresAt: string | null;
@@ -42,8 +46,12 @@ async function mountMiroFishPane(
     reportId: 'report-1',
     runUrl: 'https://mirofish.example/simulation/sim-1/start?embed=1&classroomToken=token-a',
     reportUrl: 'https://mirofish.example/report/report-1?embed=1&classroomToken=report-token-a',
-    viewerHasSimulationControl: true,
+    collaborationMode: 'single-controller',
+    viewerCanInteract: true,
     viewerCanManageSimulation: true,
+    collaborationState: null,
+    viewerInteractionReason: null,
+    spotlightDisplayName: null,
     controllerRole: 'teacher',
     controllerDisplayName: 'Teacher One',
     controlLeaseExpiresAt: null,
@@ -207,7 +215,7 @@ describe('MiroFishPane', () => {
     vi.setSystemTime(new Date('2026-04-11T00:00:00.000Z'));
 
     const mounted = await mountMiroFishPane({
-      viewerHasSimulationControl: false,
+      viewerCanInteract: false,
       viewerCanManageSimulation: false,
       controllerRole: 'student',
       controllerDisplayName: 'Student One',
@@ -218,5 +226,24 @@ describe('MiroFishPane', () => {
       'Student One currently has control of the shared simulation.',
     );
     expect(mounted.container.textContent).toContain('Lease: 5m 00s remaining');
+  });
+
+  it('shows the multi-user overlay reason and spotlight without the lease UI', async () => {
+    const mounted = await mountMiroFishPane({
+      collaborationMode: 'multi-user',
+      viewerCanInteract: false,
+      collaborationState: 'frozen',
+      viewerInteractionReason: 'frozen',
+      spotlightDisplayName: 'Student Two',
+      controllerRole: 'teacher',
+      controllerDisplayName: 'Teacher One',
+      controlLeaseExpiresAt: null,
+    });
+
+    expect(mounted.container.textContent).toContain('Read-only collaboration view');
+    expect(mounted.container.textContent).toContain('The teacher has temporarily frozen student interaction.');
+    expect(mounted.container.textContent).toContain('State: frozen');
+    expect(mounted.container.textContent).toContain('Spotlight: Student Two');
+    expect(mounted.container.textContent).not.toContain('Lease:');
   });
 });

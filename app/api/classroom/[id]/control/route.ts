@@ -13,6 +13,7 @@ import {
 import { isValidClassroomId, updateClassroom } from '@/lib/server/classroom-storage';
 import { recordAuditEvent } from '@/lib/server/audit-log';
 import { createLogger } from '@/lib/logger';
+import { getSharedSimulationCollaborationMode } from '@/lib/utils/classroom-presentation';
 
 interface ControlBody {
   action?: 'grant' | 'revoke';
@@ -52,6 +53,15 @@ export async function PATCH(
       API_ERROR_CODES.INVALID_REQUEST,
       404,
       'No MiroFish simulation is attached',
+    );
+  }
+
+  if (getSharedSimulationCollaborationMode(snapshot.sharedSimulation) === 'multi-user') {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Single-controller leases are unavailable while MiroFish multi-user mode is active',
     );
   }
 

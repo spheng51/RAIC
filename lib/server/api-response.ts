@@ -63,7 +63,7 @@ export async function withRequestWebSession<T extends NextResponse>(
     return response;
   }
 
-  attachSessionCookie(response, sessionToken, session.expiresAt);
+  attachSessionCookie(response, sessionToken, session.absoluteExpiresAt);
   return response;
 }
 

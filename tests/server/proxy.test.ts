@@ -23,6 +23,7 @@ describe('proxy auth refresh', () => {
       id: 'session-1',
       kind: 'web',
       expiresAt: '2026-01-01T00:00:00.000Z',
+      absoluteExpiresAt: '2026-01-20T00:00:00.000Z',
     });
 
     const { proxy } = await import('../../proxy');
@@ -35,7 +36,11 @@ describe('proxy auth refresh', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.cookies.get(SESSION_COOKIE_NAME)?.value).toBe('session-token');
+    const sessionCookie = response.cookies.get(SESSION_COOKIE_NAME);
+    expect(sessionCookie?.value).toBe('session-token');
+    expect(new Date(sessionCookie?.expires ?? 0).toISOString()).toBe(
+      '2026-01-20T00:00:00.000Z',
+    );
   });
 
   it('clears invalid web session cookies and redirects to sign-in', async () => {

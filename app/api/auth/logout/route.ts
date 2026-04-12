@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clearClassroomAccessCookie } from '@/lib/auth/classroom-access';
 import { getRequestAuth } from '@/lib/auth/current-user';
 import { clearNonceCookie, clearSessionCookie } from '@/lib/auth/session';
 import { revokeSessionById } from '@/lib/db/repositories/sessions';
@@ -22,5 +23,6 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ success: true });
   clearSessionCookie(response);
   clearNonceCookie(response);
+  clearClassroomAccessCookie(response);
   return response;
 }

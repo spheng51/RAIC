@@ -12,12 +12,14 @@ import { useWhiteboardHistoryStore } from '@/lib/store/whiteboard-history';
 import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
+import { useI18n } from '@/lib/hooks/use-i18n';
 
 const log = createLogger('Classroom');
 
 export default function ClassroomDetailPage() {
   const params = useParams();
   const classroomId = params?.id as string;
+  const { t } = useI18n();
 
   const { loadFromStorage } = useStageStore();
 
@@ -233,20 +235,21 @@ export default function ClassroomDetailPage() {
               aria-busy="true"
             >
               <div className="text-center text-muted-foreground">
-                <p>Loading classroom...</p>
+                <p>{t('classroom.loading')}</p>
               </div>
             </div>
           ) : error ? (
             <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
               <div className="text-center" role="alert" aria-live="assertive" aria-atomic="true">
-                <p className="text-destructive mb-4">Error: {error}</p>
+                <h2 className="text-destructive font-medium mb-2">{t('common.error')}</h2>
+                <p className="text-sm text-muted-foreground mb-4">{error}</p>
                 <button
                   ref={retryButtonRef}
                   type="button"
                   onClick={handleRetry}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  Retry
+                  {t('common.retry')}
                 </button>
               </div>
             </div>

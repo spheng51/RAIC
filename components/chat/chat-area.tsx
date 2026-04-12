@@ -284,7 +284,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
             type="button"
             onMouseDown={handleDragStart}
             onKeyDown={handleResizeKeyDown}
-            aria-label="Resize chat panel"
+            aria-label={t('chat.resizePanel')}
             className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors focus-visible:outline-none focus-visible:bg-purple-400/30 dark:focus-visible:bg-purple-600/30"
           >
             <div
@@ -324,8 +324,8 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
                 <button
                   type="button"
                   onClick={() => onCollapseChange(true)}
-                  aria-label="Collapse chat panel"
-                  title="Collapse chat panel"
+                  aria-label={t('chat.collapsePanel')}
+                  title={t('chat.collapsePanel')}
                   className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gray-100/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 ring-1 ring-black/[0.04] dark:ring-white/[0.06] hover:bg-gray-200/90 dark:hover:bg-gray-700/90 hover:text-gray-700 dark:hover:text-gray-200 active:scale-90 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40"
                 >
                   <PanelRightClose className="w-4 h-4" />

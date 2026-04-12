@@ -161,7 +161,7 @@ export function SceneSidebar({
           type="button"
           onMouseDown={handleDragStart}
           onKeyDown={handleResizeKeyDown}
-          aria-label="Resize scene sidebar"
+          aria-label={t('stage.resizeSidebar')}
           className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 group hover:bg-purple-400/30 dark:hover:bg-purple-600/30 active:bg-purple-500/40 dark:active:bg-purple-500/40 transition-colors focus-visible:outline-none focus-visible:bg-purple-400/30 dark:focus-visible:bg-purple-600/30"
         >
           <div
@@ -186,7 +186,7 @@ export function SceneSidebar({
           <button
             type="button"
             onClick={() => onCollapseChange(true)}
-            aria-label="Collapse scene sidebar"
+            aria-label={t('stage.collapseSidebar')}
             className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center bg-gray-100/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 ring-1 ring-black/[0.04] dark:ring-white/[0.06] hover:bg-gray-200/90 dark:hover:bg-gray-700/90 hover:text-gray-700 dark:hover:text-gray-200 active:scale-90 transition-all duration-200"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -210,7 +210,7 @@ export function SceneSidebar({
                 data-testid="scene-item"
                 role="button"
                 tabIndex={0}
-                aria-label={`Open scene ${index + 1}: ${scene.title}`}
+                aria-label={t('stage.openScene', { index: index + 1, title: scene.title })}
                 onClick={() => selectScene(scene.id)}
                 onKeyDown={(e) => handleInteractiveKeyDown(e, () => selectScene(scene.id))}
                 className={cn(
@@ -395,8 +395,8 @@ export function SceneSidebar({
                   aria-disabled={isFailed || undefined}
                   aria-label={
                     isFailed
-                      ? `Generation failed for ${outline.title}`
-                      : `Open generating scene: ${outline.title}`
+                      ? t('stage.failedScene', { title: outline.title })
+                      : t('stage.openGeneratingScene', { title: outline.title })
                   }
                   onClick={() => {
                     if (isFailed) return;

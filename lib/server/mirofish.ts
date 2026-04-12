@@ -15,6 +15,22 @@ interface MiroFishEmbedTokenInput {
   reportId?: string;
 }
 
+export type MiroFishParticipantCapability = 'view' | 'interact' | 'moderate';
+
+interface MiroFishParticipantTokenInput extends MiroFishEmbedTokenInput {
+  mirofishSessionId: string;
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  role: 'teacher' | 'student';
+  capabilities: MiroFishParticipantCapability[];
+}
+
+interface SignedMiroFishToken {
+  token: string;
+  expiresAt: string;
+}
+
 function normalizeBaseUrl(rawUrl: string, envName: string) {
   const trimmed = rawUrl.trim();
   if (!trimmed) {
@@ -54,6 +70,41 @@ export function getMiroFishConfig(): MiroFishConfig {
     apiBaseUrl,
     apiKey: process.env.MIROFISH_API_KEY?.trim() || null,
     embedSecret: process.env.MIROFISH_EMBED_SECRET?.trim() || null,
+  };
+}
+
+function getMiroFishTokenWindow() {
+  const validityWindowSeconds = 2 * 60 * 60;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const exp =
+    Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds +
+    validityWindowSeconds;
+
+  return {
+    exp,
+    expiresAt: new Date(exp * 1_000).toISOString(),
+  };
+}
+
+function createSignedMiroFishToken(payloadBody: Record<string, unknown>): SignedMiroFishToken | null {
+  const { embedSecret } = getMiroFishConfig();
+  if (!embedSecret) {
+    return null;
+  }
+
+  const { exp, expiresAt } = getMiroFishTokenWindow();
+  const payload = Buffer.from(
+    JSON.stringify({
+      ...payloadBody,
+      exp,
+    }),
+    'utf-8',
+  ).toString('base64url');
+  const signature = createHmac('sha256', embedSecret).update(payload).digest('base64url');
+
+  return {
+    token: `${payload}.${signature}`,
+    expiresAt,
   };
 }
 
@@ -120,29 +171,29 @@ export function buildMiroFishReportUrl(reportId: string) {
 }
 
 export function createMiroFishEmbedToken(input: MiroFishEmbedTokenInput) {
-  const { embedSecret } = getMiroFishConfig();
-  if (!embedSecret) {
-    return null;
-  }
+  return createSignedMiroFishToken({
+    classroomId: input.classroomId,
+    simulationId: input.simulationId,
+    reportId: input.reportId,
+    tokenType: 'classroom',
+  })?.token ?? null;
+}
 
-  // Keep embed tokens stable across polling and valid for a typical class session.
-  const validityWindowSeconds = 2 * 60 * 60;
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const exp =
-    Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds +
-    validityWindowSeconds;
-
-  const payload = Buffer.from(
-    JSON.stringify({
-      classroomId: input.classroomId,
-      simulationId: input.simulationId,
-      reportId: input.reportId,
-      exp,
-    }),
-    'utf-8',
-  ).toString('base64url');
-  const signature = createHmac('sha256', embedSecret).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
+export function issueMiroFishParticipantToken(
+  input: MiroFishParticipantTokenInput,
+): SignedMiroFishToken | null {
+  return createSignedMiroFishToken({
+    classroomId: input.classroomId,
+    simulationId: input.simulationId,
+    reportId: input.reportId,
+    mirofishSessionId: input.mirofishSessionId,
+    sessionId: input.sessionId,
+    userId: input.userId,
+    displayName: input.displayName,
+    role: input.role,
+    capabilities: input.capabilities,
+    tokenType: 'participant',
+  });
 }
 
 export function withMiroFishEmbedToken(
@@ -158,4 +209,25 @@ export function withMiroFishEmbedToken(
   }
 
   return url.toString();
+}
+
+export function withMiroFishParticipantToken(
+  urlString: string,
+  input: {
+    mirofishSessionId: string;
+    participantToken: string | null;
+  },
+): string {
+  const url = new URL(urlString);
+  url.searchParams.set('embed', '1');
+  url.searchParams.set('mirofishSessionId', input.mirofishSessionId);
+  if (input.participantToken) {
+    url.searchParams.set('participantToken', input.participantToken);
+  }
+  return url.toString();
+}
+
+export function isMiroFishMultiUserEnabled() {
+  const raw = process.env.MIROFISH_MULTI_USER_ENABLED?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }

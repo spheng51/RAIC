@@ -827,7 +827,7 @@ function GenerationPreviewContent() {
       >
         <div className="text-center text-muted-foreground">
           <div className="size-8 border-2 border-current border-t-transparent rounded-full motion-safe:animate-spin motion-reduce:animate-none mx-auto" />
-          <p className="sr-only">Loading generation preview</p>
+          <p className="sr-only">{t('generation.loadingPreview')}</p>
         </div>
       </div>
     );
@@ -998,7 +998,9 @@ function GenerationPreviewContent() {
                         <TooltipTrigger asChild>
                           <motion.button
                             type="button"
-                            aria-label={`View ${truncationWarnings.length} generation warnings`}
+                            aria-label={t('generation.viewWarnings', {
+                              count: truncationWarnings.length,
+                            })}
                             animate={
                               prefersReducedMotion
                                 ? { boxShadow: 'none' }
@@ -1110,23 +1112,27 @@ function GenerationPreviewContent() {
 
 export default function GenerationPreviewPage() {
   return (
-    <Suspense
-      fallback={
-        <div
-          className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center"
-          role="status"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <div className="motion-safe:animate-pulse motion-reduce:animate-none space-y-4 text-center">
-            <div className="h-8 w-48 bg-muted rounded mx-auto" />
-            <div className="h-4 w-64 bg-muted rounded mx-auto" />
-            <p className="sr-only">Loading generation preview</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<GenerationPreviewFallback />}>
       <GenerationPreviewContent />
     </Suspense>
+  );
+}
+
+function GenerationPreviewFallback() {
+  const { t } = useI18n();
+
+  return (
+    <div
+      className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="motion-safe:animate-pulse motion-reduce:animate-none space-y-4 text-center">
+        <div className="h-8 w-48 bg-muted rounded mx-auto" />
+        <div className="h-4 w-64 bg-muted rounded mx-auto" />
+        <p className="sr-only">{t('generation.loadingPreview')}</p>
+      </div>
+    </div>
   );
 }

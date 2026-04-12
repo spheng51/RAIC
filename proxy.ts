@@ -9,7 +9,7 @@ export async function proxy(request: NextRequest) {
     const session = await resolveSessionFromToken(sessionCookie);
     if (session?.kind === 'web') {
       const response = NextResponse.next();
-      attachSessionCookie(response, sessionCookie, session.expiresAt);
+      attachSessionCookie(response, sessionCookie, session.absoluteExpiresAt);
       return response;
     }
   }
