@@ -116,6 +116,22 @@ providers:
 
 Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, and any OpenAI-compatible API.
 
+### Org-managed AI connectivity
+
+Authenticated `teacher` and `org_admin` flows can run on managed server-side provider config instead of browser-only secrets.
+
+Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admin` and server-backed teacher overrides in authenticated `/studio`.
+
+- Accepted key formats: 64-character hex, base64 that decodes to 32 bytes, or any passphrase hashed with SHA-256 on the server
+- Authenticated interactive precedence: personal override -> org config -> env / `server-providers.yml` bootstrap -> one-release legacy browser-key fallback
+- Background and async classroom jobs: org config -> env / `server-providers.yml` bootstrap only
+- If `RAIC_SECRET_ENCRYPTION_KEY` is missing, bootstrap config still works, but `/api/admin/ai/config` and `/api/me/ai/overrides` fail closed for secret storage
+- Public `/` demo keeps the legacy local-storage flow for this release window, while authenticated `/studio` and `/admin` use the governed path
+
+Operator rollout notes, smoke checks, and release-gate steps live in [docs/ai-governance-rollout.md](docs/ai-governance-rollout.md).
+
+MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps live in [docs/mirofish-classroom-rollout.md](docs/mirofish-classroom-rollout.md).
+
 MiniMax quick examples:
 
 ```env

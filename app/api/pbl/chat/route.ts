@@ -10,8 +10,13 @@ import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { callLLM } from '@/lib/ai/llm';
 import type { PBLAgent, PBLIssue } from '@/lib/pbl/types';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
+import { resolveModelFromHeadersWithScope } from '@/lib/server/resolve-model';
 const log = createLogger('PBL Chat');
 
 interface PBLChatRequest {
@@ -34,7 +39,12 @@ export async function POST(req: NextRequest) {
     resolvedAgentType = agentType;
 
     if (!classroomId || !message || !agent) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Classroom ID, message, and agent are required');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Classroom ID, message, and agent are required',
+      );
     }
 
     const access = await requireClassroomAccess(req, classroomId);
@@ -43,7 +53,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Get model config from headers
-    const { model } = await resolveModelFromHeaders(req);
+    const { model } = await resolveModelFromHeadersWithScope(req, {
+      auth: access.auth,
+      organizationId: access.auth.organization?.id ?? null,
+      userId: access.auth.user.id,
+    });
 
     // Build context for the agent, differentiating question vs judge
     let issueContext = '';
@@ -77,12 +91,21 @@ export async function POST(req: NextRequest) {
       'pbl-chat',
     );
 
-    return apiSuccess({ message: result.text, agentName: agent.name });
+    return apiSuccessWithRequestSession(req, { message: result.text, agentName: agent.name });
   } catch (error) {
     log.error(
       `PBL chat failed [agent="${agentName ?? 'unknown'}", type=${resolvedAgentType ?? 'question'}]:`,
       error,
     );
-    return apiError('INTERNAL_ERROR', 500, error instanceof Error ? error.message : String(error));
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+    return apiErrorWithRequestSession(
+      req,
+      'INTERNAL_ERROR',
+      500,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }

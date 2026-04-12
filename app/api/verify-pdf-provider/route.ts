@@ -1,7 +1,15 @@
 import { NextRequest } from 'next/server';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolvePDFApiKey, resolvePDFBaseUrl } from '@/lib/server/provider-config';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('Verify PDF Provider');
@@ -12,31 +20,36 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     providerId = body.providerId;
     const { apiKey, baseUrl } = body;
+    const auth = await getRequestAuth(req);
 
     if (!providerId) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Provider ID is required');
+      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Provider ID is required');
     }
 
     const clientBaseUrl = (baseUrl as string | undefined) || undefined;
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
+        return apiErrorWithRequestSession(req, 'INVALID_URL', 403, ssrfError);
       }
     }
 
-    const resolvedBaseUrl = clientBaseUrl ? clientBaseUrl : resolvePDFBaseUrl(providerId, baseUrl);
+    const resolved = await resolveGovernedProviderConfig({
+      auth,
+      family: 'pdf',
+      providerId,
+      requestedSecret: (apiKey as string | undefined) || undefined,
+      requestedBaseUrl: clientBaseUrl,
+    });
+
+    const resolvedBaseUrl = resolved.baseUrl;
     if (!resolvedBaseUrl) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Base URL is required');
+      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Base URL is required');
     }
 
-    const resolvedApiKey = clientBaseUrl
-      ? (apiKey as string | undefined) || ''
-      : resolvePDFApiKey(providerId, apiKey);
-
     const headers: Record<string, string> = {};
-    if (resolvedApiKey) {
-      headers['Authorization'] = `Bearer ${resolvedApiKey}`;
+    if (resolved.apiKey) {
+      headers['Authorization'] = `Bearer ${resolved.apiKey}`;
     }
 
     const response = await fetch(resolvedBaseUrl, {
@@ -46,16 +59,21 @@ export async function POST(req: NextRequest) {
     });
 
     if (response.status >= 300 && response.status < 400) {
-      return apiError('REDIRECT_NOT_ALLOWED', 403, 'Redirects are not allowed');
+      return apiErrorWithRequestSession(req, 'REDIRECT_NOT_ALLOWED', 403, 'Redirects are not allowed');
     }
 
     // MinerU's FastAPI root returns 404 (no root route), but the server is reachable.
     // Any HTTP response (including 404) means the server is up.
-    return apiSuccess({
+    return apiSuccessWithRequestSession(req, {
       message: 'Connection successful',
       status: response.status,
     });
   } catch (error) {
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(req, governanceError);
+    }
+
     log.error(`PDF provider verification failed [provider=${providerId ?? 'unknown'}]:`, error);
 
     let errorMessage = 'Connection failed';
@@ -71,6 +89,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return apiError('INTERNAL_ERROR', 500, errorMessage);
+    return apiErrorWithRequestSession(req, 'INTERNAL_ERROR', 500, errorMessage);
   }
 }

@@ -19,13 +19,18 @@ export async function searchWithTavily(params: {
   query: string;
   apiKey: string;
   maxResults?: number;
+  baseUrl?: string;
 }): Promise<WebSearchResult> {
-  const { query, apiKey, maxResults = 5 } = params;
+  const { query, apiKey, maxResults = 5, baseUrl } = params;
+  const apiUrl = `${(baseUrl || TAVILY_API_URL).replace(/\/$/, '')}/search`.replace(
+    /\/search\/search$/,
+    '/search',
+  );
 
   // Tavily rejects queries over 400 characters with a 400 error
   const truncatedQuery = query.slice(0, TAVILY_MAX_QUERY_LENGTH);
 
-  const res = await proxyFetch(TAVILY_API_URL, {
+  const res = await proxyFetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

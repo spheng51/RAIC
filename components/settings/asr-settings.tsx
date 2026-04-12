@@ -31,9 +31,13 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
   const asrLanguage = useSettingsStore((state) => state.asrLanguage);
   const asrProvidersConfig = useSettingsStore((state) => state.asrProvidersConfig);
   const setASRProviderConfig = useSettingsStore((state) => state.setASRProviderConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   const asrProvider = ASR_PROVIDERS[selectedProviderId] ?? ASR_PROVIDERS['openai-whisper'];
   const isServerConfigured = !!asrProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const canOverrideBaseUrl =
+    !asrProvidersConfig[selectedProviderId]?.hasOrganizationConfig ||
+    aiPolicy.allowPersonalCustomBaseUrls;
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -214,6 +218,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                   })
                 }
                 className="text-sm"
+                disabled={!canOverrideBaseUrl}
               />
             </div>
           </div>

@@ -164,7 +164,7 @@ vi.stubGlobal('localStorage', {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Full server response shape */
+/** Legacy-shaped test helper that is converted to the governed effective-options envelope. */
 interface MockServerResponse {
   providers?: Record<string, { models?: string[]; baseUrl?: string }>;
   tts?: Record<string, { baseUrl?: string }>;
@@ -176,17 +176,127 @@ interface MockServerResponse {
 }
 
 function mockServerResponse(overrides: MockServerResponse = {}) {
+  const llm = Object.fromEntries(
+    Object.entries(overrides.providers ?? {}).map(([providerId, config]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        allowedModels: config.models,
+        defaultModel: config.models?.[0] ?? null,
+        baseUrl: config.baseUrl,
+        hasSecret: true,
+        requiresApiKey: true,
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const tts = Object.fromEntries(
+    Object.entries(overrides.tts ?? {}).map(([providerId, config]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        baseUrl: config.baseUrl,
+        hasSecret: true,
+        requiresApiKey: providerId !== 'browser-native-tts',
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const asr = Object.fromEntries(
+    Object.entries(overrides.asr ?? {}).map(([providerId, config]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        baseUrl: config.baseUrl,
+        hasSecret: true,
+        requiresApiKey: providerId !== 'browser-native',
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const pdf = Object.fromEntries(
+    Object.entries(overrides.pdf ?? {}).map(([providerId, config]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        baseUrl: config.baseUrl,
+        hasSecret: false,
+        requiresApiKey: false,
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const image = Object.fromEntries(
+    Object.entries(overrides.image ?? {}).map(([providerId]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        hasSecret: true,
+        requiresApiKey: true,
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const video = Object.fromEntries(
+    Object.entries(overrides.video ?? {}).map(([providerId]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        hasSecret: true,
+        requiresApiKey: true,
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
+  const webSearch = Object.fromEntries(
+    Object.entries(overrides.webSearch ?? {}).map(([providerId, config]) => [
+      providerId,
+      {
+        providerId,
+        enabled: true,
+        source: 'organization',
+        baseUrl: config.baseUrl,
+        hasSecret: true,
+        requiresApiKey: true,
+        hasOrganizationConfig: true,
+      },
+    ]),
+  );
+
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
-      providers: {},
-      tts: {},
-      asr: {},
-      pdf: {},
-      image: {},
-      video: {},
-      webSearch: {},
-      ...overrides,
+      policy: {
+        allowPersonalOverrides: false,
+        allowPersonalCustomBaseUrls: false,
+      },
+      providers: {
+        llm,
+        tts,
+        asr,
+        pdf,
+        image,
+        video,
+        webSearch,
+      },
     }),
   });
 }
@@ -282,6 +392,61 @@ describe('fetchServerProviders — provider availability sync', () => {
     await store.getState().fetchServerProviders();
 
     expect(store.getState().providersConfig.openai.isServerConfigured).toBe(true);
+  });
+
+  it('fills modelId from governed server models when provider is usable but no model is selected', async () => {
+    const store = await getStore();
+    store.setState({
+      providerId: 'openai',
+      modelId: '',
+    });
+
+    mockServerResponse({
+      providers: {
+        openai: { models: ['gpt-4o'] },
+      },
+    });
+
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providerId).toBe('openai');
+    expect(store.getState().modelId).toBe('gpt-4o');
+  });
+
+  it('does not mutate classroom sharedSimulation while syncing server providers', async () => {
+    const store = await getStore();
+    const { useStageStore } = await import('@/lib/store/stage');
+
+    const sharedSimulation = {
+      provider: 'mirofish' as const,
+      simulationId: 'sim-1',
+      reportId: 'report-1',
+      runUrl: 'https://mirofish.example/simulation/sim-1/start?embed=1',
+      reportUrl: 'https://mirofish.example/report/report-1?embed=1',
+      activeSurface: 'simulation' as const,
+      controllerRole: 'teacher' as const,
+      status: 'running' as const,
+    };
+
+    useStageStore.setState({
+      stage: {
+        id: 'classroom-1',
+        name: 'MiroFish classroom',
+        createdAt: 1,
+        updatedAt: 1,
+        sharedSimulation,
+      },
+    });
+
+    mockServerResponse({
+      providers: {
+        openai: { models: ['gpt-4o'] },
+      },
+    });
+
+    await store.getState().fetchServerProviders();
+
+    expect(useStageStore.getState().stage?.sharedSimulation).toEqual(sharedSimulation);
   });
 
   it('resets isServerConfigured when provider disappears from response', async () => {

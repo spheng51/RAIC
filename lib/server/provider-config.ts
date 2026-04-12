@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { createLogger } from '@/lib/logger';
+import type { AIProviderFamily } from '@/lib/types/ai-governance';
 
 const log = createLogger('ServerProviderConfig');
 
@@ -18,6 +19,13 @@ const log = createLogger('ServerProviderConfig');
 
 interface ServerProviderEntry {
   apiKey: string;
+  baseUrl?: string;
+  models?: string[];
+  proxy?: string;
+}
+
+export interface BootstrapProviderConfig {
+  apiKey?: string;
   baseUrl?: string;
   models?: string[];
   proxy?: string;
@@ -239,6 +247,48 @@ function getConfig(): ServerConfig {
   logConfig(config, DEFAULT_FILENAME);
   _configs.set('', config);
   return config;
+}
+
+function getSectionForFamily(
+  family: AIProviderFamily,
+): Record<string, ServerProviderEntry> {
+  const config = getConfig();
+
+  switch (family) {
+    case 'llm':
+      return config.providers;
+    case 'tts':
+      return config.tts;
+    case 'asr':
+      return config.asr;
+    case 'pdf':
+      return config.pdf;
+    case 'image':
+      return config.image;
+    case 'video':
+      return config.video;
+    case 'webSearch':
+      return config.webSearch;
+    default:
+      return {};
+  }
+}
+
+export function getBootstrapProviderConfig(
+  family: AIProviderFamily,
+  providerId: string,
+): BootstrapProviderConfig | null {
+  const entry = getSectionForFamily(family)[providerId];
+  if (!entry) {
+    return null;
+  }
+
+  return {
+    ...(entry.apiKey ? { apiKey: entry.apiKey } : {}),
+    ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : {}),
+    ...(entry.models?.length ? { models: entry.models } : {}),
+    ...(entry.proxy ? { proxy: entry.proxy } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------

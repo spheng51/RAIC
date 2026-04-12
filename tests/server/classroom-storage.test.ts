@@ -1,3 +1,4 @@
+import { promises as fs } from 'fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,8 +20,13 @@ describe('classroom-storage helpers', () => {
     vi.unstubAllEnvs();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    await fs.rm(path.join(process.cwd(), 'data', 'classrooms'), {
+      recursive: true,
+      force: true,
+    });
   });
 
   it('resolves classroom JSON paths inside the classroom data directory', async () => {
@@ -79,5 +85,29 @@ describe('classroom-storage helpers', () => {
     );
 
     expect(origin).toBe('http://localhost:3000');
+  });
+
+  it('retries atomic writes after a transient Windows rename lock', async () => {
+    const realRename = fs.rename;
+    const rename = vi.spyOn(fs, 'rename');
+    let attempts = 0;
+
+    rename.mockImplementation(async (from, to) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('locked') as NodeJS.ErrnoException;
+        error.code = 'EPERM';
+        throw error;
+      }
+      return realRename(from, to);
+    });
+
+    const filePath = path.join(process.cwd(), 'data', 'classrooms', 'atomic-write.json');
+    const { writeJsonFileAtomic } = await import('@/lib/server/classroom-storage');
+
+    await writeJsonFileAtomic(filePath, { ok: true });
+
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toContain('"ok": true');
+    expect(rename).toHaveBeenCalledTimes(2);
   });
 });

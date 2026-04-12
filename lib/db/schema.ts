@@ -1,5 +1,7 @@
 import 'server-only';
 
+import type { AIProviderDefinition, AIProviderFamily } from '@/lib/types/ai-governance';
+
 export type PlatformRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
 export type OrganizationKind = 'personal' | 'school';
 export type SessionKind = 'web' | 'classroom';
@@ -76,6 +78,44 @@ export interface AuditLogRecord {
   createdAt: string;
 }
 
+export interface OrganizationAIPolicyRecord {
+  id: string;
+  organizationId: string;
+  allowPersonalOverrides: boolean;
+  allowPersonalCustomBaseUrls: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationProviderConfigRecord {
+  id: string;
+  organizationId: string;
+  family: AIProviderFamily;
+  providerId: string;
+  providerDefinition: AIProviderDefinition | null;
+  encryptedSecret: string | null;
+  baseUrl: string | null;
+  allowedModels: string[];
+  defaultModel: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserProviderOverrideRecord {
+  id: string;
+  organizationId: string;
+  userId: string;
+  family: AIProviderFamily;
+  providerId: string;
+  encryptedSecret: string | null;
+  baseUrl: string | null;
+  preferredModel: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlatformStore {
   users: UserRecord[];
   organizations: OrganizationRecord[];
@@ -83,6 +123,9 @@ export interface PlatformStore {
   sessions: SessionRecord[];
   joinTokens: JoinTokenRecord[];
   auditLogs: AuditLogRecord[];
+  organizationAiPolicies: OrganizationAIPolicyRecord[];
+  organizationProviderConfigs: OrganizationProviderConfigRecord[];
+  userProviderOverrides: UserProviderOverrideRecord[];
 }
 
 export const EMPTY_PLATFORM_STORE: PlatformStore = {
@@ -92,6 +135,9 @@ export const EMPTY_PLATFORM_STORE: PlatformStore = {
   sessions: [],
   joinTokens: [],
   auditLogs: [],
+  organizationAiPolicies: [],
+  organizationProviderConfigs: [],
+  userProviderOverrides: [],
 };
 
 export const PLATFORM_SCHEMA_SQL = [
@@ -163,9 +209,49 @@ export const PLATFORM_SCHEMA_SQL = [
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS organization_ai_policies (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    allow_personal_overrides BOOLEAN NOT NULL DEFAULT FALSE,
+    allow_personal_custom_base_urls BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (organization_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS organization_provider_configs (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    family TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    provider_definition JSONB,
+    encrypted_secret TEXT,
+    base_url TEXT,
+    allowed_models JSONB NOT NULL DEFAULT '[]'::jsonb,
+    default_model TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (organization_id, family, provider_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS user_provider_overrides (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    family TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    encrypted_secret TEXT,
+    base_url TEXT,
+    preferred_model TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (organization_id, user_id, family, provider_id)
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_classroom_id ON sessions (classroom_id)`,
   `CREATE INDEX IF NOT EXISTS idx_join_tokens_token_hash ON join_tokens (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON memberships (user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_org_provider_configs_org_family ON organization_provider_configs (organization_id, family)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_provider_overrides_org_user_family ON user_provider_overrides (organization_id, user_id, family)`,
 ];

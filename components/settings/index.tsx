@@ -187,20 +187,24 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
 
   // Get settings from store
   const providerId = useSettingsStore((state) => state.providerId);
-  const _modelId = useSettingsStore((state) => state.modelId);
+  const modelId = useSettingsStore((state) => state.modelId);
   const providersConfig = useSettingsStore((state) => state.providersConfig);
   const pdfProviderId = useSettingsStore((state) => state.pdfProviderId);
   const pdfProvidersConfig = useSettingsStore((state) => state.pdfProvidersConfig);
   const webSearchProviderId = useSettingsStore((state) => state.webSearchProviderId);
   const webSearchProvidersConfig = useSettingsStore((state) => state.webSearchProvidersConfig);
   const imageProviderId = useSettingsStore((state) => state.imageProviderId);
+  const imageModelId = useSettingsStore((state) => state.imageModelId);
   const imageProvidersConfig = useSettingsStore((state) => state.imageProvidersConfig);
   const videoProviderId = useSettingsStore((state) => state.videoProviderId);
+  const videoModelId = useSettingsStore((state) => state.videoModelId);
   const videoProvidersConfig = useSettingsStore((state) => state.videoProvidersConfig);
   const ttsProviderId = useSettingsStore((state) => state.ttsProviderId);
   const ttsProvidersConfig = useSettingsStore((state) => state.ttsProvidersConfig);
   const asrProviderId = useSettingsStore((state) => state.asrProviderId);
   const asrProvidersConfig = useSettingsStore((state) => state.asrProvidersConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
+  const fetchServerProviders = useSettingsStore((state) => state.fetchServerProviders);
 
   // Store actions
   const setModel = useSettingsStore((state) => state.setModel);
@@ -208,6 +212,12 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
   const setProvidersConfig = useSettingsStore((state) => state.setProvidersConfig);
   const setTTSProvider = useSettingsStore((state) => state.setTTSProvider);
   const setASRProvider = useSettingsStore((state) => state.setASRProvider);
+  const setTTSProviderConfig = useSettingsStore((state) => state.setTTSProviderConfig);
+  const setASRProviderConfig = useSettingsStore((state) => state.setASRProviderConfig);
+  const setPDFProviderConfig = useSettingsStore((state) => state.setPDFProviderConfig);
+  const setImageProviderConfig = useSettingsStore((state) => state.setImageProviderConfig);
+  const setVideoProviderConfig = useSettingsStore((state) => state.setVideoProviderConfig);
+  const setWebSearchProviderConfig = useSettingsStore((state) => state.setWebSearchProviderConfig);
 
   // Navigation
   const [activeSection, setActiveSection] = useState<SettingsSection>('providers');
@@ -293,8 +303,179 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     };
   }, [isResizing]);
 
-  const handleSave = () => {
-    onOpenChange(false);
+  const handleSave = async () => {
+    setSaveStatus('idle');
+
+    const overrides: Array<{
+      family: 'llm' | 'tts' | 'asr' | 'pdf' | 'image' | 'video' | 'webSearch';
+      providerId: string;
+      enabled: boolean;
+      secret?: string;
+      baseUrl?: string | null;
+      preferredModel?: string | null;
+    }> = [];
+
+    for (const [pid, config] of Object.entries(providersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'llm',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+        preferredModel: providerId === pid ? modelId || null : null,
+      });
+    }
+
+    for (const [pid, config] of Object.entries(ttsProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'tts',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+        preferredModel: ttsProviderId === pid ? config.modelId || null : null,
+      });
+    }
+
+    for (const [pid, config] of Object.entries(asrProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'asr',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+        preferredModel: asrProviderId === pid ? config.modelId || null : null,
+      });
+    }
+
+    for (const [pid, config] of Object.entries(pdfProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'pdf',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+      });
+    }
+
+    for (const [pid, config] of Object.entries(imageProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'image',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+        preferredModel: imageProviderId === pid ? imageModelId || null : null,
+      });
+    }
+
+    for (const [pid, config] of Object.entries(videoProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'video',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+        preferredModel: videoProviderId === pid ? videoModelId || null : null,
+      });
+    }
+
+    for (const [pid, config] of Object.entries(webSearchProvidersConfig)) {
+      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      overrides.push({
+        family: 'webSearch',
+        providerId: pid,
+        enabled: config.serverEnabled !== false,
+        ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
+        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
+          ? { baseUrl: config.baseUrl.trim() }
+          : {}),
+      });
+    }
+
+    if (overrides.length === 0) {
+      onOpenChange(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/me/ai/overrides', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ overrides }),
+      });
+
+      if (response.status === 401) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        onOpenChange(false);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: t('settings.saveFailed') }));
+        setSaveStatus('error');
+        toast.error(errorData.error || t('settings.saveFailed'));
+        return;
+      }
+
+      for (const [pid, config] of Object.entries(providersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setProviderConfig(pid as ProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(ttsProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setTTSProviderConfig(pid as TTSProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(asrProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setASRProviderConfig(pid as ASRProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(pdfProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setPDFProviderConfig(pid as PDFProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(imageProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setImageProviderConfig(pid as ImageProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(videoProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setVideoProviderConfig(pid as VideoProviderId, { apiKey: '', baseUrl: '' });
+      }
+      for (const [pid, config] of Object.entries(webSearchProvidersConfig)) {
+        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+        setWebSearchProviderConfig(pid as WebSearchProviderId, { apiKey: '', baseUrl: '' });
+      }
+
+      await fetchServerProviders();
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      onOpenChange(false);
+    } catch (error) {
+      setSaveStatus('error');
+      toast.error(error instanceof Error ? error.message : t('settings.saveFailed'));
+    }
   };
 
   const handleProviderSelect = (pid: ProviderId) => {
@@ -439,7 +620,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
   };
 
   const handleDeleteProvider = (pid: ProviderId) => {
-    if (providersConfig[pid]?.isBuiltIn) {
+    if (providersConfig[pid]?.isBuiltIn || providersConfig[pid]?.hasOrganizationConfig) {
       toast.error(t('settings.cannotDeleteBuiltIn'));
       return;
     }
@@ -675,7 +856,11 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[85vh] p-0 gap-0 block" showCloseButton={false}>
+      <DialogContent
+        className="h-[85vh] p-0 gap-0 block"
+        showCloseButton={false}
+        data-testid="settings-dialog"
+      >
         <DialogTitle className="sr-only">{t('settings.title')}</DialogTitle>
         <DialogDescription className="sr-only">{t('settings.description')}</DialogDescription>
         <div className="flex h-full overflow-hidden">
@@ -801,7 +986,6 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 providers={allProviders}
                 selectedProviderId={selectedProviderId}
                 onSelect={handleProviderSelect}
-                onAddProvider={() => setShowAddProviderDialog(true)}
                 width={providerListWidth}
               />
               <div
@@ -950,7 +1134,8 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
               <div className="flex items-center gap-3">{getHeaderContent()}</div>
               <div className="flex items-center gap-2">
                 {activeSection === 'providers' &&
-                  !providersConfig[selectedProviderId]?.isBuiltIn && (
+                  !providersConfig[selectedProviderId]?.isBuiltIn &&
+                  !providersConfig[selectedProviderId]?.hasOrganizationConfig && (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -32,6 +32,7 @@ import {
   Send,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { useSettingsStore } from '@/lib/store/settings';
 import type { ProviderConfig } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
 import { formatContextWindow } from './utils';
@@ -67,6 +68,7 @@ export function ProviderConfigPanel({
   isBuiltIn,
 }: ProviderConfigPanelProps) {
   const { t } = useI18n();
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   // Local state for this provider
   const [apiKey, setApiKey] = useState(initialApiKey);
@@ -151,6 +153,10 @@ export function ProviderConfigPanel({
 
   const models = providersConfig[provider.id]?.models || [];
   const isServerConfigured = providersConfig[provider.id]?.isServerConfigured;
+  const isGovernedProvider = !!providersConfig[provider.id]?.hasOrganizationConfig;
+  const legacyFallbackAllowed = providersConfig[provider.id]?.legacyFallbackAllowed !== false;
+  const isLegacyFallbackInUse = !!apiKey && !isServerConfigured && legacyFallbackAllowed;
+  const canOverrideBaseUrl = !isGovernedProvider || aiPolicy.allowPersonalCustomBaseUrls;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -161,12 +167,23 @@ export function ProviderConfigPanel({
         </div>
       )}
 
+      {isLegacyFallbackInUse && (
+        <div
+          data-testid="legacy-fallback-notice"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300"
+        >
+          Using a one-release legacy browser credential fallback for this provider. Ask an org
+          admin to save it server-side to avoid future breakage.
+        </div>
+      )}
+
       {/* API Key */}
       <div className="space-y-2">
         <Label>{t('settings.apiSecret')}</Label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Input
+              data-testid={`provider-api-key-${provider.id}`}
               name={`llm-api-key-${provider.id}`}
               type={showApiKey ? 'text' : 'password'}
               autoComplete="new-password"
@@ -190,6 +207,7 @@ export function ProviderConfigPanel({
             </button>
           </div>
           <Button
+            data-testid={`provider-test-${provider.id}`}
             variant="outline"
             size="sm"
             onClick={handleTestApi}
@@ -245,6 +263,7 @@ export function ProviderConfigPanel({
       <div className="space-y-2">
         <Label>{t('settings.apiHost')}</Label>
         <Input
+          data-testid={`provider-base-url-${provider.id}`}
           name={`llm-base-url-${provider.id}`}
           type="url"
           autoComplete="off"
@@ -256,6 +275,7 @@ export function ProviderConfigPanel({
           onChange={(e) => handleBaseUrlChange(e.target.value)}
           onBlur={onSave}
           className="h-8"
+          disabled={!canOverrideBaseUrl}
         />
         {(() => {
           const effectiveBaseUrl = baseUrl || provider.defaultBaseUrl || '';
@@ -292,7 +312,7 @@ export function ProviderConfigPanel({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
           <div className="flex items-center gap-2 flex-wrap">
-            {isBuiltIn && onResetToDefault && (
+            {!isGovernedProvider && isBuiltIn && onResetToDefault && (
               <Button
                 variant="outline"
                 size="sm"
@@ -303,10 +323,12 @@ export function ProviderConfigPanel({
                 {t('settings.reset')}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={onAddModel} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              {t('settings.addNewModel')}
-            </Button>
+            {!isGovernedProvider && (
+              <Button variant="outline" size="sm" onClick={onAddModel} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                {t('settings.addNewModel')}
+              </Button>
+            )}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">{t('settings.modelsManagementDescription')}</p>
@@ -361,26 +383,28 @@ export function ProviderConfigPanel({
                 </div>
 
                 {/* Edit/Delete Buttons */}
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={() => onEditModel(index)}
-                    title={t('settings.editModel')}
-                  >
-                    <Settings2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => onDeleteModel(index)}
-                    title={t('settings.deleteModel')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {!isGovernedProvider && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => onEditModel(index)}
+                      title={t('settings.editModel')}
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => onDeleteModel(index)}
+                      title={t('settings.deleteModel')}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })}

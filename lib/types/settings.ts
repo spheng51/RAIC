@@ -1,4 +1,5 @@
 import type { ProviderId, ModelInfo, ProviderType } from '@/lib/types/provider';
+import type { AIProviderSource } from '@/lib/types/ai-governance';
 
 export type SettingsSection =
   | 'general'
@@ -34,6 +35,12 @@ export interface ProviderSettings {
   isServerConfigured?: boolean; // Server has API key for this provider
   serverModels?: string[]; // Server-restricted model list (if set)
   serverBaseUrl?: string; // Server-provided base URL override
+  serverDefaultModel?: string;
+  source?: AIProviderSource;
+  serverEnabled?: boolean;
+  legacyFallbackAllowed?: boolean;
+  hasOrganizationConfig?: boolean;
+  hasPersonalOverride?: boolean;
 }
 
 /**

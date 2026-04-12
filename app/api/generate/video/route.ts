@@ -18,10 +18,18 @@
 
 import { NextRequest } from 'next/server';
 import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
-import { resolveVideoApiKey, resolveVideoBaseUrl } from '@/lib/server/provider-config';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('VideoGeneration API');
@@ -33,33 +41,32 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as VideoGenerationOptions;
 
     if (!body.prompt) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
+      return apiErrorWithRequestSession(request, 'MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
     }
 
     const providerId = (request.headers.get('x-video-provider') || 'seedance') as VideoProviderId;
-    const clientApiKey = request.headers.get('x-api-key') || undefined;
-    const clientBaseUrl = request.headers.get('x-base-url') || undefined;
+    const clientApiKey =
+      request.headers.get('x-video-api-key') || request.headers.get('x-api-key') || undefined;
+    const clientBaseUrl =
+      request.headers.get('x-video-base-url') || request.headers.get('x-base-url') || undefined;
     const clientModel = request.headers.get('x-video-model') || undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
+        return apiErrorWithRequestSession(request, 'INVALID_URL', 403, ssrfError);
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveVideoApiKey(providerId, clientApiKey);
-    if (!apiKey) {
-      return apiError(
-        'MISSING_API_KEY',
-        401,
-        `No API key configured for video provider: ${providerId}`,
-      );
-    }
-
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveVideoBaseUrl(providerId, clientBaseUrl);
+    const auth = await getRequestAuth(request);
+    const resolved = await resolveGovernedProviderConfig({
+      auth,
+      family: 'video',
+      providerId,
+      requestedSecret: clientApiKey,
+      requestedBaseUrl: clientBaseUrl,
+      requestedModel: clientModel,
+    });
 
     // Normalize options against provider capabilities
     const options = normalizeVideoOptions(providerId, body);
@@ -71,7 +78,12 @@ export async function POST(request: NextRequest) {
     );
 
     const result = await generateVideo(
-      { providerId, apiKey, baseUrl, model: clientModel },
+      {
+        providerId,
+        apiKey: resolved.apiKey,
+        baseUrl: resolved.baseUrl,
+        model: resolved.modelId || clientModel,
+      },
       options,
     );
 
@@ -79,18 +91,22 @@ export async function POST(request: NextRequest) {
       `Video generated: url=${result.url ? 'yes' : 'no'}, ${result.width}x${result.height}, ${result.duration}s`,
     );
 
-    return apiSuccess({ result });
+    return apiSuccessWithRequestSession(request, { result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(request, governanceError);
+    }
     // Detect content safety filter rejections (e.g. Seedance SensitiveContent errors)
     if (message.includes('SensitiveContent') || message.includes('sensitive information')) {
       log.warn(`Video blocked by content safety filter: ${message}`);
-      return apiError('CONTENT_SENSITIVE', 400, message);
+      return apiErrorWithRequestSession(request, 'CONTENT_SENSITIVE', 400, message);
     }
     log.error(
       `Video generation failed [provider=${request.headers.get('x-video-provider') ?? 'kling'}, model=${request.headers.get('x-video-model') ?? 'default'}]:`,
       error,
     );
-    return apiError('INTERNAL_ERROR', 500, message);
+    return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, message);
   }
 }

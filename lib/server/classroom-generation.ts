@@ -17,7 +17,7 @@ import { formatTeacherPersonaForPrompt } from '@/lib/generation/prompt-formatter
 import { getDefaultAgents } from '@/lib/orchestration/registry/store';
 import { createLogger } from '@/lib/logger';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
-import { resolveWebSearchApiKey } from '@/lib/server/provider-config';
+import { resolveGovernedProviderConfig } from '@/lib/server/ai-governance';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
 import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
@@ -165,6 +165,8 @@ export async function generateClassroom(
   input: GenerateClassroomInput,
   options: {
     baseUrl: string;
+    organizationId?: string | null;
+    userId?: string | null;
     onProgress?: (progress: ClassroomGenerationProgress) => Promise<void> | void;
   },
 ): Promise<GenerateClassroomResult> {
@@ -183,7 +185,11 @@ export async function generateClassroom(
     modelString,
     providerId,
     apiKey,
-  } = await resolveModel({});
+  } = await resolveModel({
+    organizationId: options.organizationId,
+    userId: options.userId,
+    mode: 'background',
+  });
   log.info(`Using server-configured model: ${modelString}`);
 
   // Fail fast if the resolved provider has no API key configured
@@ -259,8 +265,15 @@ export async function generateClassroom(
   // Web search (optional, graceful degradation)
   let researchContext: string | undefined;
   if (input.enableWebSearch) {
-    const tavilyKey = resolveWebSearchApiKey();
-    if (tavilyKey) {
+    try {
+      const resolvedWebSearch = await resolveGovernedProviderConfig({
+        auth: null,
+        organizationId: options.organizationId,
+        family: 'webSearch',
+        providerId: 'tavily',
+        mode: 'background',
+      });
+
       try {
         const searchQuery = await buildSearchQuery(requirement, pdfText, searchQueryAiCall);
 
@@ -273,7 +286,8 @@ export async function generateClassroom(
 
         const searchResult = await searchWithTavily({
           query: searchQuery.query,
-          apiKey: tavilyKey,
+          apiKey: resolvedWebSearch.apiKey,
+          baseUrl: resolvedWebSearch.baseUrl,
         });
         researchContext = formatSearchResultsAsContext(searchResult);
         if (researchContext) {
@@ -282,8 +296,11 @@ export async function generateClassroom(
       } catch (e) {
         log.warn('Web search failed, continuing without search context:', e);
       }
-    } else {
-      log.warn('enableWebSearch is true but no Tavily API key configured, skipping web search');
+    } catch (e) {
+      log.warn(
+        'enableWebSearch is true but no governed Tavily configuration is available, skipping web search',
+        e,
+      );
     }
   }
 
@@ -424,7 +441,9 @@ export async function generateClassroom(
     });
 
     try {
-      const mediaMap = await generateMediaForClassroom(outlines, stageId, options.baseUrl);
+      const mediaMap = await generateMediaForClassroom(outlines, stageId, options.baseUrl, {
+        organizationId: options.organizationId ?? null,
+      });
       replaceMediaPlaceholders(scenes, mediaMap);
       log.info(`Media generation complete: ${Object.keys(mediaMap).length} files`);
     } catch (err) {
@@ -443,7 +462,9 @@ export async function generateClassroom(
     });
 
     try {
-      await generateTTSForClassroom(scenes, stageId, options.baseUrl);
+      await generateTTSForClassroom(scenes, stageId, options.baseUrl, {
+        organizationId: options.organizationId ?? null,
+      });
       log.info('TTS generation complete');
     } catch (err) {
       log.warn('TTS generation phase failed, continuing:', err);
@@ -461,6 +482,8 @@ export async function generateClassroom(
   const persisted = await persistClassroom(
     {
       id: stageId,
+      ownerUserId: options.userId ?? null,
+      organizationId: options.organizationId ?? null,
       stage,
       scenes,
     },

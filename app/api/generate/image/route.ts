@@ -17,10 +17,18 @@
 
 import { NextRequest } from 'next/server';
 import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
-import { resolveImageApiKey, resolveImageBaseUrl } from '@/lib/server/provider-config';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  withRequestWebSession,
+} from '@/lib/server/api-response';
+import {
+  resolveGovernedProviderConfig,
+  toGovernedProviderApiErrorResponse,
+} from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('ImageGeneration API');
@@ -32,33 +40,32 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as ImageGenerationOptions;
 
     if (!body.prompt) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
+      return apiErrorWithRequestSession(request, 'MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
     }
 
     const providerId = (request.headers.get('x-image-provider') || 'seedream') as ImageProviderId;
-    const clientApiKey = request.headers.get('x-api-key') || undefined;
-    const clientBaseUrl = request.headers.get('x-base-url') || undefined;
+    const clientApiKey =
+      request.headers.get('x-image-api-key') || request.headers.get('x-api-key') || undefined;
+    const clientBaseUrl =
+      request.headers.get('x-image-base-url') || request.headers.get('x-base-url') || undefined;
     const clientModel = request.headers.get('x-image-model') || undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
+        return apiErrorWithRequestSession(request, 'INVALID_URL', 403, ssrfError);
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveImageApiKey(providerId, clientApiKey);
-    if (!apiKey) {
-      return apiError(
-        'MISSING_API_KEY',
-        401,
-        `No API key configured for image provider: ${providerId}`,
-      );
-    }
-
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveImageBaseUrl(providerId, clientBaseUrl);
+    const auth = await getRequestAuth(request);
+    const resolved = await resolveGovernedProviderConfig({
+      auth,
+      family: 'image',
+      providerId,
+      requestedSecret: clientApiKey,
+      requestedBaseUrl: clientBaseUrl,
+      requestedModel: clientModel,
+    });
 
     // Resolve dimensions from aspect ratio if not explicitly set
     if (!body.width && !body.height && body.aspectRatio) {
@@ -72,20 +79,32 @@ export async function POST(request: NextRequest) {
         `prompt="${body.prompt.slice(0, 80)}...", size=${body.width ?? 'auto'}x${body.height ?? 'auto'}`,
     );
 
-    const result = await generateImage({ providerId, apiKey, baseUrl, model: clientModel }, body);
+    const result = await generateImage(
+      {
+        providerId,
+        apiKey: resolved.apiKey,
+        baseUrl: resolved.baseUrl,
+        model: resolved.modelId || clientModel,
+      },
+      body,
+    );
 
-    return apiSuccess({ result });
+    return apiSuccessWithRequestSession(request, { result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return withRequestWebSession(request, governanceError);
+    }
     // Detect content safety filter rejections (e.g. Seedream OutputImageSensitiveContentDetected)
     if (message.includes('SensitiveContent') || message.includes('sensitive information')) {
       log.warn(`Image blocked by content safety filter: ${message}`);
-      return apiError('CONTENT_SENSITIVE', 400, message);
+      return apiErrorWithRequestSession(request, 'CONTENT_SENSITIVE', 400, message);
     }
     log.error(
       `Image generation failed [provider=${request.headers.get('x-image-provider') ?? 'seedream'}, model=${request.headers.get('x-image-model') ?? 'default'}]:`,
       error,
     );
-    return apiError('INTERNAL_ERROR', 500, message);
+    return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, message);
   }
 }

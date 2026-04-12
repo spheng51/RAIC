@@ -33,6 +33,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
   const imageProvidersConfig = useSettingsStore((state) => state.imageProvidersConfig);
   const _setImageModelId = useSettingsStore((state) => state.setImageModelId);
   const setImageProviderConfig = useSettingsStore((state) => state.setImageProviderConfig);
+  const aiPolicy = useSettingsStore((state) => state.aiPolicy);
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
@@ -60,6 +61,8 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
     [currentConfig?.customModels],
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
+  const canOverrideBaseUrl =
+    !currentConfig?.hasOrganizationConfig || aiPolicy.allowPersonalCustomBaseUrls;
 
   const handleApiKeyChange = (apiKey: string) => {
     setImageProviderConfig(selectedProviderId, { apiKey });
@@ -229,6 +232,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
             t('settings.enterCustomBaseUrl')
           }
           className="h-8"
+          disabled={!canOverrideBaseUrl}
         />
         {(() => {
           const effectiveBaseUrl =
