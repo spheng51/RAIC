@@ -66,6 +66,25 @@ describe('validateUrlForSSRF', () => {
     expect(lookupMock).not.toHaveBeenCalled();
   });
 
+  it('allows local and private URLs when ALLOW_LOCAL_NETWORKS is enabled', async () => {
+    const previousAllowLocalNetworks = process.env.ALLOW_LOCAL_NETWORKS;
+    process.env.ALLOW_LOCAL_NETWORKS = 'true';
+
+    try {
+      const { validateUrlForSSRF } = await import('@/lib/server/ssrf-guard');
+
+      await expect(validateUrlForSSRF('http://localhost:4010/v1')).resolves.toBeNull();
+      await expect(validateUrlForSSRF('http://127.0.0.1:4010/v1')).resolves.toBeNull();
+      expect(lookupMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousAllowLocalNetworks === undefined) {
+        delete process.env.ALLOW_LOCAL_NETWORKS;
+      } else {
+        process.env.ALLOW_LOCAL_NETWORKS = previousAllowLocalNetworks;
+      }
+    }
+  });
+
   it('rejects private IPv4 literals', async () => {
     const { validateUrlForSSRF } = await import('@/lib/server/ssrf-guard');
 

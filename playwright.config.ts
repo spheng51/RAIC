@@ -5,6 +5,10 @@ process.env.RAIC_SECRET_ENCRYPTION_KEY ??=
   '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const nodeBinDir = path.dirname(process.execPath);
 const webServerPath = `${nodeBinDir}${path.delimiter}${process.env.PATH ?? ''}`;
+const ciWebServerCommand =
+  process.platform === 'win32'
+    ? 'corepack pnpm build && corepack pnpm exec next start'
+    : 'corepack pnpm build && node .next/standalone/server.js';
 
 export default defineConfig({
   testDir: './e2e/tests',
@@ -27,13 +31,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI ? 'corepack pnpm build && corepack pnpm start' : 'corepack pnpm dev',
+    command: process.env.CI ? ciWebServerCommand : 'corepack pnpm dev',
     url: 'http://localhost:3002',
     reuseExistingServer: !process.env.CI && process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
     timeout: 120_000,
     env: {
       PATH: webServerPath,
+      HOSTNAME: '127.0.0.1',
       PORT: '3002',
+      ALLOW_LOCAL_NETWORKS: '1',
       OPENAI_API_KEY: '',
       OPENAI_BASE_URL: '',
       OPENAI_MODELS: '',

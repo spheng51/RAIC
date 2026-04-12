@@ -44,6 +44,15 @@ async function openStudioSettings(page: Page) {
   await expect(page.getByTestId('settings-dialog')).toBeVisible();
 }
 
+async function expectAuditLog(action: string) {
+  await expect
+    .poll(async () => {
+      const store = await readPlatformStore();
+      return store.auditLogs.some((entry) => entry.action === action);
+    })
+    .toBe(true);
+}
+
 async function saveOrgOpenAIConfig(page: Page, params: { secret: string; baseUrl: string }) {
   await page.goto(`${APP_BASE_URL}/admin`);
   await expect(page.getByRole('heading', { name: 'Managed provider connectivity' })).toBeVisible();
@@ -121,10 +130,7 @@ test('org admin saves org defaults and teacher generates without entering a key'
       })
       .toBe(1);
 
-    const store = await readPlatformStore();
-    expect(
-      store.auditLogs.some((entry) => entry.action === 'organization_provider_config.updated'),
-    ).toBeTruthy();
+    await expectAuditLog('organization_provider_config.updated');
 
     const teacher = await createAuthedPage(browser, teacherSession.token);
     teacherContext = teacher.context;
@@ -211,10 +217,7 @@ test('teacher personal override beats org default', async ({ browser }) => {
     expect(overrideResponse.ok()).toBeTruthy();
     expect(overrideBody.success).toBe(true);
 
-    const store = await readPlatformStore();
-    expect(
-      store.auditLogs.some((entry) => entry.action === 'user_provider_override.updated'),
-    ).toBeTruthy();
+    await expectAuditLog('user_provider_override.updated');
 
     const verifyResponse = await teacher.page.request.post(`${APP_BASE_URL}/api/verify-model`, {
       data: {
@@ -298,10 +301,7 @@ test('teacher cannot save a custom base URL when policy forbids it', async ({ br
     expect(overrideBody.success).toBe(false);
     expect(overrideBody.errorCode).toBe('INVALID_REQUEST');
 
-    const store = await readPlatformStore();
-    expect(
-      store.auditLogs.some((entry) => entry.action === 'user_provider_override.denied'),
-    ).toBeTruthy();
+    await expectAuditLog('user_provider_override.denied');
   } finally {
     await teacherContext?.close();
   }
@@ -402,10 +402,7 @@ test('legacy local key still works only when no server-backed config exists, wit
     await expect.poll(() => mockServer.hits.length).toBeGreaterThan(0);
     expect(mockServer.hits.at(-1)?.authorization).toBe('Bearer legacy-secret');
 
-    const store = await readPlatformStore();
-    expect(
-      store.auditLogs.some((entry) => entry.action === 'provider_resolution.legacy_fallback_used'),
-    ).toBeTruthy();
+    await expectAuditLog('provider_resolution.legacy_fallback_used');
   } finally {
     await teacherContext?.close();
     await mockServer.close();

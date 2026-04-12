@@ -26,6 +26,17 @@ const CLASSROOMS_DIR = path.join(DATA_DIR, 'classrooms');
 const CLASSROOM_JOBS_DIR = path.join(DATA_DIR, 'classroom-jobs');
 const ENCRYPTION_VERSION = 'v1';
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const EMPTY_PLATFORM_STORE: PlatformStore = {
+  users: [],
+  organizations: [],
+  memberships: [],
+  sessions: [],
+  joinTokens: [],
+  auditLogs: [],
+  organizationAiPolicies: [],
+  organizationProviderConfigs: [],
+  userProviderOverrides: [],
+};
 const TEST_SLIDE_THEME = {
   backgroundColor: '#ffffff',
   themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4'],
@@ -323,8 +334,16 @@ export async function writePlatformStore(params: {
 }
 
 export async function readPlatformStore(): Promise<PlatformStore> {
-  const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf8');
-  return JSON.parse(content) as PlatformStore;
+  try {
+    const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf8');
+    return JSON.parse(content) as PlatformStore;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return structuredClone(EMPTY_PLATFORM_STORE);
+    }
+    throw error;
+  }
 }
 
 export async function writeClassroomData(params: {
