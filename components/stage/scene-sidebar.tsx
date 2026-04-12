@@ -473,7 +473,8 @@ export function SceneSidebar({
                               <RefreshCw
                                 className={cn(
                                   'w-3.5 h-3.5',
-                                  isRetrying && 'motion-safe:animate-spin motion-reduce:animate-none',
+                                  isRetrying &&
+                                    'motion-safe:animate-spin motion-reduce:animate-none',
                                 )}
                               />
                             </button>

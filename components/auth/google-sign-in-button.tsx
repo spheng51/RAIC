@@ -23,9 +23,7 @@ interface GoogleSignInButtonProps {
   redirectTo?: string;
 }
 
-export function GoogleSignInButton({
-  redirectTo = '/studio',
-}: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ redirectTo = '/studio' }: GoogleSignInButtonProps) {
   const router = useRouter();
   const buttonContainerRef = useRef<HTMLDivElement | null>(null);
   const [nonce, setNonce] = useState<string | null>(null);
@@ -65,7 +63,13 @@ export function GoogleSignInButton({
   }, []);
 
   useEffect(() => {
-    if (!clientId || !isScriptReady || !nonce || !buttonContainerRef.current || !window.google?.accounts?.id) {
+    if (
+      !clientId ||
+      !isScriptReady ||
+      !nonce ||
+      !buttonContainerRef.current ||
+      !window.google?.accounts?.id
+    ) {
       return;
     }
 

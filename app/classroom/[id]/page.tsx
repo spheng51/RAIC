@@ -51,7 +51,10 @@ export default function ClassroomDetailPage() {
 
         if (res.status === 404) {
           shouldFallbackToStorage = true;
-          log.info('Classroom not found in server storage, trying local IndexedDB for:', classroomId);
+          log.info(
+            'Classroom not found in server storage, trying local IndexedDB for:',
+            classroomId,
+          );
         } else if (res.ok) {
           const json = await res.json();
           if (json.success && json.classroom) {

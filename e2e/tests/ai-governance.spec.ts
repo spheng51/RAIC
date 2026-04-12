@@ -1,4 +1,11 @@
-import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import {
   APP_BASE_URL,
   addSessionCookie,
@@ -47,8 +54,7 @@ async function saveOrgOpenAIConfig(page: Page, params: { secret: string; baseUrl
 
   const saveResponsePromise = page.waitForResponse(
     (response) =>
-      response.url().endsWith('/api/admin/ai/config') &&
-      response.request().method() === 'PUT',
+      response.url().endsWith('/api/admin/ai/config') && response.request().method() === 'PUT',
   );
   await page.getByTestId('save-org-ai-config').click();
   const saveResponse = await saveResponsePromise;
@@ -385,8 +391,7 @@ test('legacy local key still works only when no server-backed config exists, wit
 
     const verifyResponsePromise = teacher.page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/verify-model') &&
-        response.request().method() === 'POST',
+        response.url().endsWith('/api/verify-model') && response.request().method() === 'POST',
     );
     await teacher.page.getByTestId('provider-test-openai').click();
     const verifyResponse = await verifyResponsePromise;

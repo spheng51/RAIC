@@ -79,7 +79,9 @@ describe('GET /join/[joinCode]/enter', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/classroom/room-1');
-    expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe('classroom-session-token');
+    expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe(
+      'classroom-session-token',
+    );
     expect(createClassroomGuestUserMock).toHaveBeenCalledWith({
       displayName: 'Physics',
       emailHint: 'Physics',

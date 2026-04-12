@@ -20,13 +20,15 @@ function encodeEvent(name: string, payload: unknown) {
   return encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid classroom id',
+    );
   }
 
   const access = await requireClassroomAccess(request, id);
@@ -36,10 +38,18 @@ export async function GET(
 
   const initialSnapshot = await getClassroomPresentationSnapshot(id);
   if (!initialSnapshot) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
-  const initialPayload = buildClassroomPresentationStatePayload(initialSnapshot, access.auth.session);
+  const initialPayload = buildClassroomPresentationStatePayload(
+    initialSnapshot,
+    access.auth.session,
+  );
   const initialFingerprint = getClassroomPresentationFingerprint(initialPayload);
 
   const stream = new ReadableStream<Uint8Array>({
@@ -88,7 +98,10 @@ export async function GET(
             return;
           }
 
-          const nextPayload = buildClassroomPresentationStatePayload(nextSnapshot, access.auth.session);
+          const nextPayload = buildClassroomPresentationStatePayload(
+            nextSnapshot,
+            access.auth.session,
+          );
           const nextFingerprint = getClassroomPresentationFingerprint(nextPayload);
           if (nextFingerprint === fingerprint) {
             return;

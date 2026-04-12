@@ -389,7 +389,7 @@ export async function callLLM<T extends GenerateTextParams>(
   }
 
   // All attempts exhausted — return last result or throw last error
-      if (lastResult) return lastResult;
+  if (lastResult) return lastResult;
   throw lastError;
 }
 

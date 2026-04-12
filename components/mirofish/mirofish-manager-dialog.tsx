@@ -67,7 +67,9 @@ export function MiroFishManagerDialog({
     useState<SharedSimulationCollaborationMode>('single-controller');
   const [leaseMinutes, setLeaseMinutes] = useState(10);
   const [attachError, setAttachError] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<'attach' | 'grant' | 'revoke' | 'collaboration' | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    'attach' | 'grant' | 'revoke' | 'collaboration' | null
+  >(null);
   const [leaseNowMs, setLeaseNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -200,10 +202,12 @@ export function MiroFishManagerDialog({
               <div className="space-y-2">
                 <Label>Interaction mode</Label>
                 <div className="flex flex-wrap gap-2">
-                  {([
-                    { value: 'single-controller', label: 'Single controller' },
-                    { value: 'multi-user', label: 'Multi-user' },
-                  ] as const).map((option) => (
+                  {(
+                    [
+                      { value: 'single-controller', label: 'Single controller' },
+                      { value: 'multi-user', label: 'Multi-user' },
+                    ] as const
+                  ).map((option) => (
                     <button
                       key={option.value}
                       type="button"
@@ -284,14 +288,21 @@ export function MiroFishManagerDialog({
                 Shared pane status
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant="outline">Surface: {activeSurfaceLabel(sharedSimulation?.activeSurface)}</Badge>
-                <Badge variant="outline">Mode: {isMultiUser ? 'Multi-user' : 'Single controller'}</Badge>
+                <Badge variant="outline">
+                  Surface: {activeSurfaceLabel(sharedSimulation?.activeSurface)}
+                </Badge>
+                <Badge variant="outline">
+                  Mode: {isMultiUser ? 'Multi-user' : 'Single controller'}
+                </Badge>
                 <Badge variant="outline">
                   Status: {sharedSimulation?.status ?? 'Not attached'}
                 </Badge>
                 {isMultiUser && (
                   <Badge variant="outline">
-                    Collaboration: {collaboration?.collaborationState ?? sharedSimulation?.collaborationState ?? 'inactive'}
+                    Collaboration:{' '}
+                    {collaboration?.collaborationState ??
+                      sharedSimulation?.collaborationState ??
+                      'inactive'}
                   </Badge>
                 )}
               </div>
@@ -432,7 +443,10 @@ export function MiroFishManagerDialog({
                             variant="outline"
                             disabled={busyAction !== null || participant.isRemoved}
                             onClick={() => {
-                              void runCollaborationAction('remove_participant', participant.sessionId);
+                              void runCollaborationAction(
+                                'remove_participant',
+                                participant.sessionId,
+                              );
                             }}
                           >
                             Remove
@@ -442,7 +456,8 @@ export function MiroFishManagerDialog({
                     ))
                   ) : (
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Students will appear here once they join the classroom and open the shared simulation.
+                      Students will appear here once they join the classroom and open the shared
+                      simulation.
                     </p>
                   )}
                 </div>
@@ -527,7 +542,9 @@ export function MiroFishManagerDialog({
                   await onRevokeControl();
                 } catch (error) {
                   toast.error(
-                    error instanceof Error ? error.message : 'Failed to return control to the teacher.',
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to return control to the teacher.',
                   );
                 } finally {
                   setBusyAction(null);
@@ -540,7 +557,8 @@ export function MiroFishManagerDialog({
             </Button>
           ) : (
             <div className="text-xs text-slate-500 dark:text-slate-400">
-              Multi-user classrooms keep the teacher in charge of pane switching while students collaborate live inside the shared simulation.
+              Multi-user classrooms keep the teacher in charge of pane switching while students
+              collaborate live inside the shared simulation.
             </div>
           )}
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

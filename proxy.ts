@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
-import { attachSessionCookie, clearSessionCookie, resolveSessionFromToken } from '@/lib/auth/session';
+import {
+  attachSessionCookie,
+  clearSessionCookie,
+  resolveSessionFromToken,
+} from '@/lib/auth/session';
 
 export async function proxy(request: NextRequest) {
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;

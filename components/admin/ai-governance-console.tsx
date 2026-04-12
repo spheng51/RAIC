@@ -15,13 +15,7 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -148,7 +142,10 @@ function serializeModelList(models?: string[]) {
   return (models ?? []).join('\n');
 }
 
-function buildRegistryProviders(snapshot: AdminConfigSnapshot, options: EffectiveAIOptionsResponse) {
+function buildRegistryProviders(
+  snapshot: AdminConfigSnapshot,
+  options: EffectiveAIOptionsResponse,
+) {
   const builtIns: Record<AIProviderFamily, RegistryProvider[]> = {
     llm: Object.values(PROVIDERS).map((provider) => ({
       family: 'llm',
@@ -268,12 +265,11 @@ function buildDraftFromSources(input: {
   option?: EffectiveAIOption;
 }): ProviderDraft {
   const { provider, snapshotConfig, option } = input;
-  const allowedModels =
-    snapshotConfig?.allowedModels?.length
-      ? snapshotConfig.allowedModels
-      : option?.allowedModels?.length
-        ? option.allowedModels
-        : provider.models;
+  const allowedModels = snapshotConfig?.allowedModels?.length
+    ? snapshotConfig.allowedModels
+    : option?.allowedModels?.length
+      ? option.allowedModels
+      : provider.models;
 
   const definition =
     snapshotConfig?.definition ??
@@ -356,7 +352,11 @@ export function AIGovernanceConsole({
   const [snapshot, setSnapshot] = useState(initialConfig);
   const [effectiveOptions, setEffectiveOptions] = useState(initialOptions);
   const [drafts, setDrafts] = useState(() =>
-    buildDraftMap(buildRegistryProviders(initialConfig, initialOptions), initialConfig, initialOptions),
+    buildDraftMap(
+      buildRegistryProviders(initialConfig, initialOptions),
+      initialConfig,
+      initialOptions,
+    ),
   );
   const [selectedFamily, setSelectedFamily] = useState<AIProviderFamily>('llm');
   const [selectedProviderId, setSelectedProviderId] = useState<string>('openai');
@@ -381,11 +381,11 @@ export function AIGovernanceConsole({
 
   const currentDraft =
     selectedProvider && selectedKey
-      ? drafts[selectedKey] ??
+      ? (drafts[selectedKey] ??
         buildDraftFromSources({
           provider: selectedProvider,
           option: selectedOption,
-        })
+        }))
       : null;
 
   const parsedAllowedModels = currentDraft ? parseModelList(currentDraft.allowedModelsText) : [];
@@ -472,8 +472,7 @@ export function AIGovernanceConsole({
         const configs = Object.values(drafts)
           .filter((draft) => {
             const hasExisting = snapshot.configs.some(
-              (config) =>
-                config.family === draft.family && config.providerId === draft.providerId,
+              (config) => config.family === draft.family && config.providerId === draft.providerId,
             );
             return hasExisting || draft.touched || draft.enabled || !!draft.definition;
           })
@@ -523,16 +522,16 @@ export function AIGovernanceConsole({
           throw new Error(errorData.error || 'Save failed');
         }
 
-        const savedPayload =
-          (await response.json()) as { success?: boolean } & AdminConfigSnapshot;
+        const savedPayload = (await response.json()) as { success?: boolean } & AdminConfigSnapshot;
         setPolicy(savedPayload.policy);
         setSnapshot(savedPayload);
 
         let nextOptions = effectiveOptions;
         const optionsResponse = await fetch('/api/ai/options');
         if (optionsResponse.ok) {
-          const optionsPayload =
-            (await optionsResponse.json()) as { success?: boolean } & EffectiveAIOptionsResponse;
+          const optionsPayload = (await optionsResponse.json()) as {
+            success?: boolean;
+          } & EffectiveAIOptionsResponse;
           nextOptions = optionsPayload;
           setEffectiveOptions(optionsPayload);
         }
@@ -634,8 +633,10 @@ export function AIGovernanceConsole({
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Badge variant="outline">{countEnabledConfigs(snapshot)} org-managed configs</Badge>
               <Badge variant="outline">
-                {Object.values(effectiveOptions.providers.llm).filter((option) => option.isCustom)
-                  .length}{' '}
+                {
+                  Object.values(effectiveOptions.providers.llm).filter((option) => option.isCustom)
+                    .length
+                }{' '}
                 custom LLMs
               </Badge>
             </div>
@@ -657,8 +658,8 @@ export function AIGovernanceConsole({
                 Effective options
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Source badges, default models, and allowlists are all derived from the same
-                resolver used by generation routes.
+                Source badges, default models, and allowlists are all derived from the same resolver
+                used by generation routes.
               </p>
             </div>
             <div className="rounded-xl border border-border/60 bg-background/80 p-4">
@@ -677,9 +678,9 @@ export function AIGovernanceConsole({
                 Scope enforcement
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Org-scoped studio, classroom, and admin requests must use bootstrap,
-                org-managed, or policy-approved personal credentials. Request-supplied
-                credentials only apply outside organization-managed flows.
+                Org-scoped studio, classroom, and admin requests must use bootstrap, org-managed, or
+                policy-approved personal credentials. Request-supplied credentials only apply
+                outside organization-managed flows.
               </p>
             </div>
           </CardContent>
@@ -771,7 +772,9 @@ export function AIGovernanceConsole({
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate font-medium text-foreground">{provider.name}</p>
+                                <p className="truncate font-medium text-foreground">
+                                  {provider.name}
+                                </p>
                                 <p className="mt-1 truncate text-xs text-muted-foreground">
                                   {provider.providerId}
                                 </p>
@@ -811,8 +814,12 @@ export function AIGovernanceConsole({
                               <h3 className="text-xl font-semibold text-foreground">
                                 {selectedProvider.name}
                               </h3>
-                              <Badge variant="outline">{FAMILY_LABELS[selectedProvider.family]}</Badge>
-                              {selectedProvider.isCustom && <Badge variant="secondary">Custom</Badge>}
+                              <Badge variant="outline">
+                                {FAMILY_LABELS[selectedProvider.family]}
+                              </Badge>
+                              {selectedProvider.isCustom && (
+                                <Badge variant="secondary">Custom</Badge>
+                              )}
                             </div>
                             <p className="mt-2 text-sm text-muted-foreground">
                               {selectedProvider.providerId}

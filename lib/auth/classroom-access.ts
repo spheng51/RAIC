@@ -2,7 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CLASSROOM_ACCESS_COOKIE_NAME } from '@/lib/auth/constants';
-import { getRequestAuth, resolveAuthContextFromToken, type AuthContext } from '@/lib/auth/current-user';
+import {
+  getRequestAuth,
+  resolveAuthContextFromToken,
+  type AuthContext,
+} from '@/lib/auth/current-user';
 import { findLatestAuditLogByActionAndResource } from '@/lib/db/repositories/audit-logs';
 import { hashToken } from '@/lib/auth/session';
 import { findJoinTokenByHash } from '@/lib/db/repositories/join-tokens';
@@ -182,7 +186,10 @@ export async function requireClassroomAccess(
     return classroomAccessError('Classroom session is invalid or has expired');
   }
 
-  if (classroomAuth.session.kind !== 'classroom' || classroomAuth.session.classroomId !== classroomId) {
+  if (
+    classroomAuth.session.kind !== 'classroom' ||
+    classroomAuth.session.classroomId !== classroomId
+  ) {
     return classroomAccessError('This classroom session does not match the requested classroom');
   }
 

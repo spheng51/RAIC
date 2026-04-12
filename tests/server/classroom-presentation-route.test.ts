@@ -171,7 +171,9 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     const json = await response.json();
 
     expect(response.status).toBe(403);
-    expect(json.error).toBe('Only the teacher or the active controller can change the presentation');
+    expect(json.error).toBe(
+      'Only the teacher or the active controller can change the presentation',
+    );
   });
 
   it('allows authorized viewers to update the presentation surface and status', async () => {

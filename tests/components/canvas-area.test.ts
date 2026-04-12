@@ -108,9 +108,7 @@ function buildSharedSimulation(overrides: Partial<SharedSimulation> = {}): Share
   };
 }
 
-async function mountCanvasArea(
-  initialOverrides: Partial<CanvasAreaTestProps> = {},
-): Promise<{
+async function mountCanvasArea(initialOverrides: Partial<CanvasAreaTestProps> = {}): Promise<{
   readonly container: HTMLDivElement;
   readonly rerender: (nextProps?: Partial<CanvasAreaTestProps>) => Promise<void>;
 }> {
@@ -190,8 +188,9 @@ async function mountCanvasArea(
 
 describe('CanvasArea', () => {
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     miroFishMountCount = 0;
     miroFishUnmountCount = 0;
   });

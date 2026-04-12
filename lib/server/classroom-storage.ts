@@ -89,10 +89,12 @@ export interface PersistedClassroomData {
 }
 
 function normalizePersistedClassroomData(
-  value: PersistedClassroomData | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
-    ownerUserId?: string | null;
-    organizationId?: string | null;
-  }),
+  value:
+    | PersistedClassroomData
+    | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
+        ownerUserId?: string | null;
+        organizationId?: string | null;
+      }),
 ): PersistedClassroomData {
   return {
     ...value,
@@ -190,7 +192,6 @@ export async function updateClassroom(
           stage: preservedStage,
         },
   );
-
   await writePersistedClassroomData(normalizedNext);
   return normalizedNext;
 }
