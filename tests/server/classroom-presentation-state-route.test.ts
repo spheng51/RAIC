@@ -10,11 +10,15 @@ vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
 }));
 
-vi.mock('@/lib/server/classroom-presentation', () => ({
-  getClassroomPresentationSnapshot: getClassroomPresentationSnapshotMock,
-  canSessionControlPresentation: canSessionControlPresentationMock,
-  doesSessionOwnSimulationControl: doesSessionOwnSimulationControlMock,
-}));
+vi.mock('@/lib/server/classroom-presentation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/classroom-presentation')>();
+  return {
+    ...actual,
+    getClassroomPresentationSnapshot: getClassroomPresentationSnapshotMock,
+    canSessionControlPresentation: canSessionControlPresentationMock,
+    doesSessionOwnSimulationControl: doesSessionOwnSimulationControlMock,
+  };
+});
 
 describe('GET /api/classroom/[id]/presentation-state', () => {
   beforeEach(() => {
@@ -27,9 +31,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
 
   it('rejects invalid classroom IDs', async () => {
     const { GET } = await import('@/app/api/classroom/[id]/presentation-state/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/bad/presentation-state'), {
-      params: Promise.resolve({ id: '../bad' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/bad/presentation-state'),
+      {
+        params: Promise.resolve({ id: '../bad' }),
+      },
+    );
     const json = await response.json();
 
     expect(response.status).toBe(400);
@@ -50,9 +57,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
     );
 
     const { GET } = await import('@/app/api/classroom/[id]/presentation-state/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/presentation-state'), {
-      params: Promise.resolve({ id: 'room-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation-state'),
+      {
+        params: Promise.resolve({ id: 'room-1' }),
+      },
+    );
 
     expect(response.status).toBe(401);
     expect(getClassroomPresentationSnapshotMock).not.toHaveBeenCalled();
@@ -69,9 +79,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
     getClassroomPresentationSnapshotMock.mockResolvedValue(null);
 
     const { GET } = await import('@/app/api/classroom/[id]/presentation-state/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/presentation-state'), {
-      params: Promise.resolve({ id: 'room-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation-state'),
+      {
+        params: Promise.resolve({ id: 'room-1' }),
+      },
+    );
     const json = await response.json();
 
     expect(response.status).toBe(404);
@@ -87,7 +100,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
-      classroom: { id: 'room-1', stage: { id: 'room-1' }, scenes: [], createdAt: '2026-04-11T00:00:00.000Z' },
+      classroom: {
+        id: 'room-1',
+        stage: { id: 'room-1' },
+        scenes: [],
+        createdAt: '2026-04-11T00:00:00.000Z',
+      },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -118,9 +136,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
     doesSessionOwnSimulationControlMock.mockReturnValue(false);
 
     const { GET } = await import('@/app/api/classroom/[id]/presentation-state/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/presentation-state'), {
-      params: Promise.resolve({ id: 'room-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation-state'),
+      {
+        params: Promise.resolve({ id: 'room-1' }),
+      },
+    );
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -150,7 +171,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
       source: 'classroom',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
-      classroom: { id: 'room-1', stage: { id: 'room-1' }, scenes: [], createdAt: '2026-04-11T00:00:00.000Z' },
+      classroom: {
+        id: 'room-1',
+        stage: { id: 'room-1' },
+        scenes: [],
+        createdAt: '2026-04-11T00:00:00.000Z',
+      },
       sharedSimulation: null,
       participants: [],
       reportAvailable: false,
@@ -161,9 +187,12 @@ describe('GET /api/classroom/[id]/presentation-state', () => {
     doesSessionOwnSimulationControlMock.mockReturnValue(false);
 
     const { GET } = await import('@/app/api/classroom/[id]/presentation-state/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/presentation-state'), {
-      params: Promise.resolve({ id: 'room-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation-state'),
+      {
+        params: Promise.resolve({ id: 'room-1' }),
+      },
+    );
     const json = await response.json();
 
     expect(response.status).toBe(200);

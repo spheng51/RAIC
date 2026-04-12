@@ -264,7 +264,10 @@ async function loadScopeData(
       organizationConfigs.map((config) => [makeScopeKey(config.family, config.providerId), config]),
     ),
     userOverrides: new Map(
-      userOverrides.map((override) => [makeScopeKey(override.family, override.providerId), override]),
+      userOverrides.map((override) => [
+        makeScopeKey(override.family, override.providerId),
+        override,
+      ]),
     ),
   };
 }
@@ -450,12 +453,7 @@ function chooseModelId(input: {
   defaultModel?: string | null;
   allowedModels: string[];
 }) {
-  const {
-    requestedModel,
-    preferredModel,
-    defaultModel,
-    allowedModels,
-  } = input;
+  const { requestedModel, preferredModel, defaultModel, allowedModels } = input;
 
   if (allowedModels.length === 0) {
     return requestedModel || preferredModel || defaultModel || undefined;
@@ -500,8 +498,7 @@ function getEffectiveOptionForScope(
   const canUsePersonalBaseUrl = canUsePersonalOverride && scope.policy.allowPersonalCustomBaseUrls;
 
   const organizationDisabled = organizationConfig ? !organizationConfig.enabled : false;
-  const personalDisabled =
-    canUsePersonalOverride && userOverride ? !userOverride.enabled : false;
+  const personalDisabled = canUsePersonalOverride && userOverride ? !userOverride.enabled : false;
 
   const allowedModels = getAllowedModels(entry, organizationConfig, bootstrap);
   const defaultModel = chooseModelId({
@@ -515,11 +512,7 @@ function getEffectiveOptionForScope(
   const hasBootstrapSecret = !!bootstrap?.apiKey;
   const hasSecret = hasPersonalSecret || hasOrganizationSecret || hasBootstrapSecret;
   const legacyFallbackAllowed =
-    !bootstrap &&
-    !entry.clientOnly &&
-    !entry.isCustom &&
-    !organizationConfig &&
-    !userOverride;
+    !bootstrap && !entry.clientOnly && !entry.isCustom && !organizationConfig && !userOverride;
 
   const baseUrl =
     (canUsePersonalBaseUrl ? userOverride?.baseUrl : undefined) ||
@@ -535,7 +528,9 @@ function getEffectiveOptionForScope(
   } else if (
     canUsePersonalOverride &&
     userOverride &&
-    (hasPersonalSecret || (canUsePersonalBaseUrl && !!userOverride.baseUrl) || !!userOverride.preferredModel)
+    (hasPersonalSecret ||
+      (canUsePersonalBaseUrl && !!userOverride.baseUrl) ||
+      !!userOverride.preferredModel)
   ) {
     source = 'personal';
   } else if (organizationConfig) {
@@ -656,10 +651,7 @@ async function resolveProviderCredentials(input: {
   const canUsePersonalBaseUrl = canUsePersonalOverride && scope.policy.allowPersonalCustomBaseUrls;
   const legacyBlocked = !!organizationConfig || !!userOverride || !!bootstrap;
   const legacyFallbackAllowed =
-    mode === 'interactive' &&
-    !legacyBlocked &&
-    !entry.clientOnly &&
-    !entry.isCustom;
+    mode === 'interactive' && !legacyBlocked && !entry.clientOnly && !entry.isCustom;
 
   if (
     hasOrganizationScope &&
@@ -843,11 +835,12 @@ export async function resolveLLMGovernedConfig(input: {
 
   return {
     ...resolved,
-    modelId: chooseModelId({
-      requestedModel: input.modelId,
-      defaultModel: resolved.defaultModel,
-      allowedModels: resolved.allowedModels ?? [],
-    }) || input.modelId,
+    modelId:
+      chooseModelId({
+        requestedModel: input.modelId,
+        defaultModel: resolved.defaultModel,
+        allowedModels: resolved.allowedModels ?? [],
+      }) || input.modelId,
   };
 }
 
@@ -1167,7 +1160,7 @@ async function saveAdminConfigSnapshotInPostgres(
       ? null
       : typeof config.secret === 'string'
         ? encryptSecret(config.secret)
-        : existing?.encryptedSecret ?? null;
+        : (existing?.encryptedSecret ?? null);
 
     const saved = await upsertOrganizationProviderConfig(
       {
@@ -1248,7 +1241,7 @@ async function saveAdminConfigSnapshotInJsonStore(
         ? null
         : typeof config.secret === 'string'
           ? encryptSecret(config.secret)
-          : existing?.encryptedSecret ?? null;
+          : (existing?.encryptedSecret ?? null);
 
       const saved = upsertOrganizationProviderConfigInStore(store, {
         organizationId,
@@ -1324,7 +1317,7 @@ async function saveUserOverridesSnapshotInPostgres(
       ? null
       : typeof override.secret === 'string'
         ? encryptSecret(override.secret)
-        : existing?.encryptedSecret ?? null;
+        : (existing?.encryptedSecret ?? null);
 
     const saved = await upsertUserProviderOverride(
       {
@@ -1385,7 +1378,7 @@ async function saveUserOverridesSnapshotInJsonStore(
         ? null
         : typeof override.secret === 'string'
           ? encryptSecret(override.secret)
-          : existing?.encryptedSecret ?? null;
+          : (existing?.encryptedSecret ?? null);
 
       const saved = upsertUserProviderOverrideInStore(store, {
         organizationId,

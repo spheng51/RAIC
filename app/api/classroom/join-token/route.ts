@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createOpaqueToken, hashToken } from '@/lib/auth/session';
 import { requireRequestRole } from '@/lib/auth/authorize';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { createJoinTokenRecord } from '@/lib/db/repositories/join-tokens';
 import { buildRequestOrigin, isValidClassroomId } from '@/lib/server/classroom-storage';
 import { recordAuditEvent } from '@/lib/server/audit-log';
+import { withRequestWebSession } from '@/lib/server/api-response';
 
 export async function POST(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
@@ -18,14 +20,22 @@ export async function POST(request: NextRequest) {
   };
 
   if (!body.classroomId || !isValidClassroomId(body.classroomId)) {
-    return NextResponse.json(
-      {
-        success: false,
-        errorCode: 'INVALID_CLASSROOM_ID',
-        error: 'A valid classroomId is required',
-      },
-      { status: 400 },
+    return withRequestWebSession(
+      request,
+      NextResponse.json(
+        {
+          success: false,
+          errorCode: 'INVALID_CLASSROOM_ID',
+          error: 'A valid classroomId is required',
+        },
+        { status: 400 },
+      ),
     );
+  }
+
+  const access = await requireClassroomAccess(request, body.classroomId);
+  if (access instanceof NextResponse) {
+    return access;
   }
 
   const expiresInMinutes = Math.min(Math.max(body.expiresInMinutes ?? 120, 10), 24 * 60);
@@ -55,10 +65,13 @@ export async function POST(request: NextRequest) {
   });
 
   const joinUrl = `${buildRequestOrigin(request)}/join/${rawToken}`;
-  return NextResponse.json({
-    success: true,
-    joinUrl,
-    joinCode: rawToken,
-    expiresAt,
-  });
+  return withRequestWebSession(
+    request,
+    NextResponse.json({
+      success: true,
+      joinUrl,
+      joinCode: rawToken,
+      expiresAt,
+    }),
+  );
 }

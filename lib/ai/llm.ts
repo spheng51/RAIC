@@ -9,7 +9,14 @@ import type { GenerateTextResult, StreamTextResult } from 'ai';
 import { createLogger } from '@/lib/logger';
 import { PROVIDERS } from './providers';
 import { thinkingContext } from './thinking-context';
-import type { ProviderType, ThinkingCapability, ThinkingConfig } from '@/lib/types/provider';
+import type {
+  LibraryReviewRoute,
+  ProviderCallMetrics,
+  ProviderType,
+  ThinkingCapability,
+  ThinkingConfig,
+  TraceContext,
+} from '@/lib/types/provider';
 const log = createLogger('LLM');
 
 // Re-export for external use
@@ -37,6 +44,37 @@ function getModelId(params: GenerateTextParams | StreamTextParams): string {
   if (typeof m === 'string') return m;
   if (m && typeof m === 'object' && 'modelId' in m) return (m as { modelId: string }).modelId;
   return 'unknown';
+}
+
+function createProviderCallMetric(
+  route: string,
+  modelId: string,
+  category: ProviderCallMetrics['category'],
+  requestStart: number,
+  traceContext?: TraceContext,
+): ProviderCallMetrics | null {
+  if (!traceContext) return null;
+  return {
+    providerId: traceContext.providerId || 'unknown',
+    model: traceContext.model || modelId,
+    route: (route || 'chat') as LibraryReviewRoute,
+    category,
+    requestStart,
+    status: 'ok',
+    attempts: 1,
+  };
+}
+
+function _normalizeErrorCode(error: unknown): string {
+  if (!error) return 'unknown';
+  if (error instanceof Error) {
+    return error.name || 'error';
+  }
+  if (typeof error === 'string') return error;
+  if (typeof error === 'object' && 'code' in error) {
+    return String((error as { code?: unknown }).code || 'error');
+  }
+  return 'error';
 }
 
 // ---------------------------------------------------------------------------
@@ -287,10 +325,25 @@ export async function callLLM<T extends GenerateTextParams>(
   source: string,
   retryOptions?: LLMRetryOptions,
   thinking?: ThinkingConfig,
+  traceContext?: TraceContext,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<GenerateTextResult<any, any>> {
+  const requestStart = Date.now();
   const maxAttempts = (retryOptions?.retries ?? 0) + 1;
   const validate = retryOptions?.validate ?? (maxAttempts > 1 ? DEFAULT_VALIDATE : undefined);
+  const modelId = getModelId(params);
+  const metrics = createProviderCallMetric(
+    source,
+    modelId,
+    traceContext?.category || 'generation',
+    requestStart,
+    traceContext,
+  );
+  const providerTrace = traceContext;
+  if (metrics && providerTrace) {
+    providerTrace.providerCalls = providerTrace.providerCalls || [];
+    providerTrace.providerCalls.push(metrics);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let lastResult: GenerateTextResult<any, any> | undefined;
@@ -308,6 +361,12 @@ export async function callLLM<T extends GenerateTextParams>(
       const result = await thinkingContext.run(effectiveThinking, () =>
         generateText(injectedParams),
       );
+      if (metrics) {
+        metrics.attempts = attempt;
+        metrics.firstByteMs = Date.now() - requestStart;
+        metrics.firstEventMs = Date.now() - requestStart;
+        metrics.status = 'ok';
+      }
 
       // Validate result (only when retries are configured)
       if (validate && !validate(result.text)) {
@@ -347,10 +406,27 @@ export function streamLLM<T extends StreamTextParams>(
   params: T,
   source: string,
   thinking?: ThinkingConfig,
+  traceContext?: TraceContext,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): StreamTextResult<any, any> {
   // Resolve effective thinking config and wrap in thinkingContext
   const effectiveThinking = thinking ?? getGlobalThinkingConfig();
+  const modelId = getModelId(params);
+  const requestStart = Date.now();
+  const metrics = createProviderCallMetric(
+    source,
+    modelId,
+    traceContext?.category || 'chat',
+    requestStart,
+    traceContext,
+  );
+  const providerTrace = traceContext;
+  if (metrics && providerTrace) {
+    providerTrace.providerCalls = providerTrace.providerCalls || [];
+    providerTrace.providerCalls.push(metrics);
+    // Stream events are consumed by the caller; firstEventMs can be updated in the route.
+    metrics.status = 'ok';
+  }
   const injectedParams = injectProviderOptions(params, effectiveThinking);
   const result = thinkingContext.run(effectiveThinking, () => streamText(injectedParams));
 

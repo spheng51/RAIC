@@ -4,8 +4,14 @@ import {
   canSessionControlPresentation,
   getClassroomPresentationSnapshot,
 } from '@/lib/server/classroom-presentation';
-import { apiError, apiSuccess, API_ERROR_CODES } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  API_ERROR_CODES,
+} from '@/lib/server/api-response';
 import { isValidClassroomId, updateClassroom } from '@/lib/server/classroom-storage';
+import { recordAuditEvent } from '@/lib/server/audit-log';
+import { createLogger } from '@/lib/logger';
 import type { PresentationSurface, SharedSimulationStatus } from '@/lib/types/stage';
 
 interface PresentationBody {
@@ -15,6 +21,7 @@ interface PresentationBody {
 
 const SURFACES: PresentationSurface[] = ['lesson', 'simulation', 'report'];
 const STATUSES: SharedSimulationStatus[] = ['attached', 'running', 'completed', 'error'];
+const log = createLogger('Classroom Presentation');
 
 function isPresentationSurface(value: unknown): value is PresentationSurface {
   return typeof value === 'string' && SURFACES.includes(value as PresentationSurface);
@@ -24,13 +31,15 @@ function isSharedSimulationStatus(value: unknown): value is SharedSimulationStat
   return typeof value === 'string' && STATUSES.includes(value as SharedSimulationStatus);
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid classroom id',
+    );
   }
 
   const access = await requireClassroomAccess(request, id);
@@ -40,15 +49,33 @@ export async function PATCH(
 
   const snapshot = await getClassroomPresentationSnapshot(id);
   if (!snapshot) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
   if (!snapshot.sharedSimulation) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'No MiroFish simulation is attached');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'No MiroFish simulation is attached',
+    );
   }
 
   if (!canSessionControlPresentation(snapshot.sharedSimulation, access.auth.session)) {
-    return apiError(
+    log.warn('Presentation update rejected', {
+      classroomId: id,
+      actorSessionId: access.auth.session.id,
+      actorUserId: access.auth.user.id,
+      actorKind: access.source,
+      result: 'forbidden',
+    });
+    return apiErrorWithRequestSession(
+      request,
       API_ERROR_CODES.INVALID_REQUEST,
       403,
       'Only the teacher or the active controller can change the presentation',
@@ -60,15 +87,30 @@ export async function PATCH(
   const nextStatus = body.status ?? snapshot.sharedSimulation.status;
 
   if (!isPresentationSurface(nextSurface)) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid activeSurface value');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid activeSurface value',
+    );
   }
 
   if (!isSharedSimulationStatus(nextStatus)) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid status value');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid status value',
+    );
   }
 
   if (nextSurface === 'report' && !snapshot.reportAvailable) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'No report is attached to this classroom');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'No report is attached to this classroom',
+    );
   }
 
   const updated = await updateClassroom(id, (current) => {
@@ -90,10 +132,63 @@ export async function PATCH(
   });
 
   if (!updated?.stage.sharedSimulation) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'No MiroFish simulation is attached');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'No MiroFish simulation is attached',
+    );
   }
 
-  return apiSuccess({
+  const previousSurface = snapshot.sharedSimulation.activeSurface;
+  const previousStatus = snapshot.sharedSimulation.status;
+  const auditAction =
+    nextSurface !== previousSurface
+      ? nextSurface === 'lesson' && nextStatus === 'error' && previousSurface !== 'lesson'
+        ? 'classroom.presentation.recovered_to_lesson'
+        : 'classroom.presentation.surface_changed'
+      : null;
+
+  if (auditAction) {
+    await recordAuditEvent({
+      organizationId: access.auth.session.organizationId,
+      userId: access.auth.user.id,
+      actorRole: access.auth.session.role,
+      action: auditAction,
+      resourceType: 'classroom',
+      resourceId: id,
+      metadata: {
+        activeSurface: nextSurface,
+        previousSurface,
+        status: nextStatus,
+        previousStatus,
+        source: 'classroom',
+        actorKind: access.source,
+        actorSessionId: access.auth.session.id,
+      },
+    });
+  }
+
+  log.info('Presentation updated', {
+    classroomId: id,
+    simulationId: updated.stage.sharedSimulation.simulationId,
+    reportId: updated.stage.sharedSimulation.reportId ?? null,
+    actorSessionId: access.auth.session.id,
+    actorUserId: access.auth.user.id,
+    actorKind: access.source,
+    activeSurface: nextSurface,
+    previousSurface,
+    status: nextStatus,
+    previousStatus,
+    result:
+      nextSurface === 'lesson' && nextStatus === 'error' && previousSurface !== 'lesson'
+        ? 'recovered_to_lesson'
+        : nextSurface !== previousSurface
+          ? 'surface_changed'
+          : 'status_updated',
+  });
+
+  return apiSuccessWithRequestSession(request, {
     sharedSimulation: updated.stage.sharedSimulation,
   });
 }

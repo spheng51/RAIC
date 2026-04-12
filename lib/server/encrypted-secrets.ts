@@ -41,9 +41,7 @@ export function hasEncryptionKeyConfigured() {
 export function requireEncryptionKey() {
   const key = getEncryptionKey();
   if (!key) {
-    throw new Error(
-      `${ENCRYPTION_ENV_KEY} is required for server-backed AI credential storage.`,
-    );
+    throw new Error(`${ENCRYPTION_ENV_KEY} is required for server-backed AI credential storage.`);
   }
 
   return key;
@@ -68,20 +66,11 @@ export function decryptSecret(payload: string) {
   const key = requireEncryptionKey();
   const [version, ivEncoded, tagEncoded, encryptedEncoded] = payload.split(':');
 
-  if (
-    version !== ENCRYPTION_VERSION ||
-    !ivEncoded ||
-    !tagEncoded ||
-    !encryptedEncoded
-  ) {
+  if (version !== ENCRYPTION_VERSION || !ivEncoded || !tagEncoded || !encryptedEncoded) {
     throw new Error('Encrypted AI credential payload is invalid.');
   }
 
-  const decipher = createDecipheriv(
-    ENCRYPTION_ALGORITHM,
-    key,
-    Buffer.from(ivEncoded, 'base64'),
-  );
+  const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, Buffer.from(ivEncoded, 'base64'));
   decipher.setAuthTag(Buffer.from(tagEncoded, 'base64'));
 
   const decrypted = Buffer.concat([

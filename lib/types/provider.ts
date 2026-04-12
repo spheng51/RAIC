@@ -30,6 +30,55 @@ export type ProviderId = BuiltInProviderId | `custom-${string}`;
  */
 export type ProviderType = 'openai' | 'anthropic' | 'google';
 
+export type LibraryReviewSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export type LibraryReviewRoute =
+  | 'chat-adapter'
+  | 'chat-adapter-stream'
+  | 'chat'
+  | 'scene-outlines-stream'
+  | 'scene-content'
+  | 'scene-actions'
+  | 'agent-profiles'
+  | 'web-search-query-rewrite'
+  | 'pbl-chat'
+  | 'quiz-grade'
+  | 'web-search'
+  | 'classroom-generation';
+
+export type LibraryReviewCategory = 'chat' | 'tts' | 'media' | 'generation';
+
+export interface ProviderCallMetrics {
+  providerId: string;
+  model: string;
+  route: LibraryReviewRoute;
+  category: LibraryReviewCategory;
+  requestStart: number;
+  firstByteMs?: number;
+  firstEventMs?: number;
+  status: 'ok' | 'error' | 'timeout' | 'aborted';
+  errorCode?: string;
+  attempts?: number;
+}
+
+export interface TraceContext {
+  requestId?: string;
+  providerId?: string;
+  model?: string;
+  category?: LibraryReviewCategory;
+  providerCalls?: ProviderCallMetrics[];
+  dedupeKey?: string;
+  modelResolutionMs?: number;
+}
+
+export interface LibraryReviewFinding {
+  severity: LibraryReviewSeverity;
+  impact: string;
+  location: string;
+  owner: string;
+  acceptanceTest: string;
+}
+
 /**
  * Describes a model's thinking/reasoning API control capability.
  * Models without thinking support simply omit this field from capabilities.

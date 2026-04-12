@@ -84,6 +84,11 @@ export async function POST(request: NextRequest) {
       `Video provider verification failed [provider=${request.headers.get('x-video-provider') ?? 'seedance'}]:`,
       err,
     );
-    return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, `Connectivity test error: ${err}`);
+    return apiErrorWithRequestSession(
+      request,
+      'INTERNAL_ERROR',
+      500,
+      `Connectivity test error: ${err}`,
+    );
   }
 }

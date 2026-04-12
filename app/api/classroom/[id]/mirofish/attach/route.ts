@@ -1,25 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRequestRole } from '@/lib/auth/authorize';
-import { apiError, apiSuccess, API_ERROR_CODES } from '@/lib/server/api-response';
+import { requireClassroomAccess } from '@/lib/auth/classroom-access';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+  API_ERROR_CODES,
+} from '@/lib/server/api-response';
 import { updateClassroom, readClassroom, isValidClassroomId } from '@/lib/server/classroom-storage';
+import { recordAuditEvent } from '@/lib/server/audit-log';
+import { createLogger } from '@/lib/logger';
 import {
   buildMiroFishReportUrl,
   buildMiroFishRunUrl,
+  isMiroFishMultiUserEnabled,
   validateMiroFishReport,
   validateMiroFishSimulation,
 } from '@/lib/server/mirofish';
-import type { SharedSimulation } from '@/lib/types/stage';
+import type { SharedSimulation, SharedSimulationCollaborationMode } from '@/lib/types/stage';
 
 interface AttachMiroFishBody {
   simulationId?: string;
   reportId?: string;
   defaultSurface?: 'lesson' | 'simulation';
+  collaborationMode?: SharedSimulationCollaborationMode;
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+const log = createLogger('Classroom MiroFish Attach');
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
     return auth;
@@ -27,24 +35,51 @@ export async function POST(
 
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid classroom id',
+    );
+  }
+
+  const access = await requireClassroomAccess(request, id);
+  if (access instanceof NextResponse) {
+    return access;
   }
 
   const classroom = await readClassroom(id);
   if (!classroom) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
   const body = (await request.json()) as AttachMiroFishBody;
   const simulationId = body.simulationId?.trim();
   const reportId = body.reportId?.trim() || undefined;
   const defaultSurface = body.defaultSurface === 'simulation' ? 'simulation' : 'lesson';
+  const requestedCollaborationMode =
+    body.collaborationMode === 'multi-user' ? 'multi-user' : 'single-controller';
 
   if (!simulationId) {
-    return apiError(
+    return apiErrorWithRequestSession(
+      request,
       API_ERROR_CODES.MISSING_REQUIRED_FIELD,
       400,
       'simulationId is required',
+    );
+  }
+
+  if (requestedCollaborationMode === 'multi-user' && !isMiroFishMultiUserEnabled()) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'MiroFish multi-user mode is not enabled for this deployment',
     );
   }
 
@@ -56,7 +91,18 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status = message.includes('MIROFISH_') ? 500 : 400;
-    return apiError(
+    log.warn('Attach rejected', {
+      classroomId: id,
+      simulationId,
+      reportId: reportId ?? null,
+      actorSessionId: auth.session.id,
+      actorUserId: auth.user.id,
+      result: 'validation_failed',
+      status,
+      error: message,
+    });
+    return apiErrorWithRequestSession(
+      request,
       status === 500 ? API_ERROR_CODES.INTERNAL_ERROR : API_ERROR_CODES.INVALID_REQUEST,
       status,
       status === 500 ? 'MiroFish integration is not configured correctly' : message,
@@ -71,6 +117,12 @@ export async function POST(
     reportUrl: reportId ? buildMiroFishReportUrl(reportId) : undefined,
     activeSurface: defaultSurface,
     controllerRole: 'teacher',
+    collaborationMode: requestedCollaborationMode,
+    collaborationState: 'inactive',
+    allowStudentInteraction: requestedCollaborationMode === 'multi-user',
+    participantCount: 0,
+    lastCollaborationSyncAt: new Date().toISOString(),
+    removedParticipantSessionIds: undefined,
     status: 'attached',
   };
 
@@ -83,10 +135,44 @@ export async function POST(
   }));
 
   if (!updated) {
-    return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
-  return apiSuccess({
+  const hadExistingAttachment = Boolean(classroom.stage.sharedSimulation);
+
+  await recordAuditEvent({
+    organizationId: auth.session.organizationId,
+    userId: auth.user.id,
+    actorRole: auth.session.role,
+    action: hadExistingAttachment ? 'classroom.mirofish.updated' : 'classroom.mirofish.attached',
+    resourceType: 'classroom',
+    resourceId: id,
+    metadata: {
+      simulationId,
+      reportId,
+      defaultSurface,
+      collaborationMode: requestedCollaborationMode,
+      classroomId: id,
+      source: 'web',
+      actorSessionId: auth.session.id,
+    },
+  });
+
+  log.info('Attach succeeded', {
+    classroomId: id,
+    simulationId,
+    reportId: reportId ?? null,
+    actorSessionId: auth.session.id,
+    actorUserId: auth.user.id,
+    result: hadExistingAttachment ? 'updated' : 'attached',
+  });
+
+  return apiSuccessWithRequestSession(request, {
     sharedSimulation,
     attachedByUserId: auth.user.id,
   });

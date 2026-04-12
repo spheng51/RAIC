@@ -31,12 +31,14 @@ vi.mock('@/lib/server/encrypted-secrets', () => ({
 vi.mock('@/lib/db/client', () => ({
   runPostgresQuery: vi.fn(async () => null),
   runPostgresTransaction: vi.fn(async () => null),
-  updatePlatformStore: vi.fn(async (updater: (store: PlatformStore) => Promise<unknown> | unknown) => {
-    const nextStore = structuredClone(platformStore);
-    const result = await updater(nextStore);
-    platformStore = nextStore;
-    return result;
-  }),
+  updatePlatformStore: vi.fn(
+    async (updater: (store: PlatformStore) => Promise<unknown> | unknown) => {
+      const nextStore = structuredClone(platformStore);
+      const result = await updater(nextStore);
+      platformStore = nextStore;
+      return result;
+    },
+  ),
   readPlatformStore: vi.fn(async () => structuredClone(platformStore)),
 }));
 
@@ -96,11 +98,9 @@ describe('PUT /api/admin/ai/config', () => {
   });
 
   it('does not persist a partial snapshot when a later config fails mid-save', async () => {
-    encryptSecretMock
-      .mockReturnValueOnce('enc:first')
-      .mockImplementationOnce(() => {
-        throw new Error('encryption exploded');
-      });
+    encryptSecretMock.mockReturnValueOnce('enc:first').mockImplementationOnce(() => {
+      throw new Error('encryption exploded');
+    });
 
     const { PUT } = await import('@/app/api/admin/ai/config/route');
     const { readPlatformStore } = await import('@/lib/db/client');

@@ -8,7 +8,12 @@ import { resolveSessionFromToken } from '@/lib/auth/session';
 import { listMembershipsForUser } from '@/lib/db/repositories/memberships';
 import { findOrganizationById } from '@/lib/db/repositories/organizations';
 import { findUserById } from '@/lib/db/repositories/users';
-import type { MembershipRecord, OrganizationRecord, SessionRecord, UserRecord } from '@/lib/db/schema';
+import type {
+  MembershipRecord,
+  OrganizationRecord,
+  SessionRecord,
+  UserRecord,
+} from '@/lib/db/schema';
 
 export interface AuthContext {
   user: UserRecord;
@@ -33,7 +38,9 @@ export async function resolveAuthContextFromToken(
   const activeMembership =
     (session.organizationId
       ? memberships.find((membership) => membership.organizationId === session.organizationId)
-      : null) ?? memberships[0] ?? null;
+      : null) ??
+    memberships[0] ??
+    null;
   const organization = activeMembership
     ? await findOrganizationById(activeMembership.organizationId)
     : null;

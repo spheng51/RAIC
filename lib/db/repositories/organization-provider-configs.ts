@@ -80,16 +80,18 @@ export async function listOrganizationProviderConfigs(
 
   const store = await readPlatformStore();
   return store.organizationProviderConfigs.filter(
-    (config) =>
-      config.organizationId === organizationId && (!family || config.family === family),
+    (config) => config.organizationId === organizationId && (!family || config.family === family),
   );
 }
 
-export async function findOrganizationProviderConfig(input: {
-  organizationId: string;
-  family: AIProviderFamily;
-  providerId: string;
-}, executor?: PostgresExecutor): Promise<OrganizationProviderConfigRecord | null> {
+export async function findOrganizationProviderConfig(
+  input: {
+    organizationId: string;
+    family: AIProviderFamily;
+    providerId: string;
+  },
+  executor?: PostgresExecutor,
+): Promise<OrganizationProviderConfigRecord | null> {
   const rows = executor
     ? await executor.unsafe<OrganizationProviderConfigRow>(
         `SELECT
@@ -113,7 +115,7 @@ export async function findOrganizationProviderConfig(input: {
         [input.organizationId, input.family, input.providerId],
       )
     : await runPostgresQuery<OrganizationProviderConfigRow>(
-    `SELECT
+        `SELECT
        id,
        organization_id,
        family,
@@ -131,8 +133,8 @@ export async function findOrganizationProviderConfig(input: {
        AND family = $2
        AND provider_id = $3
      LIMIT 1`,
-    [input.organizationId, input.family, input.providerId],
-  );
+        [input.organizationId, input.family, input.providerId],
+      );
 
   if (rows) {
     return rows[0] ? mapRow(rows[0]) : null;
@@ -149,17 +151,20 @@ export async function findOrganizationProviderConfig(input: {
   );
 }
 
-export async function upsertOrganizationProviderConfig(input: {
-  organizationId: string;
-  family: AIProviderFamily;
-  providerId: string;
-  providerDefinition?: AIProviderDefinition | null;
-  encryptedSecret?: string | null;
-  baseUrl?: string | null;
-  allowedModels?: string[];
-  defaultModel?: string | null;
-  enabled: boolean;
-}, executor?: PostgresExecutor): Promise<OrganizationProviderConfigRecord> {
+export async function upsertOrganizationProviderConfig(
+  input: {
+    organizationId: string;
+    family: AIProviderFamily;
+    providerId: string;
+    providerDefinition?: AIProviderDefinition | null;
+    encryptedSecret?: string | null;
+    baseUrl?: string | null;
+    allowedModels?: string[];
+    defaultModel?: string | null;
+    enabled: boolean;
+  },
+  executor?: PostgresExecutor,
+): Promise<OrganizationProviderConfigRecord> {
   const now = new Date().toISOString();
   const allowedModels = input.allowedModels ?? [];
 
@@ -216,7 +221,7 @@ export async function upsertOrganizationProviderConfig(input: {
         ],
       )
     : await runPostgresQuery<OrganizationProviderConfigRow>(
-    `INSERT INTO organization_provider_configs (
+        `INSERT INTO organization_provider_configs (
        id,
        organization_id,
        family,
@@ -252,20 +257,20 @@ export async function upsertOrganizationProviderConfig(input: {
        enabled,
        created_at,
        updated_at`,
-    [
-      randomUUID(),
-      input.organizationId,
-      input.family,
-      input.providerId,
-      JSON.stringify(input.providerDefinition ?? null),
-      input.encryptedSecret ?? null,
-      input.baseUrl ?? null,
-      JSON.stringify(allowedModels),
-      input.defaultModel ?? null,
-      input.enabled,
-      now,
-    ],
-  );
+        [
+          randomUUID(),
+          input.organizationId,
+          input.family,
+          input.providerId,
+          JSON.stringify(input.providerDefinition ?? null),
+          input.encryptedSecret ?? null,
+          input.baseUrl ?? null,
+          JSON.stringify(allowedModels),
+          input.defaultModel ?? null,
+          input.enabled,
+          now,
+        ],
+      );
 
   if (rows) {
     return mapRow(rows[0]);

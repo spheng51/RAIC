@@ -84,6 +84,11 @@ export async function POST(request: NextRequest) {
       `Image provider verification failed [provider=${request.headers.get('x-image-provider') ?? 'seedream'}]:`,
       err,
     );
-    return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, `Connectivity test error: ${err}`);
+    return apiErrorWithRequestSession(
+      request,
+      'INTERNAL_ERROR',
+      500,
+      `Connectivity test error: ${err}`,
+    );
   }
 }

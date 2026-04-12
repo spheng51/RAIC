@@ -4,6 +4,8 @@ import {
   clearClassroomAccessCookie,
   findValidJoinToken,
 } from '@/lib/auth/classroom-access';
+import { CLASSROOM_ACCESS_COOKIE_NAME } from '@/lib/auth/constants';
+import { resolveAuthContextFromToken } from '@/lib/auth/current-user';
 import { createClassroomSession, getRequestIpAddress } from '@/lib/auth/session';
 import { ensureMembership } from '@/lib/db/repositories/memberships';
 import { createClassroomGuestUser } from '@/lib/db/repositories/users';
@@ -17,8 +19,28 @@ export async function GET(
   const joinToken = await findValidJoinToken(joinCode);
 
   if (!joinToken) {
-    const response = NextResponse.redirect(new URL(`/join/${encodeURIComponent(joinCode)}`, request.url));
+    const response = NextResponse.redirect(
+      new URL(`/join/${encodeURIComponent(joinCode)}`, request.url),
+    );
     clearClassroomAccessCookie(response);
+    return response;
+  }
+
+  const existingClassroomToken = request.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value ?? null;
+  const existingClassroomAuth = await resolveAuthContextFromToken(existingClassroomToken);
+  if (
+    existingClassroomToken &&
+    existingClassroomAuth?.session.kind === 'classroom' &&
+    existingClassroomAuth.session.classroomId === joinToken.classroomId
+  ) {
+    const response = NextResponse.redirect(
+      new URL(`/classroom/${joinToken.classroomId}`, request.url),
+    );
+    attachClassroomAccessCookie(
+      response,
+      existingClassroomToken,
+      existingClassroomAuth.session.absoluteExpiresAt,
+    );
     return response;
   }
 
@@ -59,7 +81,9 @@ export async function GET(
     },
   });
 
-  const response = NextResponse.redirect(new URL(`/classroom/${joinToken.classroomId}`, request.url));
+  const response = NextResponse.redirect(
+    new URL(`/classroom/${joinToken.classroomId}`, request.url),
+  );
   attachClassroomAccessCookie(response, classroomSessionToken, session.absoluteExpiresAt);
   return response;
 }

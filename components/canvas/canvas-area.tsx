@@ -10,6 +10,10 @@ import { Whiteboard } from '@/components/whiteboard';
 import { CanvasToolbar } from '@/components/canvas/canvas-toolbar';
 import type { CanvasToolbarProps } from '@/components/canvas/canvas-toolbar';
 import type { Scene, StageMode } from '@/lib/types/stage';
+import type {
+  ClassroomCollaborationInteractionReason,
+  ClassroomCollaborationStatePayload,
+} from '@/lib/types/classroom-collaboration';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { MiroFishPane, type MiroFishHostEvent } from '@/components/mirofish/mirofish-pane';
 
@@ -23,6 +27,12 @@ interface CanvasAreaProps extends CanvasToolbarProps {
   readonly runUrl?: string | null;
   readonly reportUrl?: string | null;
   readonly viewerHasSimulationControl?: boolean;
+  readonly collaboration?: ClassroomCollaborationStatePayload | null;
+  readonly viewerCanInteractWithSimulation?: boolean;
+  readonly viewerInteractionReason?: ClassroomCollaborationInteractionReason;
+  readonly spotlightDisplayName?: string | null;
+  readonly controllerDisplayName?: string;
+  readonly controlLeaseExpiresAt?: string | null;
   readonly presentationFallbackMessage?: string | null;
   readonly onMiroFishEvent?: (event: MiroFishHostEvent) => void;
   readonly onReclaimMiroFishControl?: () => void;
@@ -63,6 +73,12 @@ export function CanvasArea({
   runUrl,
   reportUrl,
   viewerHasSimulationControl,
+  collaboration,
+  viewerCanInteractWithSimulation,
+  viewerInteractionReason,
+  spotlightDisplayName,
+  controllerDisplayName,
+  controlLeaseExpiresAt,
   presentationFallbackMessage,
   onMiroFishEvent,
   onReclaimMiroFishControl,
@@ -149,13 +165,23 @@ export function CanvasArea({
 
           {!isLessonSurface && sharedSimulation && !whiteboardOpen && (
             <MiroFishPane
-              key={`${currentSurface}:${runUrl ?? 'no-run'}:${reportUrl ?? 'no-report'}`}
+              key={`${currentSurface}:${sharedSimulation.simulationId}:${sharedSimulation.reportId ?? 'no-report'}`}
               activeSurface={currentSurface === 'report' ? 'report' : 'simulation'}
+              simulationId={sharedSimulation.simulationId}
+              reportId={sharedSimulation.reportId ?? null}
               runUrl={runUrl ?? null}
               reportUrl={reportUrl ?? null}
-              viewerHasSimulationControl={!!viewerHasSimulationControl}
+              collaborationMode={sharedSimulation.collaborationMode ?? 'single-controller'}
+              viewerCanInteract={viewerCanInteractWithSimulation ?? !!viewerHasSimulationControl}
               viewerCanManageSimulation={!!viewerCanManageSimulation}
+              collaborationState={
+                collaboration?.collaborationState ?? sharedSimulation.collaborationState
+              }
+              viewerInteractionReason={viewerInteractionReason ?? null}
+              spotlightDisplayName={spotlightDisplayName ?? null}
               controllerRole={sharedSimulation.controllerRole}
+              controllerDisplayName={controllerDisplayName ?? 'Teacher'}
+              controlLeaseExpiresAt={controlLeaseExpiresAt ?? null}
               onEvent={onMiroFishEvent}
               onReclaimControl={onReclaimMiroFishControl}
               onRecoverToLesson={onRecoverToLesson}

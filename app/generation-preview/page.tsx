@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { CheckCircle2, Sparkles, AlertCircle, AlertTriangle, ArrowLeft, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -37,6 +37,8 @@ function GenerationPreviewContent() {
   const { t } = useI18n();
   const hasStartedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const retryActionRef = useRef<HTMLButtonElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   const [session, setSession] = useState<GenerationSessionState | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
@@ -88,6 +90,12 @@ function GenerationPreviewContent() {
       abortControllerRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (error) {
+      retryActionRef.current?.focus();
+    }
+  }, [error]);
 
   // Get API credentials from localStorage
   const getApiHeaders = () => {
@@ -811,9 +819,15 @@ function GenerationPreviewContent() {
   // Still loading session from sessionStorage
   if (!sessionLoaded) {
     return (
-      <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
+      <div
+        className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <div className="text-center text-muted-foreground">
-          <div className="size-8 border-2 border-current border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="size-8 border-2 border-current border-t-transparent rounded-full motion-safe:animate-spin motion-reduce:animate-none mx-auto" />
+          <p className="sr-only">{t('generation.loadingPreview')}</p>
         </div>
       </div>
     );
@@ -848,12 +862,12 @@ function GenerationPreviewContent() {
       {/* Background Decor */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div
-          className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: '4s' }}
+          className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl motion-safe:animate-pulse motion-reduce:animate-none"
+          style={{ animationDuration: 'var(--motion-duration-ambient)' }}
         />
         <div
-          className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: '6s' }}
+          className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl motion-safe:animate-pulse motion-reduce:animate-none"
+          style={{ animationDuration: 'calc(var(--motion-duration-ambient) + 1600ms)' }}
         />
       </div>
 
@@ -863,7 +877,7 @@ function GenerationPreviewContent() {
         animate={{ opacity: 1, y: 0 }}
         className="absolute top-4 left-4 z-20"
       >
-        <Button variant="ghost" size="sm" onClick={goBackToHome}>
+        <Button variant="ghost" size="sm" type="button" onClick={goBackToHome}>
           <ArrowLeft className="size-4 mr-2" />
           {t('generation.backToHome')}
         </Button>
@@ -945,6 +959,9 @@ function GenerationPreviewContent() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="space-y-2"
+                    role={error ? 'alert' : 'status'}
+                    aria-live={error ? 'assertive' : 'polite'}
+                    aria-atomic="true"
                   >
                     <h2 className="text-2xl font-bold tracking-tight">
                       {error
@@ -981,18 +998,29 @@ function GenerationPreviewContent() {
                         <TooltipTrigger asChild>
                           <motion.button
                             type="button"
-                            animate={{
-                              boxShadow: [
-                                '0 0 0 0 rgba(251, 191, 36, 0), 0 0 0 0 rgba(251, 191, 36, 0)',
-                                '0 0 16px 4px rgba(251, 191, 36, 0.12), 0 0 4px 1px rgba(251, 191, 36, 0.08)',
-                                '0 0 0 0 rgba(251, 191, 36, 0), 0 0 0 0 rgba(251, 191, 36, 0)',
-                              ],
-                            }}
-                            transition={{
-                              duration: 3,
-                              repeat: Infinity,
-                              ease: 'easeInOut',
-                            }}
+                            aria-label={t('generation.viewWarnings', {
+                              count: truncationWarnings.length,
+                            })}
+                            animate={
+                              prefersReducedMotion
+                                ? { boxShadow: 'none' }
+                                : {
+                                    boxShadow: [
+                                      '0 0 0 0 rgba(251, 191, 36, 0), 0 0 0 0 rgba(251, 191, 36, 0)',
+                                      '0 0 16px 4px rgba(251, 191, 36, 0.12), 0 0 4px 1px rgba(251, 191, 36, 0.08)',
+                                      '0 0 0 0 rgba(251, 191, 36, 0), 0 0 0 0 rgba(251, 191, 36, 0)',
+                                    ],
+                                  }
+                            }
+                            transition={
+                              prefersReducedMotion
+                                ? { duration: 0.12 }
+                                : {
+                                    duration: 3,
+                                    repeat: Infinity,
+                                    ease: 'easeInOut',
+                                  }
+                            }
                             className="relative size-7 rounded-full flex items-center justify-center cursor-default
                                        bg-gradient-to-br from-amber-400/15 to-orange-400/10
                                        border border-amber-400/25 hover:border-amber-400/40
@@ -1033,7 +1061,14 @@ function GenerationPreviewContent() {
                 animate={{ opacity: 1, y: 0 }}
                 className="w-full max-w-xs"
               >
-                <Button size="lg" variant="outline" className="w-full h-12" onClick={goBackToHome}>
+                <Button
+                  ref={retryActionRef}
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  className="w-full h-12"
+                  onClick={goBackToHome}
+                >
                   {t('generation.goBackAndRetry')}
                 </Button>
               </motion.div>
@@ -1043,12 +1078,13 @@ function GenerationPreviewContent() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3 text-sm text-muted-foreground/50 font-medium uppercase tracking-widest"
               >
-                <Sparkles className="size-3 animate-pulse" />
+                <Sparkles className="size-3 motion-safe:animate-pulse motion-reduce:animate-none" />
                 {t('generation.aiWorking')}
                 {generatedAgents.length > 0 && !showAgentReveal && (
                   <button
+                    type="button"
                     onClick={() => setShowAgentReveal(true)}
-                    className="ml-2 flex items-center gap-1.5 rounded-full border border-purple-300/30 bg-purple-500/10 px-3 py-1 text-xs font-medium normal-case tracking-normal text-purple-400 transition-colors hover:bg-purple-500/20 hover:text-purple-300"
+                    className="ml-2 flex items-center gap-1.5 rounded-full border border-purple-300/30 bg-purple-500/10 px-3 py-1 text-xs font-medium normal-case tracking-normal text-purple-400 transition-colors hover:bg-purple-500/20 hover:text-purple-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30"
                   >
                     <Bot className="size-3" />
                     {t('generation.viewAgents')}
@@ -1076,17 +1112,27 @@ function GenerationPreviewContent() {
 
 export default function GenerationPreviewPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
-          <div className="animate-pulse space-y-4 text-center">
-            <div className="h-8 w-48 bg-muted rounded mx-auto" />
-            <div className="h-4 w-64 bg-muted rounded mx-auto" />
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<GenerationPreviewFallback />}>
       <GenerationPreviewContent />
     </Suspense>
+  );
+}
+
+function GenerationPreviewFallback() {
+  const { t } = useI18n();
+
+  return (
+    <div
+      className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="motion-safe:animate-pulse motion-reduce:animate-none space-y-4 text-center">
+        <div className="h-8 w-48 bg-muted rounded mx-auto" />
+        <div className="h-4 w-64 bg-muted rounded mx-auto" />
+        <p className="sr-only">{t('generation.loadingPreview')}</p>
+      </div>
+    </div>
   );
 }

@@ -3,7 +3,9 @@
     "you": "You",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "retry": "Retry",
+    "error": "Error"
   },
   "home": {
     "slogan": "Generative Learning in Multi-Agent Interactive Classroom",
@@ -46,6 +48,8 @@
     "unknown": "Unknown",
     "stopDiscussion": "Stop Discussion",
     "endQA": "End Q&A",
+    "resizePanel": "Resize chat panel",
+    "collapsePanel": "Collapse chat panel",
     "tabs": {
       "lecture": "Notes",
       "chat": "Chat"
@@ -113,6 +117,11 @@
     "generating": "Generating...",
     "paused": "Paused",
     "generationFailed": "Generation failed",
+    "resizeSidebar": "Resize scene sidebar",
+    "collapseSidebar": "Collapse scene sidebar",
+    "openScene": "Open scene {{index}}: {{title}}",
+    "openGeneratingScene": "Open generating scene: {{title}}",
+    "failedScene": "Generation failed for {{title}}",
     "confirmSwitchTitle": "Switch Scene",
     "confirmSwitchMessage": "A topic is currently in progress. Switching scenes will end the current topic. Are you sure?",
     "generatingNextPage": "Scene is being generated, please wait...",
@@ -255,6 +264,7 @@
   },
   "classroom": {
     "recentClassrooms": "Recent",
+    "loading": "Loading classroom...",
     "today": "Today",
     "yesterday": "Yesterday",
     "daysAgo": "days ago",
@@ -299,8 +309,10 @@
     "sessionNotFound": "Session Not Found",
     "sessionNotFoundDesc": "Please fill in course requirements to start the generation process.",
     "goBackAndRetry": "Go Back and Retry",
+    "loadingPreview": "Loading generation preview",
     "classroomReady": "Your personalized AI learning environment has been generated successfully.",
     "aiWorking": "AI Agents Working...",
+    "viewWarnings": "View {{count}} generation warnings",
     "textTruncated": "Document text is long, using first {{n}} characters for generation",
     "imageTruncated": "{{total}} images found, exceeding the {{max}} image limit. Extra images will use text descriptions only",
     "agentGeneration": "Generating Classroom Roles",

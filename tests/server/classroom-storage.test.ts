@@ -7,7 +7,11 @@ function createMockRequest(origin: string, headers?: Record<string, string>) {
     headers: {
       get(name: string) {
         const normalizedName = name.toLowerCase();
-        return Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === normalizedName)?.[1] ?? null;
+        return (
+          Object.entries(headers ?? {}).find(
+            ([key]) => key.toLowerCase() === normalizedName,
+          )?.[1] ?? null
+        );
       },
     },
     nextUrl: new URL(origin),
@@ -15,22 +19,32 @@ function createMockRequest(origin: string, headers?: Record<string, string>) {
 }
 
 describe('classroom-storage helpers', () => {
+  const originalCwd = process.cwd();
+  let testRoot = '';
+
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    testRoot = path.join(
+      originalCwd,
+      '.vitest-tmp',
+      `classroom-storage-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testRoot);
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
-    await fs.rm(path.join(process.cwd(), 'data', 'classrooms'), {
+    await fs.rm(testRoot, {
       recursive: true,
       force: true,
     });
   });
 
   it('resolves classroom JSON paths inside the classroom data directory', async () => {
-    const { CLASSROOMS_DIR, resolveClassroomJsonPath } = await import('@/lib/server/classroom-storage');
+    const { CLASSROOMS_DIR, resolveClassroomJsonPath } =
+      await import('@/lib/server/classroom-storage');
 
     expect(resolveClassroomJsonPath('safe-id')).toBe(path.resolve(CLASSROOMS_DIR, 'safe-id.json'));
   });

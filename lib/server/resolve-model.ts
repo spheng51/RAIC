@@ -81,10 +81,7 @@ export async function resolveModelFromHeadersWithScope(
     mode?: 'interactive' | 'background';
   },
 ): Promise<ResolvedModel> {
-  const auth =
-    scope.auth !== undefined
-      ? scope.auth
-      : await getRequestAuth(req);
+  const auth = scope.auth !== undefined ? scope.auth : await getRequestAuth(req);
 
   return resolveModel({
     modelString: req.headers.get('x-model') || undefined,

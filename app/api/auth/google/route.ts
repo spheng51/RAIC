@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       role: membership.role,
     });
     clearNonceCookie(response);
-    attachSessionCookie(response, session.token, session.session.expiresAt);
+    attachSessionCookie(response, session.token, session.session.absoluteExpiresAt);
     return response;
   } catch (error) {
     const response = NextResponse.json(

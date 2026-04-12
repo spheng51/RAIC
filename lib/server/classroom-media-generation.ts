@@ -281,8 +281,7 @@ export async function generateTTSForClassroom(
         const result = await generateTTS(
           {
             providerId,
-            modelId:
-              resolvedTTSProvider.modelId || DEFAULT_TTS_MODELS[providerId] || '',
+            modelId: resolvedTTSProvider.modelId || DEFAULT_TTS_MODELS[providerId] || '',
             apiKey: resolvedTTSProvider.apiKey,
             baseUrl: ttsBaseUrl,
             voice,

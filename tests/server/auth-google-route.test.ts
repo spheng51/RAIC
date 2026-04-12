@@ -99,6 +99,9 @@ describe('POST /api/auth/google', () => {
   });
 
   it('creates a session when nonce validation and identity resolution succeed', async () => {
+    const idleExpiresAt = '2026-04-12T17:23:29.000Z';
+    const absoluteExpiresAt = '2026-04-13T17:23:29.000Z';
+
     verifyGoogleIdTokenMock.mockResolvedValue({
       googleSub: 'google-sub-1',
       email: 'teacher@example.com',
@@ -120,7 +123,8 @@ describe('POST /api/auth/google', () => {
       token: 'session-token',
       session: {
         id: 'session-1',
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        expiresAt: idleExpiresAt,
+        absoluteExpiresAt,
       },
     });
     listMembershipsForUserMock.mockResolvedValue([{ id: 'membership-1' }]);
@@ -142,7 +146,9 @@ describe('POST /api/auth/google', () => {
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.redirectTo).toBe('/studio');
-    expect(response.cookies.get(SESSION_COOKIE_NAME)?.value).toBe('session-token');
+    const sessionCookie = response.cookies.get(SESSION_COOKIE_NAME);
+    expect(sessionCookie?.value).toBe('session-token');
+    expect(new Date(sessionCookie?.expires ?? 0).toISOString()).toBe(absoluteExpiresAt);
     expect(response.cookies.get(AUTH_NONCE_COOKIE_NAME)?.value).toBe('');
   });
 });

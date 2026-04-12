@@ -111,7 +111,10 @@ export function createAuthSession(params: {
   const organizationName = params.organizationName ?? 'Governed School';
   const organizationSlug =
     params.organizationSlug ??
-    organizationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    organizationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   const token = `${params.userId}-session-token`;
 
   const user: UserRecord = {
@@ -345,9 +348,8 @@ export async function startMockOpenAIServer() {
     hits.push({
       method: req.method ?? 'GET',
       path: req.url ?? '/',
-      authorization: typeof req.headers.authorization === 'string'
-        ? req.headers.authorization
-        : undefined,
+      authorization:
+        typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
       body,
     });
 

@@ -20,7 +20,12 @@ export async function POST(req: NextRequest) {
     const auth = await getRequestAuth(req);
 
     if (!model) {
-      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Model name is required');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Model name is required',
+      );
     }
 
     // Parse model string and resolve server-side fallback
@@ -35,21 +40,19 @@ export async function POST(req: NextRequest) {
       });
       languageModel = result.model;
     } catch (error) {
-      return (
-        (await (async () => {
-          const governanceError = toGovernedProviderApiErrorResponse(error);
-          if (governanceError) {
-            return withRequestWebSession(req, governanceError);
-          }
+      return await (async () => {
+        const governanceError = toGovernedProviderApiErrorResponse(error);
+        if (governanceError) {
+          return withRequestWebSession(req, governanceError);
+        }
 
-          return apiErrorWithRequestSession(
-            req,
-            'INVALID_REQUEST',
-            401,
-            error instanceof Error ? error.message : String(error),
-          );
-        })())
-      );
+        return apiErrorWithRequestSession(
+          req,
+          'INVALID_REQUEST',
+          401,
+          error instanceof Error ? error.message : String(error),
+        );
+      })();
     }
 
     // Send a minimal test message

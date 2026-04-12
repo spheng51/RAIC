@@ -64,9 +64,9 @@ describe('proxy-media helpers and route', () => {
   });
 
   it('errors when a chunked payload exceeds the byte limit', async () => {
-    await expect(readProxyBodyWithinLimit(createChunkedStream(['1234', '5678']), 6)).rejects.toThrow(
-      ProxyMediaTooLargeError,
-    );
+    await expect(
+      readProxyBodyWithinLimit(createChunkedStream(['1234', '5678']), 6),
+    ).rejects.toThrow(ProxyMediaTooLargeError);
   });
 
   it('returns 403 when upstream responds with a redirect', async () => {
@@ -114,7 +114,7 @@ describe('proxy-media helpers and route', () => {
         'content-length': '11',
         'content-type': 'image/png',
       }),
-      body: { getReader } as ReadableStream<Uint8Array>,
+      body: { getReader } as unknown as ReadableStream<Uint8Array>,
     });
 
     const { POST } = await import('@/app/api/proxy-media/route');

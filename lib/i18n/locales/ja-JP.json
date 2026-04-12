@@ -3,7 +3,9 @@
     "you": "あなた",
     "confirm": "確認",
     "cancel": "キャンセル",
-    "loading": "読み込み中..."
+    "loading": "読み込み中...",
+    "retry": "再試行",
+    "error": "エラー"
   },
   "home": {
     "slogan": "マルチエージェント対話型教室で生成的に学ぶ",
@@ -46,6 +48,8 @@
     "unknown": "不明",
     "stopDiscussion": "ディスカッションを終了",
     "endQA": "Q&Aを終了",
+    "resizePanel": "チャットパネルの幅を変更",
+    "collapsePanel": "チャットパネルを折りたたむ",
     "tabs": {
       "lecture": "ノート",
       "chat": "チャット"
@@ -113,6 +117,11 @@
     "generating": "生成中...",
     "paused": "一時停止中",
     "generationFailed": "生成に失敗しました",
+    "resizeSidebar": "シーンサイドバーの幅を変更",
+    "collapseSidebar": "シーンサイドバーを折りたたむ",
+    "openScene": "シーン {{index}} を開く: {{title}}",
+    "openGeneratingScene": "生成中のシーンを開く: {{title}}",
+    "failedScene": "{{title}} の生成に失敗しました",
     "confirmSwitchTitle": "シーンの切り替え",
     "confirmSwitchMessage": "現在トピックが進行中です。シーンを切り替えると、現在のトピックが終了します。よろしいですか？",
     "generatingNextPage": "シーンを生成中です。お待ちください...",
@@ -255,6 +264,7 @@
   },
   "classroom": {
     "recentClassrooms": "最近の教室",
+    "loading": "教室を読み込み中...",
     "today": "今日",
     "yesterday": "昨日",
     "daysAgo": "日前",
@@ -299,8 +309,10 @@
     "sessionNotFound": "セッションが見つかりません",
     "sessionNotFoundDesc": "コースの要件を入力して生成プロセスを開始してください。",
     "goBackAndRetry": "戻ってやり直す",
+    "loadingPreview": "生成プレビューを読み込み中",
     "classroomReady": "パーソナライズされたAI学習環境が正常に生成されました。",
     "aiWorking": "AIエージェントが作業中...",
+    "viewWarnings": "生成に関する警告を {{count}} 件表示",
     "textTruncated": "ドキュメントのテキストが長いため、最初の{{n}}文字を使用して生成します",
     "imageTruncated": "{{total}}枚の画像が見つかりましたが、上限の{{max}}枚を超えています。超過分はテキスト説明のみ使用されます",
     "agentGeneration": "教室の役割を生成中",

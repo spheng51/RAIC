@@ -97,7 +97,8 @@ export async function upsertGoogleUser(input: UpsertGoogleUserInput): Promise<Us
   const normalizedEmail = input.email.trim().toLowerCase();
   const displayName = input.displayName.trim() || normalizedEmail;
   const avatarUrl = input.avatarUrl?.trim() || null;
-  const existing = (await findUserByGoogleSub(input.googleSub)) ?? (await findUserByEmail(normalizedEmail));
+  const existing =
+    (await findUserByGoogleSub(input.googleSub)) ?? (await findUserByEmail(normalizedEmail));
 
   const rows = existing
     ? await runPostgresQuery<UserRow>(

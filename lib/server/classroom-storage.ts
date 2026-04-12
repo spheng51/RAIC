@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { NextRequest } from 'next/server';
 import type { Scene, Stage } from '@/lib/types/stage';
+import { preserveStageSharedSimulation } from '@/lib/utils/classroom-presentation';
 
 export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
 export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
@@ -88,15 +89,18 @@ export interface PersistedClassroomData {
 }
 
 function normalizePersistedClassroomData(
-  value: PersistedClassroomData | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
-    ownerUserId?: string | null;
-    organizationId?: string | null;
-  }),
+  value:
+    | PersistedClassroomData
+    | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
+        ownerUserId?: string | null;
+        organizationId?: string | null;
+      }),
 ): PersistedClassroomData {
   return {
     ...value,
     ownerUserId: typeof value.ownerUserId === 'string' ? value.ownerUserId : null,
     organizationId: typeof value.organizationId === 'string' ? value.organizationId : null,
+    stage: preserveStageSharedSimulation(value.stage, value.stage.sharedSimulation ?? null),
   };
 }
 
@@ -153,7 +157,7 @@ export async function persistClassroom(
     id: data.id,
     ownerUserId: data.ownerUserId ?? null,
     organizationId: data.organizationId ?? null,
-    stage: data.stage,
+    stage: preserveStageSharedSimulation(data.stage, data.stage.sharedSimulation),
     scenes: data.scenes,
     createdAt: new Date().toISOString(),
   };
@@ -176,7 +180,18 @@ export async function updateClassroom(
   }
 
   const next = updater(existing);
-  const normalizedNext = normalizePersistedClassroomData(next);
+  const preservedStage = preserveStageSharedSimulation(
+    next.stage,
+    next.stage.sharedSimulation ?? existing.stage.sharedSimulation ?? null,
+  );
+  const normalizedNext = normalizePersistedClassroomData(
+    preservedStage === next.stage
+      ? next
+      : {
+          ...next,
+          stage: preservedStage,
+        },
+  );
   await writePersistedClassroomData(normalizedNext);
   return normalizedNext;
 }
