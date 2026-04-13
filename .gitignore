@@ -71,3 +71,6 @@ next-env.d.ts
 
 # docs
 /docs
+
+run_next_err.txt
+run_next_out.txt
