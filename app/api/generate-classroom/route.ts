@@ -15,6 +15,17 @@ const log = createLogger('GenerateClassroom API');
 
 export const maxDuration = 30;
 
+type ImageProviderOverride = {
+  providerId: string;
+  modelId?: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
+
+type GenerateClassroomRequestBody = Partial<GenerateClassroomInput> & {
+  imageProviderOverride?: ImageProviderOverride;
+};
+
 export async function POST(req: NextRequest) {
   let requirementSnippet: string | undefined;
   try {
@@ -23,9 +34,11 @@ export async function POST(req: NextRequest) {
       return auth;
     }
 
-    const rawBody = (await req.json()) as Partial<GenerateClassroomInput>;
+    const rawBody = (await req.json()) as GenerateClassroomRequestBody;
     requirementSnippet = rawBody.requirement?.substring(0, 60);
-    const body: GenerateClassroomInput = {
+    const body: GenerateClassroomInput & {
+      readonly imageProviderOverride?: ImageProviderOverride;
+    } = {
       requirement: rawBody.requirement || '',
       ...(rawBody.pdfContent ? { pdfContent: rawBody.pdfContent } : {}),
       ...(rawBody.language ? { language: rawBody.language } : {}),
@@ -38,6 +51,22 @@ export async function POST(req: NextRequest) {
         : {}),
       ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
       ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
+      ...(rawBody.enableImageGeneration && rawBody.imageProviderOverride?.providerId
+        ? {
+            imageProviderOverride: {
+              providerId: rawBody.imageProviderOverride.providerId,
+              ...(rawBody.imageProviderOverride.modelId
+                ? { modelId: rawBody.imageProviderOverride.modelId }
+                : {}),
+              ...(rawBody.imageProviderOverride.apiKey
+                ? { apiKey: rawBody.imageProviderOverride.apiKey }
+                : {}),
+              ...(rawBody.imageProviderOverride.baseUrl
+                ? { baseUrl: rawBody.imageProviderOverride.baseUrl }
+                : {}),
+            },
+          }
+        : {}),
     };
     const { requirement } = body;
 
