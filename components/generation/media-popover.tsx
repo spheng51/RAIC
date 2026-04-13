@@ -32,10 +32,11 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { useTTSPreview } from '@/lib/audio/use-tts-preview';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
-import { TTS_PROVIDERS, getTTSVoices } from '@/lib/audio/constants';
+import { TTS_PROVIDERS, getTTSVoices, CUSTOM_ASR_DEFAULT_LANGUAGES } from '@/lib/audio/constants';
 import { ASR_PROVIDERS, getASRSupportedLanguages } from '@/lib/audio/constants';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
+import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
 import type { SettingsSection } from '@/lib/types/settings';
 
 interface MediaPopoverProps {
@@ -83,7 +84,11 @@ const TABS: Array<{ id: TabId; icon: LucideIcon; label: string }> = [
 
 /** Localized TTS provider name (mirrors audio-settings.tsx) */
 function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => string): string {
-  const names: Record<TTSProviderId, string> = {
+  if (isCustomTTSProvider(providerId)) {
+    return providerId;
+  }
+
+  const names: Record<string, string> = {
     'openai-tts': t('settings.providerOpenAITTS'),
     'azure-tts': t('settings.providerAzureTTS'),
     'glm-tts': t('settings.providerGLMTTS'),
@@ -166,8 +171,6 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
     id: string,
     needsKey: boolean,
   ) => !needsKey || !!configs[id]?.apiKey || !!configs[id]?.isServerConfigured;
-
-  const ttsSpeedRange = TTS_PROVIDERS[ttsProviderId]?.speedRange;
 
   // ─── Dynamic browser voices ───
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -275,7 +278,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
         voice: ttsVoice,
         speed: ttsSpeed,
         apiKey: providerConfig?.apiKey,
-        baseUrl: providerConfig?.baseUrl,
+        baseUrl: providerConfig?.baseUrl || providerConfig?.customDefaultBaseUrl,
       });
     } catch (error) {
       const message =
@@ -293,23 +296,45 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
     ttsVoice,
   ]);
 
-  // ASR: only available providers
-  const asrGroups = useMemo(
-    () =>
-      Object.values(ASR_PROVIDERS)
-        .filter((p) => cfgOk(asrProvidersConfig, p.id, p.requiresApiKey))
-        .map((p) => ({
-          groupId: p.id,
-          groupName: p.name,
-          groupIcon: p.icon,
-          available: true,
-          items: getASRSupportedLanguages(p.id).map((l) => ({
-            id: l,
-            name: l,
-          })),
+  // ASR: built-in + custom providers
+  const asrGroups = useMemo(() => {
+    const groups: SelectGroupData[] = [];
+
+    // Built-in providers
+    for (const p of Object.values(ASR_PROVIDERS)) {
+      if (!cfgOk(asrProvidersConfig, p.id, p.requiresApiKey)) continue;
+      groups.push({
+        groupId: p.id,
+        groupName: p.name,
+        groupIcon: p.icon,
+        available: true,
+        items: getASRSupportedLanguages(p.id).map((l) => ({
+          id: l,
+          name: l,
         })),
-    [asrProvidersConfig],
-  );
+      });
+    }
+
+    // Custom providers — only show if at least one model is configured
+    for (const [id, cfg] of Object.entries(asrProvidersConfig)) {
+      if (!isCustomASRProvider(id)) continue;
+      const requiresApiKey = cfg.requiresApiKey === true;
+      const hasApiKey = typeof cfg.apiKey === 'string' && cfg.apiKey.trim().length > 0;
+      const isServerConfigured = cfg.isServerConfigured === true;
+      if (requiresApiKey && !hasApiKey && !isServerConfigured) continue;
+      const customModels = cfg.customModels || [];
+      if (customModels.length === 0) continue;
+      const providerName = cfg.customName || id;
+      groups.push({
+        groupId: id,
+        groupName: providerName,
+        available: true,
+        items: CUSTOM_ASR_DEFAULT_LANGUAGES.map((l) => ({ id: l, name: l })),
+      });
+    }
+
+    return groups;
+  }, [asrProvidersConfig]);
 
   // Auto-select first enabled tab on open
   const handleOpenChange = (isOpen: boolean) => {

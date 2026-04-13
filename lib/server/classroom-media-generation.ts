@@ -364,9 +364,10 @@ export async function generateTTSForClassroom(
   }
 
   const providerId = resolvedTTSProvider.providerId as TTSProviderId;
-  const ttsBaseUrl = resolvedTTSProvider.baseUrl || TTS_PROVIDERS[providerId]?.defaultBaseUrl;
-  const voice = DEFAULT_TTS_VOICES[providerId] || 'default';
-  const format = TTS_PROVIDERS[providerId]?.supportedFormats?.[0] || 'mp3';
+  const ttsProvider = TTS_PROVIDERS[providerId as keyof typeof TTS_PROVIDERS];
+  const ttsBaseUrl = resolvedTTSProvider.baseUrl || ttsProvider?.defaultBaseUrl;
+  const voice = DEFAULT_TTS_VOICES[providerId as keyof typeof DEFAULT_TTS_VOICES] || 'default';
+  const format = ttsProvider?.supportedFormats?.[0] || 'mp3';
 
   for (const scene of scenes) {
     if (!scene.actions) continue;
@@ -384,8 +385,11 @@ export async function generateTTSForClassroom(
         const result = await generateTTS(
           {
             providerId,
-            modelId: resolvedTTSProvider.modelId || DEFAULT_TTS_MODELS[providerId] || '',
             apiKey: resolvedTTSProvider.apiKey,
+            modelId:
+              resolvedTTSProvider.modelId ||
+              DEFAULT_TTS_MODELS[providerId as keyof typeof DEFAULT_TTS_MODELS] ||
+              '',
             baseUrl: ttsBaseUrl,
             voice,
             speed: speechAction.speed,
