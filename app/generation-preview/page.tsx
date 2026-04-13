@@ -53,13 +53,6 @@ interface ClassroomGenerationJobResponse {
   readonly done?: boolean;
 }
 
-type ImageProviderOverride = {
-  providerId: string;
-  modelId?: string;
-  apiKey?: string;
-  baseUrl?: string;
-};
-
 function GenerationPreviewContent() {
   const router = useRouter();
   const { t } = useI18n();

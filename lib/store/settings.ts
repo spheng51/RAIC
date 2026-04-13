@@ -1015,7 +1015,7 @@ export const useSettingsStore = create<SettingsState>()(
                   };
                 }
               }
-              for (const [pid, info] of Object.entries(data.tts)) {
+              for (const pid of Object.keys(data.tts)) {
                 const key = pid as TTSProviderId;
                 if (newTTSConfig[key]) {
                   newTTSConfig[key] = {
@@ -1036,7 +1036,7 @@ export const useSettingsStore = create<SettingsState>()(
                   };
                 }
               }
-              for (const [pid, info] of Object.entries(data.asr)) {
+              for (const pid of Object.keys(data.asr)) {
                 const key = pid as ASRProviderId;
                 if (newASRConfig[key]) {
                   newASRConfig[key] = {
@@ -1057,7 +1057,7 @@ export const useSettingsStore = create<SettingsState>()(
                   };
                 }
               }
-              for (const [pid, info] of Object.entries(data.pdf)) {
+              for (const pid of Object.keys(data.pdf)) {
                 const key = pid as PDFProviderId;
                 if (newPDFConfig[key]) {
                   newPDFConfig[key] = {
@@ -1078,7 +1078,7 @@ export const useSettingsStore = create<SettingsState>()(
                   };
                 }
               }
-              for (const [pid, info] of Object.entries(data.image)) {
+              for (const pid of Object.keys(data.image)) {
                 const key = pid as ImageProviderId;
                 if (newImageConfig[key]) {
                   newImageConfig[key] = {
@@ -1100,7 +1100,7 @@ export const useSettingsStore = create<SettingsState>()(
                 }
               }
               if (data.video) {
-                for (const [pid, info] of Object.entries(data.video)) {
+                for (const pid of Object.keys(data.video)) {
                   const key = pid as VideoProviderId;
                   if (newVideoConfig[key]) {
                     newVideoConfig[key] = {
@@ -1120,7 +1120,7 @@ export const useSettingsStore = create<SettingsState>()(
                 };
               }
               if (data.webSearch) {
-                for (const [pid, info] of Object.entries(data.webSearch)) {
+                for (const pid of Object.keys(data.webSearch)) {
                   const key = pid as WebSearchProviderId;
                   if (newWebSearchConfig[key]) {
                     newWebSearchConfig[key] = {

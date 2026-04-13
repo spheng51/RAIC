@@ -1,7 +1,9 @@
 import type { NextConfig } from 'next';
 
+const standaloneOutputEnabled = !process.env.VERCEL && process.platform !== 'win32';
+
 const nextConfig: NextConfig = {
-  output: process.env.VERCEL ? undefined : 'standalone',
+  output: standaloneOutputEnabled ? 'standalone' : undefined,
   transpilePackages: ['mathml2omml', 'pptxgenjs'],
   serverExternalPackages: [],
   experimental: {

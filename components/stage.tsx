@@ -1250,9 +1250,9 @@ export function Stage({
   const totalActions = currentScene?.actions?.length || 0;
 
   // whiteboard toggle
-  const handleWhiteboardToggle = () => {
+  const handleWhiteboardToggle = useCallback(() => {
     setWhiteboardOpen(!whiteboardOpen);
-  };
+  }, [setWhiteboardOpen, whiteboardOpen]);
 
   const runTeacherPrompt = useCallback(
     async (message: string, { bypassPromptLock = false }: { bypassPromptLock?: boolean } = {}) => {
@@ -1434,7 +1434,10 @@ export function Stage({
   const viewerCanManageSimulation = presentationState?.viewerCanManageSimulation ?? false;
   const viewerCanControlPresentation = presentationState?.viewerCanControlPresentation ?? false;
   const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
-  const presentationParticipants = presentationState?.participants ?? [];
+  const presentationParticipants = useMemo(
+    () => presentationState?.participants ?? [],
+    [presentationState?.participants],
+  );
   const viewerCanInteractWithSimulation = isMultiUserSimulation
     ? (collaborationState?.viewerCanInteract ?? viewerCanManageSimulation)
     : viewerHasSimulationControl;
@@ -1592,6 +1595,7 @@ export function Stage({
       handleNextScene,
       handlePlayPause,
       handleSetPresentationSurface,
+      handleWhiteboardToggle,
       playbackCompleted,
       runTeacherPrompt,
       whiteboardOpen,

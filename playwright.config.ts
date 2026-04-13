@@ -5,10 +5,11 @@ process.env.RAIC_SECRET_ENCRYPTION_KEY ??=
   '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const nodeBinDir = path.dirname(process.execPath);
 const webServerPath = `${nodeBinDir}${path.delimiter}${process.env.PATH ?? ''}`;
+const standaloneOutputEnabled = !process.env.VERCEL && process.platform !== 'win32';
 const ciWebServerCommand =
-  process.platform === 'win32'
-    ? 'corepack pnpm build && corepack pnpm exec next start'
-    : 'corepack pnpm build && node .next/standalone/server.js';
+  standaloneOutputEnabled
+    ? 'corepack pnpm build && node .next/standalone/server.js'
+    : 'corepack pnpm build && corepack pnpm exec next start';
 const useDevServer = process.env.PLAYWRIGHT_USE_DEV_SERVER === 'true';
 const webServerCommand = useDevServer ? 'corepack pnpm dev' : ciWebServerCommand;
 

@@ -34,7 +34,6 @@ interface GoogleJwksResponse {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __raicGoogleJwks:
     | {
         expiresAt: number;

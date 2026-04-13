@@ -20,11 +20,8 @@ export type PostgresExecutor = {
 export type PersistenceMode = 'postgres' | 'json';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __raicPlatformSqlClient: PostgresExecutor | undefined;
-  // eslint-disable-next-line no-var
   var __raicPlatformSchemaPromise: Promise<void> | undefined;
-  // eslint-disable-next-line no-var
   var __raicPlatformJsonLock: Promise<void> | undefined;
 }
 

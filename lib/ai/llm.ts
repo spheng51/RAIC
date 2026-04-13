@@ -25,6 +25,10 @@ export type { ThinkingConfig } from '@/lib/types/provider';
 // Re-export the parameter types accepted by AI SDK
 type GenerateTextParams = Parameters<typeof generateText>[0];
 type StreamTextParams = Parameters<typeof streamText>[0];
+type StreamTextOnError = NonNullable<StreamTextParams['onError']>;
+type StreamTextParamsWithOnError = StreamTextParams & {
+  onError?: StreamTextOnError;
+};
 
 function _extractRequestInfo(params: GenerateTextParams | StreamTextParams) {
   const tools = params.tools ? Object.keys(params.tools as Record<string, unknown>) : undefined;
@@ -75,6 +79,22 @@ function _normalizeErrorCode(error: unknown): string {
     return String((error as { code?: unknown }).code || 'error');
   }
   return 'error';
+}
+
+function createStreamOnErrorHandler(
+  source: string,
+  callerOnError: StreamTextOnError | undefined,
+  metrics: ProviderCallMetrics | null,
+): StreamTextOnError {
+  return async ({ error }) => {
+    if (metrics) {
+      metrics.status = 'error';
+      metrics.errorCode = _normalizeErrorCode(error);
+    }
+
+    log.warn(`[${source}] Stream failed`, error);
+    await callerOnError?.({ error });
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -427,8 +447,16 @@ export function streamLLM<T extends StreamTextParams>(
     // Stream events are consumed by the caller; firstEventMs can be updated in the route.
     metrics.status = 'ok';
   }
-  const injectedParams = injectProviderOptions(params, effectiveThinking);
-  const result = thinkingContext.run(effectiveThinking, () => streamText(injectedParams));
+  const injectedParams = injectProviderOptions(
+    params,
+    effectiveThinking,
+  ) as StreamTextParamsWithOnError;
+  const result = thinkingContext.run(effectiveThinking, () =>
+    streamText({
+      ...injectedParams,
+      onError: createStreamOnErrorHandler(source, injectedParams.onError, metrics),
+    }),
+  );
 
   return result;
 }
