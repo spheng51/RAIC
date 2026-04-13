@@ -9,6 +9,8 @@ const ciWebServerCommand =
   process.platform === 'win32'
     ? 'corepack pnpm build && corepack pnpm exec next start'
     : 'corepack pnpm build && node .next/standalone/server.js';
+const useDevServer = process.env.PLAYWRIGHT_USE_DEV_SERVER === 'true';
+const webServerCommand = useDevServer ? 'corepack pnpm dev' : ciWebServerCommand;
 
 export default defineConfig({
   testDir: './e2e/tests',
@@ -31,9 +33,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI ? ciWebServerCommand : 'corepack pnpm dev',
+    command: webServerCommand,
     url: 'http://localhost:3002',
-    reuseExistingServer: !process.env.CI && process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
+    reuseExistingServer: useDevServer && process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
     timeout: 120_000,
     env: {
       PATH: webServerPath,

@@ -9,7 +9,7 @@ import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
 const runtimeRequire = createRequire(import.meta.url);
 const PLATFORM_DATA_DIR = path.join(process.cwd(), 'data', 'platform');
 const PLATFORM_STORE_PATH = path.join(PLATFORM_DATA_DIR, 'platform-store.json');
-const TRANSIENT_PLATFORM_READ_CODES = new Set(['EPERM', 'EBUSY']);
+const TRANSIENT_PLATFORM_READ_CODES = new Set(['EPERM', 'EBUSY', 'ENOENT']);
 const PLATFORM_READ_RETRY_COUNT = 5;
 
 export type PostgresExecutor = {
@@ -188,7 +188,7 @@ export async function readPlatformStore(): Promise<PlatformStore> {
       return normalizePlatformStore(JSON.parse(content));
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') {
+      if (code === 'ENOENT' && attempt >= PLATFORM_READ_RETRY_COUNT) {
         return structuredClone(EMPTY_PLATFORM_STORE);
       }
       if (TRANSIENT_PLATFORM_READ_CODES.has(code ?? '') && attempt < PLATFORM_READ_RETRY_COUNT) {
