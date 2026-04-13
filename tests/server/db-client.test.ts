@@ -8,6 +8,11 @@ type DbGlobals = typeof globalThis & {
   __raicPlatformSqlClient?: unknown;
 };
 
+type MockPostgresExecutor = {
+  unsafe: <T>(query: string, params?: unknown[]) => Promise<T[]>;
+  begin?: <T>(handler: (executor: MockPostgresExecutor) => Promise<T>) => Promise<T>;
+};
+
 function resetDbGlobals() {
   const globals = globalThis as DbGlobals;
   delete globals.__raicPlatformJsonLock;
@@ -15,26 +20,41 @@ function resetDbGlobals() {
   delete globals.__raicPlatformSqlClient;
 }
 
+function setMockPostgresClient(client: MockPostgresExecutor) {
+  const globals = globalThis as DbGlobals;
+  globals.__raicPlatformSqlClient = client;
+}
+
+const originalCwd = process.cwd();
+let testRoot = '';
+
 describe('db client persistence helpers', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
-    vi.doUnmock('module');
     resetDbGlobals();
+    testRoot = path.join(
+      originalCwd,
+      '.vitest-tmp',
+      `db-client-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testRoot);
   });
 
   afterEach(async () => {
     vi.unstubAllEnvs();
-    vi.doUnmock('module');
     resetDbGlobals();
-    await fs.rm(path.join(process.cwd(), 'data', 'platform'), {
+    vi.restoreAllMocks();
+    await fs.rm(testRoot, {
       recursive: true,
       force: true,
     });
   });
 
   it('uses the JSON fallback when DATABASE_URL is unset', async () => {
-    const { getPersistenceMode, updatePlatformStore, readPlatformStore } = await import('@/lib/db/client');
+    vi.stubEnv('DATABASE_URL', '');
+    const { getPersistenceMode, updatePlatformStore, readPlatformStore } =
+      await import('@/lib/db/client');
 
     expect(await getPersistenceMode()).toBe('json');
 
@@ -56,52 +76,75 @@ describe('db client persistence helpers', () => {
     expect(store.users[0]?.id).toBe('user-1');
   });
 
+  it('retries transient JSON read lock errors', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    const platformDir = path.join(testRoot, 'data', 'platform');
+    const platformStorePath = path.join(platformDir, 'platform-store.json');
+    await fs.mkdir(platformDir, { recursive: true });
+    await fs.writeFile(
+      platformStorePath,
+      JSON.stringify({
+        users: [
+          {
+            id: 'user-1',
+            googleSub: null,
+            email: 'teacher@example.com',
+            displayName: 'Teacher',
+            avatarUrl: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastLoginAt: null,
+          },
+        ],
+      }),
+      'utf8',
+    );
+
+    const actualReadFile = fs.readFile.bind(fs);
+    let attempts = 0;
+    const readFileSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (pathLike, options) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('platform store locked') as NodeJS.ErrnoException;
+        error.code = 'EPERM';
+        throw error;
+      }
+
+      return (await actualReadFile(pathLike, options as never)) as never;
+    });
+
+    const { readPlatformStore } = await import('@/lib/db/client');
+    const store = await readPlatformStore();
+
+    expect(store.users[0]?.id).toBe('user-1');
+    expect(readFileSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('throws when DATABASE_URL is set and Postgres schema initialization fails', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://localhost/raic');
-    vi.doMock('module', () => ({
-      createRequire: () =>
-        ((id: string) => {
-          if (id !== 'postgres') {
-            throw new Error(`Unexpected module request: ${id}`);
-          }
-
-          return () => ({
-            unsafe: vi.fn().mockRejectedValue(new Error('schema init failed')),
-          });
-        }) as NodeJS.Require,
-    }));
+    setMockPostgresClient({
+      unsafe: vi.fn().mockRejectedValue(new Error('schema init failed')),
+    });
 
     const { getPersistenceMode } = await import('@/lib/db/client');
-    await expect(getPersistenceMode()).rejects.toBeTruthy();
+    await expect(getPersistenceMode()).rejects.toThrow('schema init failed');
   });
 
   it('retries schema initialization after a transient failure', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://localhost/raic');
-
-    let shouldFail = true;
-    vi.doMock('module', () => ({
-      createRequire: () =>
-        ((id: string) => {
-          if (id !== 'postgres') {
-            throw new Error(`Unexpected module request: ${id}`);
-          }
-
-          return () => ({
-            unsafe: vi.fn().mockImplementation(async () => {
-              if (shouldFail) {
-                shouldFail = false;
-                throw new Error('schema init failed');
-              }
-              return [];
-            }),
-          });
-        }) as NodeJS.Require,
-    }));
+    const unsafe = vi.fn().mockImplementation(async () => {
+      if (unsafe.mock.calls.length === 1) {
+        throw new Error('schema init failed');
+      }
+      return [];
+    });
+    setMockPostgresClient({ unsafe });
 
     const { getPersistenceMode } = await import('@/lib/db/client');
 
-    await expect(getPersistenceMode()).rejects.toBeTruthy();
+    await expect(getPersistenceMode()).rejects.toThrow('schema init failed');
     await expect(getPersistenceMode()).resolves.toBe('postgres');
+    expect(unsafe).toHaveBeenCalled();
   });
 
   it('preserves all writes when JSON fallback updates overlap', async () => {

@@ -3,7 +3,14 @@ import { redirect } from 'next/navigation';
 import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { GoogleSignInButton } from '@/components/auth/google-sign-in-button';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { getDefaultLandingPath } from '@/lib/auth/authorize';
 import { getCurrentAuth } from '@/lib/auth/current-user';
 
@@ -32,20 +39,21 @@ export default async function SignInPage({
             Sign in with Google to run a safer, teacher-ready AI classroom.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            The new studio path keeps lesson generation, classroom launches, and future roster or policy
-            controls behind a first-party RAIC session while leaving the existing demo flow intact.
+            The new studio path keeps lesson generation, classroom launches, and future roster or
+            policy controls behind a first-party RAIC session while leaving the existing demo flow
+            intact.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {[
               ['Teacher studio', 'Protected lesson creation, preview, and launch'],
               ['Student join links', 'Share time-boxed classroom entry without exposing settings'],
-              ['Admin readiness', 'Role-aware foundations for policy, audit, and school rollout'],
+              [
+                'Server-backed classrooms',
+                'Teacher sessions keep classroom launches and controls on the governed path',
+              ],
             ].map(([title, description]) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-border/60 bg-background/70 p-4"
-              >
+              <div key={title} className="rounded-2xl border border-border/60 bg-background/70 p-4">
                 <p className="text-sm font-semibold text-foreground">{title}</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
               </div>
@@ -58,10 +66,11 @@ export default async function SignInPage({
             <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <ShieldCheck className="size-5" />
             </div>
-            <CardTitle>Teacher and admin sign-in</CardTitle>
+            <CardTitle>Teacher sign-in</CardTitle>
             <CardDescription>
-              Use your Google account to enter the protected RAIC studio. Student participation stays on a
-              separate join-token flow.
+              Use your Google account to enter the protected RAIC studio. Student participation
+              stays on a separate join-token flow, and org-admin rollout can stay disabled until you
+              are ready to assign it explicitly.
             </CardDescription>
           </CardHeader>
           <CardContent>

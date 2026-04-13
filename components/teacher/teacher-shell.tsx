@@ -12,8 +12,7 @@ interface TeacherShellProps {
 }
 
 export function TeacherShell({ auth, children }: TeacherShellProps) {
-  const canAccessAdmin =
-    auth.session.role === 'org_admin' || auth.session.role === 'system_admin';
+  const canAccessAdmin = auth.session.role === 'org_admin' || auth.session.role === 'system_admin';
 
   return (
     <>

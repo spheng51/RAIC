@@ -23,16 +23,19 @@ interface GoogleSignInButtonProps {
   redirectTo?: string;
 }
 
-export function GoogleSignInButton({
-  redirectTo = '/studio',
-}: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ redirectTo = '/studio' }: GoogleSignInButtonProps) {
   const router = useRouter();
   const buttonContainerRef = useRef<HTMLDivElement | null>(null);
   const [nonce, setNonce] = useState<string | null>(null);
+  const [currentOrigin, setCurrentOrigin] = useState<string | null>(null);
   const [isScriptReady, setIsScriptReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    setCurrentOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +68,13 @@ export function GoogleSignInButton({
   }, []);
 
   useEffect(() => {
-    if (!clientId || !isScriptReady || !nonce || !buttonContainerRef.current || !window.google?.accounts?.id) {
+    if (
+      !clientId ||
+      !isScriptReady ||
+      !nonce ||
+      !buttonContainerRef.current ||
+      !window.google?.accounts?.id
+    ) {
       return;
     }
 
@@ -131,7 +140,18 @@ export function GoogleSignInButton({
     return (
       <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
         <AlertCircle className="mt-0.5 size-4 shrink-0" />
-        <span>NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured yet.</span>
+        <div className="space-y-1">
+          <p>NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured yet.</p>
+          <p className="text-xs leading-5 text-amber-800/90 dark:text-amber-200/90">
+            Create a Google Web application client, add{' '}
+            <code className="rounded bg-amber-500/10 px-1 py-0.5 font-mono">
+              {currentOrigin ?? 'http://localhost:3005'}
+            </code>{' '}
+            as an Authorized JavaScript origin, set the client ID in{' '}
+            <code className="rounded bg-amber-500/10 px-1 py-0.5 font-mono">.env.local</code>, and
+            restart <code className="rounded bg-amber-500/10 px-1 py-0.5 font-mono">pnpm dev</code>.
+          </p>
+        </div>
       </div>
     );
   }

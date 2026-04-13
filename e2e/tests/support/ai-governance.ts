@@ -5,6 +5,7 @@ import path from 'path';
 import type { APIRequestContext, BrowserContext } from '@playwright/test';
 import type {
   AuditLogRecord,
+  JoinTokenRecord,
   MembershipRecord,
   OrganizationAIPolicyRecord,
   OrganizationKind,
@@ -16,6 +17,7 @@ import type {
   UserProviderOverrideRecord,
   UserRecord,
 } from '../../../lib/db/schema';
+import type { SharedSimulation } from '../../../lib/types/stage';
 
 export const APP_BASE_URL = 'http://localhost:3002';
 
@@ -25,6 +27,23 @@ const CLASSROOMS_DIR = path.join(DATA_DIR, 'classrooms');
 const CLASSROOM_JOBS_DIR = path.join(DATA_DIR, 'classroom-jobs');
 const ENCRYPTION_VERSION = 'v1';
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const EMPTY_PLATFORM_STORE: PlatformStore = {
+  users: [],
+  organizations: [],
+  memberships: [],
+  sessions: [],
+  joinTokens: [],
+  auditLogs: [],
+  organizationAiPolicies: [],
+  organizationProviderConfigs: [],
+  userProviderOverrides: [],
+};
+const TEST_SLIDE_THEME = {
+  backgroundColor: '#ffffff',
+  themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4'],
+  fontColor: '#333333',
+  fontName: 'Inter',
+};
 
 export interface SeededAuthSession {
   token: string;
@@ -39,6 +58,12 @@ export interface MockOpenAIHit {
   path: string;
   authorization: string | undefined;
   body: string;
+}
+
+export interface MockMiroFishHit {
+  method: string;
+  path: string;
+  search: string;
 }
 
 function decodeConfiguredKey(rawKey: string): Buffer {
@@ -111,7 +136,10 @@ export function createAuthSession(params: {
   const organizationName = params.organizationName ?? 'Governed School';
   const organizationSlug =
     params.organizationSlug ??
-    organizationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    organizationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   const token = `${params.userId}-session-token`;
 
   const user: UserRecord = {
@@ -241,6 +269,33 @@ export function createUserProviderOverride(params: {
   };
 }
 
+export function createJoinToken(params: {
+  classroomId: string;
+  createdByUserId: string;
+  organizationId?: string | null;
+  displayName: string;
+  rawToken: string;
+  expiresAt?: string;
+}) {
+  const createdAt = nowIso();
+  const expiresAt = params.expiresAt ?? futureIso(1);
+
+  return {
+    rawToken: params.rawToken,
+    record: {
+      id: randomUUID(),
+      classroomId: params.classroomId,
+      createdByUserId: params.createdByUserId,
+      organizationId: params.organizationId ?? null,
+      displayName: params.displayName,
+      tokenHash: hashToken(params.rawToken),
+      createdAt,
+      expiresAt,
+      consumedAt: null,
+    } satisfies JoinTokenRecord,
+  };
+}
+
 export async function resetRaicData() {
   await Promise.all([
     fs.rm(path.dirname(PLATFORM_STORE_PATH), { recursive: true, force: true }),
@@ -251,6 +306,7 @@ export async function resetRaicData() {
 
 export async function writePlatformStore(params: {
   sessions: SeededAuthSession[];
+  joinTokens?: JoinTokenRecord[];
   organizationAiPolicies?: OrganizationAIPolicyRecord[];
   organizationProviderConfigs?: OrganizationProviderConfigRecord[];
   userProviderOverrides?: UserProviderOverrideRecord[];
@@ -273,7 +329,7 @@ export async function writePlatformStore(params: {
     organizations: [...organizations.values()],
     memberships: [...memberships.values()],
     sessions: [...sessions.values()],
-    joinTokens: [],
+    joinTokens: [...(params.joinTokens ?? [])],
     auditLogs: [...(params.auditLogs ?? [])],
     organizationAiPolicies: [...(params.organizationAiPolicies ?? [])],
     organizationProviderConfigs: [...(params.organizationProviderConfigs ?? [])],
@@ -285,8 +341,85 @@ export async function writePlatformStore(params: {
 }
 
 export async function readPlatformStore(): Promise<PlatformStore> {
-  const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf8');
-  return JSON.parse(content) as PlatformStore;
+  try {
+    const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf8');
+    return JSON.parse(content) as PlatformStore;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return structuredClone(EMPTY_PLATFORM_STORE);
+    }
+    throw error;
+  }
+}
+
+export async function writeClassroomData(params: {
+  classroomId: string;
+  ownerUserId: string | null;
+  organizationId?: string | null;
+  stageName: string;
+  sceneTitles: string[];
+  sharedSimulation?: SharedSimulation | null;
+}) {
+  const createdAtIso = nowIso();
+  const createdAtMs = Date.now();
+  const stage = {
+    id: params.classroomId,
+    name: params.stageName,
+    description: `${params.stageName} classroom`,
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+    language: 'en-US',
+    style: 'professional',
+    sharedSimulation: params.sharedSimulation ?? undefined,
+  };
+  const scenes = params.sceneTitles.map((title, index) => ({
+    id: `${params.classroomId}-scene-${index + 1}`,
+    stageId: params.classroomId,
+    type: 'slide' as const,
+    title,
+    order: index,
+    content: {
+      type: 'slide' as const,
+      canvas: {
+        id: `${params.classroomId}-slide-${index + 1}`,
+        viewportSize: 1000,
+        viewportRatio: 0.5625,
+        theme: TEST_SLIDE_THEME,
+        elements: [
+          {
+            type: 'text',
+            id: `${params.classroomId}-title-${index + 1}`,
+            content: title,
+            left: 50,
+            top: 50,
+            width: 900,
+            height: 100,
+          },
+        ],
+      },
+    },
+    createdAt: createdAtMs,
+    updatedAt: createdAtMs,
+  }));
+
+  const classroom = {
+    id: params.classroomId,
+    ownerUserId: params.ownerUserId,
+    organizationId: params.organizationId ?? null,
+    stage,
+    scenes,
+    createdAt: createdAtIso,
+  };
+
+  await fs.mkdir(CLASSROOMS_DIR, { recursive: true });
+  await fs.writeFile(
+    path.join(CLASSROOMS_DIR, `${params.classroomId}.json`),
+    JSON.stringify(classroom, null, 2),
+    'utf8',
+  );
+
+  return classroom;
 }
 
 export async function addSessionCookie(context: BrowserContext, token: string) {
@@ -345,9 +478,8 @@ export async function startMockOpenAIServer() {
     hits.push({
       method: req.method ?? 'GET',
       path: req.url ?? '/',
-      authorization: typeof req.headers.authorization === 'string'
-        ? req.headers.authorization
-        : undefined,
+      authorization:
+        typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
       body,
     });
 
@@ -365,6 +497,284 @@ export async function startMockOpenAIServer() {
 
   return {
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    hits,
+    close: async () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildMockMiroFishPage(params: {
+  kind: 'simulation' | 'report';
+  resourceId: string;
+  query: URLSearchParams;
+}) {
+  const queryState = {
+    embed: params.query.get('embed') ?? '',
+    classroomToken: params.query.get('classroomToken') ?? '',
+    participantToken: params.query.get('participantToken') ?? '',
+    mirofishSessionId: params.query.get('mirofishSessionId') ?? '',
+  };
+  const queryJson = JSON.stringify(queryState);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mock MiroFish ${escapeHtml(params.kind)}</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(96, 165, 250, 0.3), transparent 35%),
+          radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.22), transparent 40%),
+          #020617;
+        color: #e2e8f0;
+      }
+      main {
+        padding: 24px;
+      }
+      .shell {
+        max-width: 960px;
+        margin: 0 auto;
+        display: grid;
+        gap: 18px;
+      }
+      .panel {
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 18px;
+        padding: 18px;
+        background: rgba(15, 23, 42, 0.82);
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.35);
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #93c5fd;
+      }
+      h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      p {
+        margin: 8px 0 0;
+        color: #cbd5e1;
+      }
+      .grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+      button {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 999px;
+        padding: 10px 14px;
+        background: rgba(30, 41, 59, 0.92);
+        color: #f8fafc;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: rgba(125, 211, 252, 0.7);
+        background: rgba(37, 99, 235, 0.34);
+      }
+      code,
+      pre {
+        font-family: "Consolas", "SFMono-Regular", monospace;
+      }
+      pre {
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        border-radius: 14px;
+        background: rgba(2, 6, 23, 0.88);
+        color: #bfdbfe;
+      }
+      [data-standalone-chrome] {
+        display: ${queryState.embed === '1' ? 'none' : 'block'};
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="shell">
+        <section class="panel">
+          <div class="eyebrow">Mock MiroFish ${escapeHtml(params.kind)}</div>
+          <h1>${escapeHtml(params.kind === 'simulation' ? 'Simulation' : 'Report')}: ${escapeHtml(params.resourceId)}</h1>
+          <p data-testid="mirofish-mode">Embed mode: ${escapeHtml(queryState.embed === '1' ? 'enabled' : 'disabled')}</p>
+          <p data-standalone-chrome>Standalone wrapper chrome stays visible when embed mode is off.</p>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Wrapper Payload</div>
+          <pre data-testid="mirofish-query-state">${escapeHtml(queryJson)}</pre>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Host Events</div>
+          <div class="grid">
+            <button type="button" data-testid="emit-ready" data-payload='{"type":"ready"}'>Send ready</button>
+            <button type="button" data-testid="emit-running" data-payload='{"type":"runStatus","status":"running"}'>Run running</button>
+            <button type="button" data-testid="emit-completed" data-payload='{"type":"runStatus","status":"completed"}'>Run completed</button>
+            <button type="button" data-testid="emit-report-ready" data-payload='{"type":"reportReady"}'>Report ready</button>
+            <button type="button" data-testid="emit-presence-two" data-payload='{"type":"presenceSummary","participantCount":2}'>Presence 2</button>
+            <button type="button" data-testid="emit-presence-three" data-payload='{"type":"presenceSummary","participantCount":3}'>Presence 3</button>
+            <button type="button" data-testid="emit-session-live" data-payload='{"type":"sessionStatus","status":"live","message":"Collaboration is live"}'>Session live</button>
+            <button type="button" data-testid="emit-session-frozen" data-payload='{"type":"sessionStatus","status":"frozen","message":"Collaboration is frozen"}'>Session frozen</button>
+            <button type="button" data-testid="emit-session-closed" data-payload='{"type":"sessionStatus","status":"closed","message":"Collaboration is closed"}'>Session closed</button>
+            <button type="button" data-testid="emit-error" data-payload='{"type":"error","message":"Mock MiroFish forced an embed failure."}'>Trigger error</button>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      (() => {
+        const queryState = ${queryJson};
+        const pageKind = ${JSON.stringify(params.kind)};
+
+        function post(payload) {
+          window.parent.postMessage(payload, '*');
+        }
+
+        function emitInitialEvents() {
+          if (queryState.embed !== '1') {
+            return;
+          }
+
+          if (pageKind === 'report') {
+            post({ type: 'reportReady' });
+            return;
+          }
+
+          post({ type: 'ready' });
+          post({ type: 'runStatus', status: 'running' });
+        }
+
+        window.addEventListener('load', () => {
+          emitInitialEvents();
+        });
+
+        document.querySelectorAll('[data-payload]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const payload = button.getAttribute('data-payload');
+            if (!payload) {
+              return;
+            }
+
+            post(JSON.parse(payload));
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>`;
+}
+
+export async function startMockMiroFishServer(params?: { port?: number }) {
+  const hits: MockMiroFishHit[] = [];
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    hits.push({
+      method: req.method ?? 'GET',
+      path: url.pathname,
+      search: url.search,
+    });
+
+    const simulationMatch = url.pathname.match(/^\/simulation\/([^/]+)\/start$/);
+    if (req.method === 'GET' && simulationMatch) {
+      res.statusCode = 200;
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end(
+        buildMockMiroFishPage({
+          kind: 'simulation',
+          resourceId: decodeURIComponent(simulationMatch[1] ?? ''),
+          query: url.searchParams,
+        }),
+      );
+      return;
+    }
+
+    const reportMatch = url.pathname.match(/^\/report\/([^/]+)$/);
+    if (req.method === 'GET' && reportMatch) {
+      res.statusCode = 200;
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end(
+        buildMockMiroFishPage({
+          kind: 'report',
+          resourceId: decodeURIComponent(reportMatch[1] ?? ''),
+          query: url.searchParams,
+        }),
+      );
+      return;
+    }
+
+    const apiSimulationMatch = url.pathname.match(/^\/api\/simulation\/([^/]+)$/);
+    if (req.method === 'GET' && apiSimulationMatch) {
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          success: true,
+          simulationId: decodeURIComponent(apiSimulationMatch[1] ?? ''),
+        }),
+      );
+      return;
+    }
+
+    const apiReportMatch = url.pathname.match(/^\/api\/report\/([^/]+)$/);
+    if (req.method === 'GET' && apiReportMatch) {
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          success: true,
+          reportId: decodeURIComponent(apiReportMatch[1] ?? ''),
+        }),
+      );
+      return;
+    }
+
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('Not found');
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(params?.port ?? 0, '127.0.0.1', () => resolve());
+  });
+
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Failed to start mock MiroFish server');
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
     hits,
     close: async () =>
       new Promise<void>((resolve, reject) => {

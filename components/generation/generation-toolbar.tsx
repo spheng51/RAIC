@@ -151,7 +151,7 @@ export function GenerationToolbar({
       <div className="w-px h-4 bg-border/60 mx-1" />
 
       {/* ── PDF (parser + upload) combined Popover ── */}
-        <Popover>
+      <Popover>
         <PopoverTrigger asChild>
           {pdfFile ? (
             <div className="relative inline-flex items-center gap-1.5">
@@ -176,11 +176,7 @@ export function GenerationToolbar({
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              aria-label={t('toolbar.uploadPdf')}
-              className={pillMuted}
-            >
+            <button type="button" aria-label={t('toolbar.uploadPdf')} className={pillMuted}>
               <Paperclip className="size-3.5" />
             </button>
           )}
@@ -234,8 +230,8 @@ export function GenerationToolbar({
               }}
             />
             {pdfFile ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
                   <div className="size-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
                     <FileText className="size-4 text-violet-600 dark:text-violet-400" />
                   </div>
@@ -389,13 +385,13 @@ export function GenerationToolbar({
       {/* ── Language pill ── */}
       <Tooltip>
         <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={t('toolbar.languageHint')}
-              onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
-              className={pillMuted}
-            >
-              <Globe className="size-3.5" />
+          <button
+            type="button"
+            aria-label={t('toolbar.languageHint')}
+            onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
+            className={pillMuted}
+          >
+            <Globe className="size-3.5" />
             <span>{language === 'zh-CN' ? '中文' : 'EN'}</span>
           </button>
         </TooltipTrigger>
@@ -457,7 +453,11 @@ function ModelSelectorPopover({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label={currentModelId ? `${currentProviderConfig?.name} / ${currentModelId}` : t('settings.selectModel')}
+              aria-label={
+                currentModelId
+                  ? `${currentProviderConfig?.name} / ${currentModelId}`
+                  : t('settings.selectModel')
+              }
               className={cn(
                 'inline-flex items-center justify-center size-7 rounded-full transition-all cursor-pointer select-none',
                 'ring-1 ring-border/60 hover:ring-border hover:bg-muted/60',
@@ -499,11 +499,11 @@ function ModelSelectorPopover({
             {configuredProviders.map((provider) => {
               const isActive = currentProviderId === provider.id;
               return (
-              <button
-                key={provider.id}
-                type="button"
-                onClick={() => setDrillProvider(provider.id)}
-                className={cn(
+                <button
+                  key={provider.id}
+                  type="button"
+                  onClick={() => setDrillProvider(provider.id)}
+                  className={cn(
                     'w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors border-b border-border/30',
                     isActive ? 'bg-violet-50/50 dark:bg-violet-950/10' : 'hover:bg-muted/50',
                   )}
@@ -571,13 +571,13 @@ function ModelSelectorPopover({
             {activeProvider.models.map((model) => {
               const isSelected = currentProviderId === drillProvider && currentModelId === model.id;
               return (
-              <button
-                key={model.id}
-                type="button"
-                aria-label={`${activeProvider.name} ${model.name}`}
-                onClick={() => {
-                  setModel(drillProvider, model.id);
-                  setPopoverOpen(false);
+                <button
+                  key={model.id}
+                  type="button"
+                  aria-label={`${activeProvider.name} ${model.name}`}
+                  onClick={() => {
+                    setModel(drillProvider, model.id);
+                    setPopoverOpen(false);
                   }}
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-left transition-colors border-b border-border/30',

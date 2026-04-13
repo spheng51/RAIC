@@ -56,11 +56,14 @@ export async function findOrganizationAIPolicy(
   );
 }
 
-export async function upsertOrganizationAIPolicy(input: {
-  organizationId: string;
-  allowPersonalOverrides: boolean;
-  allowPersonalCustomBaseUrls: boolean;
-}, executor?: PostgresExecutor): Promise<OrganizationAIPolicyRecord> {
+export async function upsertOrganizationAIPolicy(
+  input: {
+    organizationId: string;
+    allowPersonalOverrides: boolean;
+    allowPersonalCustomBaseUrls: boolean;
+  },
+  executor?: PostgresExecutor,
+): Promise<OrganizationAIPolicyRecord> {
   const now = new Date().toISOString();
 
   const rows = executor
@@ -94,7 +97,7 @@ export async function upsertOrganizationAIPolicy(input: {
         ],
       )
     : await runPostgresQuery<OrganizationAIPolicyRow>(
-    `INSERT INTO organization_ai_policies (
+        `INSERT INTO organization_ai_policies (
        id,
        organization_id,
        allow_personal_overrides,
@@ -114,14 +117,14 @@ export async function upsertOrganizationAIPolicy(input: {
        allow_personal_custom_base_urls,
        created_at,
        updated_at`,
-    [
-      randomUUID(),
-      input.organizationId,
-      input.allowPersonalOverrides,
-      input.allowPersonalCustomBaseUrls,
-      now,
-    ],
-  );
+        [
+          randomUUID(),
+          input.organizationId,
+          input.allowPersonalOverrides,
+          input.allowPersonalCustomBaseUrls,
+          now,
+        ],
+      );
 
   if (rows) {
     return mapRow(rows[0]);

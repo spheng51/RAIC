@@ -27,10 +27,7 @@ interface AttachMiroFishBody {
 
 const log = createLogger('Classroom MiroFish Attach');
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
     return auth;
@@ -38,7 +35,12 @@ export async function POST(
 
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid classroom id',
+    );
   }
 
   const access = await requireClassroomAccess(request, id);
@@ -48,7 +50,12 @@ export async function POST(
 
   const classroom = await readClassroom(id);
   if (!classroom) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
   const body = (await request.json()) as AttachMiroFishBody;
@@ -128,7 +135,12 @@ export async function POST(
   }));
 
   if (!updated) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
   const hadExistingAttachment = Boolean(classroom.stage.sharedSimulation);

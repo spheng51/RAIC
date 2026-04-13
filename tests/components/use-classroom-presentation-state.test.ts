@@ -11,7 +11,10 @@ class MockEventSource {
   readonly url: string;
   readonly close = vi.fn();
   onerror: ((event: Event) => void) | null = null;
-  private readonly listeners = new Map<string, Set<(event: Event | MessageEvent<string>) => void>>();
+  private readonly listeners = new Map<
+    string,
+    Set<(event: Event | MessageEvent<string>) => void>
+  >();
 
   constructor(url: string) {
     this.url = url;
@@ -81,9 +84,8 @@ async function mountHook(
   onStateChange: (state: ClassroomPresentationStatePayload | null) => void,
   initialClassroomId = 'room-1',
 ): Promise<MountedHook> {
-  const { useClassroomPresentationState } = await import(
-    '@/lib/hooks/use-classroom-presentation-state'
-  );
+  const { useClassroomPresentationState } =
+    await import('@/lib/hooks/use-classroom-presentation-state');
 
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -121,8 +123,9 @@ describe('useClassroomPresentationState', () => {
     vi.useFakeTimers();
     fetchMock.mockReset();
     MockEventSource.reset();
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('EventSource', MockEventSource);
     (window as typeof window & { fetch?: typeof fetch }).fetch = fetchMock as typeof fetch;

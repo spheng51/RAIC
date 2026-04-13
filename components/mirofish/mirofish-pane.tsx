@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Shield, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type {
-  ClassroomCollaborationInteractionReason,
-} from '@/lib/types/classroom-collaboration';
+import type { ClassroomCollaborationInteractionReason } from '@/lib/types/classroom-collaboration';
 import type {
   PresentationSurface,
   SharedSimulationCollaborationMode,
@@ -152,6 +150,23 @@ export function MiroFishPane({
       loadTimeoutRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    setPaneState((current) => {
+      const base = resolvePaneState(current);
+      if (base.pinnedSrc === nextSource) {
+        return base;
+      }
+
+      recoveredAttemptRef.current = null;
+      return {
+        ...base,
+        pinnedSrc: nextSource,
+        frameState: 'loading',
+        errorMessage: null,
+      };
+    });
+  }, [nextSource, resolvePaneState]);
 
   const markReady = useCallback(
     (event: MiroFishHostEvent) => {

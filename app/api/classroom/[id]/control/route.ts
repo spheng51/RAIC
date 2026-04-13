@@ -23,10 +23,7 @@ interface ControlBody {
 
 const log = createLogger('Classroom Presentation Control');
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
     return auth;
@@ -34,7 +31,12 @@ export async function PATCH(
 
   const { id } = await params;
   if (!isValidClassroomId(id)) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid classroom id');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid classroom id',
+    );
   }
 
   const access = await requireClassroomAccess(request, id);
@@ -44,7 +46,12 @@ export async function PATCH(
 
   const snapshot = await getClassroomPresentationSnapshot(id);
   if (!snapshot) {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
   }
 
   if (!snapshot.sharedSimulation) {
@@ -67,7 +74,12 @@ export async function PATCH(
 
   const body = (await request.json()) as ControlBody;
   if (body.action !== 'grant' && body.action !== 'revoke') {
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, 'Invalid action');
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Invalid action',
+    );
   }
 
   const targetSessionId = body.targetSessionId?.trim();

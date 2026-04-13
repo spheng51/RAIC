@@ -6,7 +6,7 @@ import { preserveStageSharedSimulation } from '@/lib/utils/classroom-presentatio
 
 export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
 export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
-const ATOMIC_WRITE_RETRY_CODES = new Set(['EACCES', 'EPERM']);
+const ATOMIC_WRITE_RETRY_CODES = new Set(['EACCES', 'EPERM', 'ENOENT']);
 const ATOMIC_WRITE_MAX_ATTEMPTS = 4;
 const ATOMIC_WRITE_RETRY_MS = 25;
 
@@ -36,9 +36,15 @@ async function waitForAtomicWriteRetry(attempt: number) {
   await new Promise((resolve) => setTimeout(resolve, ATOMIC_WRITE_RETRY_MS * attempt));
 }
 
-async function replaceFileWithRetry(tempFilePath: string, filePath: string) {
+export async function writeJsonFileAtomic(filePath: string, data: unknown) {
+  const dir = path.dirname(filePath);
+  await ensureDir(dir);
+
+  const tempFilePath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const content = JSON.stringify(data, null, 2);
   for (let attempt = 1; attempt <= ATOMIC_WRITE_MAX_ATTEMPTS; attempt += 1) {
     try {
+      await fs.writeFile(tempFilePath, content, 'utf-8');
       await fs.rename(tempFilePath, filePath);
       return;
     } catch (error) {
@@ -47,22 +53,9 @@ async function replaceFileWithRetry(tempFilePath: string, filePath: string) {
       }
 
       await fs.rm(filePath, { force: true }).catch(() => undefined);
+      await fs.rm(tempFilePath, { force: true }).catch(() => undefined);
       await waitForAtomicWriteRetry(attempt);
     }
-  }
-}
-
-export async function writeJsonFileAtomic(filePath: string, data: unknown) {
-  const dir = path.dirname(filePath);
-  await ensureDir(dir);
-
-  const tempFilePath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  const content = JSON.stringify(data, null, 2);
-  try {
-    await fs.writeFile(tempFilePath, content, 'utf-8');
-    await replaceFileWithRetry(tempFilePath, filePath);
-  } finally {
-    await fs.rm(tempFilePath, { force: true }).catch(() => undefined);
   }
 }
 
@@ -89,10 +82,12 @@ export interface PersistedClassroomData {
 }
 
 function normalizePersistedClassroomData(
-  value: PersistedClassroomData | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
-    ownerUserId?: string | null;
-    organizationId?: string | null;
-  }),
+  value:
+    | PersistedClassroomData
+    | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
+        ownerUserId?: string | null;
+        organizationId?: string | null;
+      }),
 ): PersistedClassroomData {
   return {
     ...value,
@@ -190,7 +185,6 @@ export async function updateClassroom(
           stage: preservedStage,
         },
   );
-
   await writePersistedClassroomData(normalizedNext);
   return normalizedNext;
 }

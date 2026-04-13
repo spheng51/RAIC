@@ -2,7 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CLASSROOM_ACCESS_COOKIE_NAME } from '@/lib/auth/constants';
-import { getRequestAuth, resolveAuthContextFromToken, type AuthContext } from '@/lib/auth/current-user';
+import {
+  getRequestAuth,
+  resolveAuthContextFromToken,
+  type AuthContext,
+} from '@/lib/auth/current-user';
 import { findLatestAuditLogByActionAndResource } from '@/lib/db/repositories/audit-logs';
 import { hashToken } from '@/lib/auth/session';
 import { findJoinTokenByHash } from '@/lib/db/repositories/join-tokens';
@@ -18,8 +22,14 @@ export interface ClassroomAccessContext {
   classroom: PersistedClassroomData;
 }
 
+const CLASSROOM_AUTH_RETRY_COUNT = 5;
+
 function isSecureCookieRequest() {
   return process.env.NODE_ENV === 'production';
+}
+
+async function waitForRetry(attempt: number) {
+  await new Promise((resolve) => setTimeout(resolve, attempt * 25));
 }
 
 export function attachClassroomAccessCookie(
@@ -53,6 +63,10 @@ export function clearClassroomAccessCookie(response: NextResponse) {
 export async function findValidJoinToken(rawToken: string) {
   if (!rawToken) return null;
 
+  // Classroom join links remain reusable until expiry in v1. We intentionally
+  // validate against expiry here without consuming the token so students can
+  // re-enter from the same browser and teachers can share one live link across
+  // a classroom window. consumedAt is reserved for a future single-use mode.
   const joinToken = await findJoinTokenByHash(hashToken(rawToken));
   if (!joinToken) return null;
 
@@ -130,6 +144,21 @@ async function resolveClassroomOwnership(
   return backfilled ?? classroom;
 }
 
+async function resolveClassroomAuthWithRetry(classroomToken: string) {
+  for (let attempt = 1; attempt <= CLASSROOM_AUTH_RETRY_COUNT; attempt += 1) {
+    const classroomAuth = await resolveAuthContextFromToken(classroomToken);
+    if (classroomAuth) {
+      return classroomAuth;
+    }
+
+    if (attempt < CLASSROOM_AUTH_RETRY_COUNT) {
+      await waitForRetry(attempt);
+    }
+  }
+
+  return null;
+}
+
 function canWebSessionAccessClassroom(
   auth: AuthContext,
   classroom: PersistedClassroomData,
@@ -177,12 +206,15 @@ export async function requireClassroomAccess(
     return classroomAccessError('Classroom access required');
   }
 
-  const classroomAuth = await resolveAuthContextFromToken(classroomToken);
+  const classroomAuth = await resolveClassroomAuthWithRetry(classroomToken);
   if (!classroomAuth) {
     return classroomAccessError('Classroom session is invalid or has expired');
   }
 
-  if (classroomAuth.session.kind !== 'classroom' || classroomAuth.session.classroomId !== classroomId) {
+  if (
+    classroomAuth.session.kind !== 'classroom' ||
+    classroomAuth.session.classroomId !== classroomId
+  ) {
     return classroomAccessError('This classroom session does not match the requested classroom');
   }
 

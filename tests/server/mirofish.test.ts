@@ -1,41 +1,43 @@
 import { promises as fs } from 'fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('MiroFish server helpers', () => {
-  const createdClassroomIds = new Set<string>();
   const originalEnv = {
     MIROFISH_BASE_URL: process.env.MIROFISH_BASE_URL,
     MIROFISH_API_BASE_URL: process.env.MIROFISH_API_BASE_URL,
     MIROFISH_API_KEY: process.env.MIROFISH_API_KEY,
     MIROFISH_EMBED_SECRET: process.env.MIROFISH_EMBED_SECRET,
   };
+  const originalCwd = process.cwd();
+  let testRoot = '';
 
   beforeEach(() => {
+    vi.resetModules();
     vi.useFakeTimers();
+    testRoot = path.join(
+      originalCwd,
+      '.vitest-tmp',
+      `mirofish-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testRoot);
     process.env.MIROFISH_BASE_URL = 'https://mirofish.example';
     process.env.MIROFISH_API_BASE_URL = 'https://mirofish.example/api';
     process.env.MIROFISH_API_KEY = 'test-api-key';
     process.env.MIROFISH_EMBED_SECRET = 'test-embed-secret';
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers();
     process.env.MIROFISH_BASE_URL = originalEnv.MIROFISH_BASE_URL;
     process.env.MIROFISH_API_BASE_URL = originalEnv.MIROFISH_API_BASE_URL;
     process.env.MIROFISH_API_KEY = originalEnv.MIROFISH_API_KEY;
     process.env.MIROFISH_EMBED_SECRET = originalEnv.MIROFISH_EMBED_SECRET;
-  });
-
-  afterEach(async () => {
-    if (createdClassroomIds.size === 0) {
-      return;
-    }
-
-    const { resolveClassroomJsonPath } = await import('@/lib/server/classroom-storage');
-    for (const classroomId of createdClassroomIds) {
-      await fs.rm(resolveClassroomJsonPath(classroomId), { force: true }).catch(() => undefined);
-      createdClassroomIds.delete(classroomId);
-    }
+    vi.restoreAllMocks();
+    await fs.rm(testRoot, {
+      recursive: true,
+      force: true,
+    });
   });
 
   it('builds embed-ready run and report URLs', async () => {
@@ -110,7 +112,6 @@ describe('MiroFish server helpers', () => {
     const { persistClassroom, readClassroom, updateClassroom } =
       await import('@/lib/server/classroom-storage');
     const classroomId = `mirofish-contract-${Math.random().toString(36).slice(2, 10)}`;
-    createdClassroomIds.add(classroomId);
 
     const sharedSimulation = {
       provider: 'mirofish' as const,

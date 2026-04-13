@@ -21,12 +21,15 @@ import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useExportPPTX } from '@/lib/export/use-export-pptx';
+import { Badge } from './ui/badge';
 
 interface HeaderProps {
   readonly currentSceneTitle: string;
+  readonly classroomSource?: 'public-demo' | 'teacher-server' | null;
+  readonly homePath?: string;
 }
 
-export function Header({ currentSceneTitle }: HeaderProps) {
+export function Header({ currentSceneTitle, classroomSource, homePath }: HeaderProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
@@ -47,6 +50,13 @@ export function Header({ currentSceneTitle }: HeaderProps) {
     generatingOutlines.length === 0 &&
     failedOutlines.length === 0 &&
     Object.values(mediaTasks).every((task) => task.status === 'done' || task.status === 'failed');
+
+  const classroomSourceLabel =
+    classroomSource === 'teacher-server'
+      ? t('classroom.teacherBackedBadge')
+      : classroomSource === 'public-demo'
+        ? t('classroom.localDemoBadge')
+        : null;
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +85,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
       <header className="h-20 px-8 flex items-center justify-between z-10 bg-transparent gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push(homePath || '/')}
             type="button"
             aria-label={t('generation.backToHome')}
             className="shrink-0 p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
@@ -87,12 +97,22 @@ export function Header({ currentSceneTitle }: HeaderProps) {
             <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 dark:text-gray-500 mb-0.5">
               {t('stage.currentScene')}
             </span>
-            <h1
-              className="text-xl font-bold text-gray-800 dark:text-gray-200 tracking-tight truncate"
-              suppressHydrationWarning
-            >
-              {currentSceneTitle || t('common.loading')}
-            </h1>
+            <div className="flex items-center gap-2 min-w-0">
+              <h1
+                className="text-xl font-bold text-gray-800 dark:text-gray-200 tracking-tight truncate"
+                suppressHydrationWarning
+              >
+                {currentSceneTitle || t('common.loading')}
+              </h1>
+              {classroomSourceLabel ? (
+                <Badge
+                  variant={classroomSource === 'teacher-server' ? 'secondary' : 'outline'}
+                  className="max-w-[14rem] truncate"
+                >
+                  {classroomSourceLabel}
+                </Badge>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -187,7 +207,13 @@ export function Header({ currentSceneTitle }: HeaderProps) {
             }}
             disabled={!canExport || isExporting}
             type="button"
-            aria-label={canExport ? (isExporting ? t('export.exporting') : t('export.pptx')) : t('share.notReady')}
+            aria-label={
+              canExport
+                ? isExporting
+                  ? t('export.exporting')
+                  : t('export.pptx')
+                : t('share.notReady')
+            }
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             title={

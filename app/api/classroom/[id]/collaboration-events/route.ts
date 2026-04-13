@@ -20,10 +20,7 @@ function encodeEvent(name: string, payload: unknown) {
   return encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
     return apiErrorWithRequestSession(

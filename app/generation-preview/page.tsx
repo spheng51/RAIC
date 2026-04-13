@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef } from 'react';
+import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { CheckCircle2, Sparkles, AlertCircle, AlertTriangle, ArrowLeft, Bot } from 'lucide-react';
@@ -29,8 +29,28 @@ import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { createLogger } from '@/lib/logger';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
+import {
+  clearClassroomLaunchContext,
+  getHomePathForLaunchMode,
+  writeClassroomLaunchContext,
+} from '@/lib/utils/classroom-launch';
 
 const log = createLogger('GenerationPreview');
+
+interface ClassroomGenerationJobResponse {
+  readonly jobId: string;
+  readonly status: 'pending' | 'running' | 'succeeded' | 'failed';
+  readonly step?: string;
+  readonly message?: string;
+  readonly pollUrl: string;
+  readonly pollIntervalMs?: number;
+  readonly result?: {
+    readonly id: string;
+    readonly url: string;
+  } | null;
+  readonly error?: string | null;
+  readonly done?: boolean;
+}
 
 function GenerationPreviewContent() {
   const router = useRouter();
@@ -125,6 +145,159 @@ function GenerationPreviewContent() {
     };
   };
 
+  const updateGenerationSession = useCallback((nextSession: GenerationSessionState) => {
+    setSession(nextSession);
+    sessionStorage.setItem('generationSession', JSON.stringify(nextSession));
+  }, []);
+
+  const waitForPollInterval = useCallback(async (ms: number, signal: AbortSignal) => {
+    await new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }, []);
+
+  const getServerStepIndex = useCallback(
+    (currentSession: GenerationSessionState, serverStep?: string) => {
+      const steps = getActiveSteps(currentSession);
+      const webSearchEnabled = !!currentSession.requirements.webSearch;
+      let mappedStepId = 'outline';
+
+      switch (serverStep) {
+        case 'researching':
+          mappedStepId = webSearchEnabled ? 'web-search' : 'outline';
+          break;
+        case 'generating_outlines':
+          mappedStepId = 'outline';
+          break;
+        case 'generating_scenes':
+          mappedStepId = 'slide-content';
+          break;
+        case 'generating_media':
+        case 'generating_tts':
+        case 'persisting':
+        case 'completed':
+          mappedStepId = 'actions';
+          break;
+        case 'initializing':
+        default:
+          mappedStepId = webSearchEnabled ? 'web-search' : 'outline';
+          break;
+      }
+
+      const mappedIndex = steps.findIndex((step) => step.id === mappedStepId);
+      return mappedIndex >= 0 ? mappedIndex : 0;
+    },
+    [],
+  );
+
+  const runServerBackedGeneration = useCallback(
+    async (currentSession: GenerationSessionState, signal: AbortSignal) => {
+      const settings = useSettingsStore.getState();
+      const enableTTS = settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts';
+      const payload = {
+        requirement: currentSession.requirements.requirement,
+        ...(currentSession.pdfText
+          ? {
+              pdfContent: {
+                text: currentSession.pdfText,
+                images: [],
+              },
+            }
+          : {}),
+        language: currentSession.requirements.language,
+        enableWebSearch: !!currentSession.requirements.webSearch,
+        enableImageGeneration: !!settings.imageGenerationEnabled,
+        enableVideoGeneration: !!settings.videoGenerationEnabled,
+        enableTTS,
+        agentMode: settings.agentMode === 'auto' ? 'generate' : 'default',
+      };
+
+      const startResponse = await fetch('/api/generate-classroom', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
+
+      const startData = (await startResponse.json().catch(() => null)) as
+        | ClassroomGenerationJobResponse
+        | {
+            readonly error?: string;
+          }
+        | null;
+
+      if (!startResponse.ok || !startData || !('pollUrl' in startData)) {
+        throw new Error(startData?.error || t('upload.generateFailed'));
+      }
+
+      setStatusMessage(startData.message || t('generation.generatingCourse'));
+      setCurrentStepIndex(getServerStepIndex(currentSession, startData.step));
+
+      let pollUrl = startData.pollUrl;
+      const pollIntervalMs = startData.pollIntervalMs ?? 5000;
+
+      while (true) {
+        const pollResponse = await fetch(pollUrl, {
+          method: 'GET',
+          cache: 'no-store',
+          signal,
+        });
+        const pollData = (await pollResponse.json().catch(() => null)) as
+          | ClassroomGenerationJobResponse
+          | {
+              readonly error?: string;
+            }
+          | null;
+
+        if (!pollResponse.ok || !pollData || !('pollUrl' in pollData)) {
+          throw new Error(pollData?.error || t('upload.generateFailed'));
+        }
+
+        setStatusMessage(pollData.message || t('generation.generatingCourse'));
+        setCurrentStepIndex(getServerStepIndex(currentSession, pollData.step));
+
+        if (pollData.done) {
+          if (pollData.status === 'succeeded' && pollData.result?.id && pollData.result.url) {
+            clearClassroomLaunchContext();
+            writeClassroomLaunchContext({
+              classroomId: pollData.result.id,
+              launchMode: 'teacher-server',
+              homePath: currentSession.homePath ?? getHomePathForLaunchMode('teacher-server'),
+            });
+            sessionStorage.removeItem('generationParams');
+            sessionStorage.removeItem('generationSession');
+            router.push(pollData.result.url);
+            return;
+          }
+
+          throw new Error(pollData.error || t('upload.generateFailed'));
+        }
+
+        pollUrl = pollData.pollUrl;
+        await waitForPollInterval(pollData.pollIntervalMs ?? pollIntervalMs, signal);
+      }
+    },
+    [getServerStepIndex, router, t, waitForPollInterval],
+  );
+
   // Auto-start generation when session is loaded
   useEffect(() => {
     if (session && !hasStartedRef.current) {
@@ -149,6 +322,7 @@ function GenerationPreviewContent() {
 
     setError(null);
     setCurrentStepIndex(0);
+    setStatusMessage('');
 
     try {
       // Compute active steps for this session (recomputed after session mutations)
@@ -279,8 +453,7 @@ function GenerationPreviewContent() {
           imageStorageIds,
           pdfStorageKey: undefined, // Clear so we don't re-parse
         };
-        setSession(updatedSession);
-        sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
+        updateGenerationSession(updatedSession);
 
         // Truncation warnings
         const warnings: string[] = [];
@@ -299,6 +472,11 @@ function GenerationPreviewContent() {
         // Reassign local reference for subsequent steps
         currentSession = updatedSession;
         activeSteps = getActiveSteps(currentSession);
+      }
+
+      if (currentSession.launchMode === 'teacher-server') {
+        await runServerBackedGeneration(currentSession, signal);
+        return;
       }
 
       // Step: Web Search (if enabled)
@@ -338,8 +516,7 @@ function GenerationPreviewContent() {
           researchContext: searchData.context || '',
           researchSources: sources,
         };
-        setSession(updatedSessionWithSearch);
-        sessionStorage.setItem('generationSession', JSON.stringify(updatedSessionWithSearch));
+        updateGenerationSession(updatedSessionWithSearch);
         currentSession = updatedSessionWithSearch;
         activeSteps = getActiveSteps(currentSession);
       }
@@ -611,8 +788,7 @@ function GenerationPreviewContent() {
         });
 
         const updatedSession = { ...currentSession, sceneOutlines: outlines };
-        setSession(updatedSession);
-        sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
+        updateGenerationSession(updatedSession);
 
         // Outline generation succeeded — clear homepage draft cache
         try {
@@ -813,7 +989,10 @@ function GenerationPreviewContent() {
   const goBackToHome = () => {
     abortControllerRef.current?.abort();
     sessionStorage.removeItem('generationSession');
-    router.push('/');
+    clearClassroomLaunchContext();
+    router.push(
+      session?.homePath ?? getHomePathForLaunchMode(session?.launchMode ?? 'public-demo'),
+    );
   };
 
   // Still loading session from sessionStorage
@@ -842,7 +1021,10 @@ function GenerationPreviewContent() {
             <AlertCircle className="size-12 text-muted-foreground mx-auto" />
             <h2 className="text-xl font-semibold">{t('generation.sessionNotFound')}</h2>
             <p className="text-sm text-muted-foreground">{t('generation.sessionNotFoundDesc')}</p>
-            <Button onClick={() => router.push('/')} className="w-full">
+            <Button
+              onClick={() => router.push(getHomePathForLaunchMode('public-demo'))}
+              className="w-full"
+            >
               <ArrowLeft className="size-4 mr-2" />
               {t('generation.backToHome')}
             </Button>

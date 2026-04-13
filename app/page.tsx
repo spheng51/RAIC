@@ -48,6 +48,11 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import {
+  clearClassroomLaunchContext,
+  getHomePathForLaunchMode,
+  type ClassroomLaunchMode,
+} from '@/lib/utils/classroom-launch';
 
 const log = createLogger('Home');
 
@@ -69,7 +74,11 @@ const initialFormState: FormState = {
   webSearch: false,
 };
 
-export function HomePage() {
+interface HomePageProps {
+  readonly launchMode?: ClassroomLaunchMode;
+}
+
+export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
@@ -241,7 +250,7 @@ export function HomePage() {
 
   const handleGenerate = async () => {
     // Validate setup before proceeding
-    if (!currentModelId) {
+    if (launchMode === 'public-demo' && !currentModelId) {
       showSetupToast(
         <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
         t('settings.modelNotConfigured'),
@@ -259,6 +268,8 @@ export function HomePage() {
     setError(null);
 
     try {
+      clearClassroomLaunchContext();
+
       const userProfile = useUserProfileStore.getState();
       const requirements: UserRequirements = {
         requirement: form.requirement,
@@ -300,6 +311,8 @@ export function HomePage() {
         pdfProviderConfig,
         sceneOutlines: null,
         currentStep: 'generating' as const,
+        launchMode,
+        homePath: getHomePathForLaunchMode(launchMode),
       };
       sessionStorage.setItem('generationSession', JSON.stringify(sessionState));
 
@@ -447,25 +460,40 @@ export function HomePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className={cn(
-          'relative z-20 w-full max-w-[800px] flex flex-col items-center',
+          'relative z-20 w-full max-w-[960px] flex flex-col items-center',
           classrooms.length === 0 ? 'justify-center min-h-[calc(100dvh-8rem)]' : 'mt-[10vh]',
         )}
       >
         <h1 className="sr-only">{t('home.slogan')}</h1>
         {/* ── Logo ── */}
-        <motion.img
-          src="/logo-horizontal.png"
-          alt="OpenMAIC"
-          initial={{ opacity: 0, scale: 0.9 }}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
             delay: 0.1,
             type: 'spring',
-            stiffness: 200,
-            damping: 20,
+            stiffness: 180,
+            damping: 18,
           }}
-          className="h-12 md:h-16 mb-2 -ml-2 md:-ml-3"
-        />
+          className="mb-4 w-full px-1"
+        >
+          <div
+            className="mx-auto w-full max-w-[880px] rounded-[32px] border border-white/50 dark:border-white/10 px-4 py-4 shadow-[0_28px_90px_rgba(43,20,97,0.22)] backdrop-blur-sm"
+            style={{
+              background:
+                'radial-gradient(circle at 18% 28%, rgba(92, 225, 255, 0.18), transparent 24%), radial-gradient(circle at 76% 64%, rgba(184, 102, 255, 0.22), transparent 24%), linear-gradient(135deg, rgba(10, 8, 20, 0.96), rgba(18, 12, 40, 0.92))',
+            }}
+          >
+            <motion.img
+              src="/openraic-logo.svg"
+              alt="OpenRAIC"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18, duration: 0.45, ease: 'easeOut' }}
+              className="mx-auto h-auto w-full max-w-[760px]"
+            />
+          </div>
+        </motion.div>
 
         {/* ── Slogan ── */}
         <motion.p
@@ -482,7 +510,7 @@ export function HomePage() {
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.35 }}
-          className="w-full"
+          className="w-full max-w-[800px]"
         >
           <div className="w-full rounded-2xl border border-border/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-black/[0.03] dark:shadow-black/20 transition-shadow focus-within:shadow-2xl focus-within:shadow-violet-500/[0.06]">
             {/* ── Greeting + Profile + Agents ── */}
@@ -650,7 +678,10 @@ export function HomePage() {
                         confirmingDelete={pendingDeleteId === classroom.id}
                         onConfirmDelete={() => confirmDelete(classroom.id)}
                         onCancelDelete={() => setPendingDeleteId(null)}
-                        onClick={() => router.push(`/classroom/${classroom.id}`)}
+                        onClick={() => {
+                          clearClassroomLaunchContext();
+                          router.push(`/classroom/${classroom.id}`);
+                        }}
                       />
                     </motion.div>
                   ))}
@@ -663,7 +694,7 @@ export function HomePage() {
 
       {/* Footer — flows with content, at the very end */}
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
-        OpenMAIC Open Source Project
+        OpenRAIC Open Source Project
       </div>
     </main>
   );

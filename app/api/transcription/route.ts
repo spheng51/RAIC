@@ -30,7 +30,12 @@ export async function POST(req: NextRequest) {
     const baseUrl = formData.get('baseUrl') as string | null;
 
     if (!audioFile) {
-      return apiErrorWithRequestSession(req, 'MISSING_REQUIRED_FIELD', 400, 'Audio file is required');
+      return apiErrorWithRequestSession(
+        req,
+        'MISSING_REQUIRED_FIELD',
+        400,
+        'Audio file is required',
+      );
     }
 
     // providerId is required from the client — no server-side store to fall back to

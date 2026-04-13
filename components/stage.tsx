@@ -59,6 +59,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
 import { toast } from 'sonner';
@@ -130,8 +131,14 @@ function getInitialCollaborationState(
 
 export function Stage({
   onRetryOutline,
+  classroomSource,
+  classroomNotice,
+  homePath,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
+  classroomSource?: 'public-demo' | 'teacher-server' | null;
+  classroomNotice?: string | null;
+  homePath?: string;
 }) {
   const { t } = useI18n();
   const stage = useStageStore.use.stage();
@@ -657,16 +664,14 @@ export function Stage({
           body: JSON.stringify({ forceNew }),
         },
       );
-      const json = (await response.json().catch(() => null)) as
-        | {
-            success?: boolean;
-            error?: string;
-            mirofishSessionId?: string;
-            embedUrl?: string;
-            tokenExpiresAt?: string | null;
-            capabilities?: string[];
-          }
-        | null;
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        mirofishSessionId?: string;
+        embedUrl?: string;
+        tokenExpiresAt?: string | null;
+        capabilities?: string[];
+      } | null;
       const errorMessage = json && 'error' in json ? json.error : undefined;
 
       if (!response.ok || !json?.success || !json?.mirofishSessionId || !json?.embedUrl) {
@@ -675,7 +680,9 @@ export function Stage({
 
       const nextState = {
         simulationId:
-          presentationState?.sharedSimulation?.simulationId ?? stage?.sharedSimulation?.simulationId ?? '',
+          presentationState?.sharedSimulation?.simulationId ??
+          stage?.sharedSimulation?.simulationId ??
+          '',
         mirofishSessionId: json.mirofishSessionId,
         embedUrl: json.embedUrl,
         tokenExpiresAt: json.tokenExpiresAt ?? null,
@@ -684,7 +691,11 @@ export function Stage({
       setMiroFishSessionEmbed(nextState);
       return nextState;
     },
-    [presentationState?.sharedSimulation?.simulationId, stage?.id, stage?.sharedSimulation?.simulationId],
+    [
+      presentationState?.sharedSimulation?.simulationId,
+      stage?.id,
+      stage?.sharedSimulation?.simulationId,
+    ],
   );
 
   const handleMiroFishEvent = useCallback(
@@ -1412,8 +1423,11 @@ export function Stage({
     presentationState?.activeSurface ?? sharedSimulation?.activeSurface ?? 'lesson';
   const miroFishRunUrl =
     isMultiUserSimulation && activePresentationSurface === 'simulation'
-      ? miroFishSessionEmbed?.embedUrl ?? presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null
-      : presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null;
+      ? (miroFishSessionEmbed?.embedUrl ??
+        presentationState?.runUrl ??
+        sharedSimulation?.runUrl ??
+        null)
+      : (presentationState?.runUrl ?? sharedSimulation?.runUrl ?? null);
   const miroFishReportUrl = presentationState?.reportUrl ?? sharedSimulation?.reportUrl ?? null;
   const reportAvailable =
     presentationState?.reportAvailable ?? hasSharedSimulationReport(sharedSimulation);
@@ -1422,7 +1436,7 @@ export function Stage({
   const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
   const presentationParticipants = presentationState?.participants ?? [];
   const viewerCanInteractWithSimulation = isMultiUserSimulation
-    ? collaborationState?.viewerCanInteract ?? viewerCanManageSimulation
+    ? (collaborationState?.viewerCanInteract ?? viewerCanManageSimulation)
     : viewerHasSimulationControl;
   const spotlightDisplayName =
     collaborationState?.participants.find(
@@ -1445,7 +1459,9 @@ export function Stage({
     const desiredSessionId =
       collaborationState?.mirofishSessionId ?? sharedSimulation.mirofishSessionId ?? null;
     const currentSimulationId =
-      presentationState?.sharedSimulation?.simulationId ?? stage?.sharedSimulation?.simulationId ?? null;
+      presentationState?.sharedSimulation?.simulationId ??
+      stage?.sharedSimulation?.simulationId ??
+      null;
     if (
       miroFishSessionEmbed &&
       miroFishSessionEmbed.simulationId === currentSimulationId &&
@@ -1475,7 +1491,8 @@ export function Stage({
     () => buildLiveClassroomStudentPulse(presentationParticipants),
     [presentationParticipants],
   );
-  const previousScene = !isPendingScene && currentSceneIndex > 0 ? scenes[currentSceneIndex - 1] : null;
+  const previousScene =
+    !isPendingScene && currentSceneIndex > 0 ? scenes[currentSceneIndex - 1] : null;
   const nextScene =
     !isPendingScene && currentSceneIndex >= 0 && currentSceneIndex < scenes.length - 1
       ? scenes[currentSceneIndex + 1]
@@ -1641,12 +1658,29 @@ export function Stage({
         onCollapseChange={setSidebarCollapsed}
         onSceneSelect={gatedSceneSwitch}
         onRetryOutline={onRetryOutline}
+        homePath={homePath}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
         {/* Header */}
-        {!isPresenting && <Header currentSceneTitle={currentScene?.title || ''} />}
+        {!isPresenting && (
+          <Header
+            currentSceneTitle={currentScene?.title || ''}
+            classroomSource={classroomSource}
+            homePath={homePath}
+          />
+        )}
+
+        {!isPresenting && classroomNotice ? (
+          <div className="px-6 pb-2">
+            <Alert className="border-blue-200/70 bg-white/80 dark:border-blue-900/50 dark:bg-slate-950/80">
+              <AlertTriangle className="size-4 text-blue-500 dark:text-blue-300" />
+              <AlertTitle>{t('classroom.localDemoBadge')}</AlertTitle>
+              <AlertDescription>{classroomNotice}</AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
 
         {/* Canvas Area */}
         <div

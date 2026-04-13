@@ -7,7 +7,11 @@ function createMockRequest(origin: string, headers?: Record<string, string>) {
     headers: {
       get(name: string) {
         const normalizedName = name.toLowerCase();
-        return Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === normalizedName)?.[1] ?? null;
+        return (
+          Object.entries(headers ?? {}).find(
+            ([key]) => key.toLowerCase() === normalizedName,
+          )?.[1] ?? null
+        );
       },
     },
     nextUrl: new URL(origin),
@@ -15,22 +19,32 @@ function createMockRequest(origin: string, headers?: Record<string, string>) {
 }
 
 describe('classroom-storage helpers', () => {
+  const originalCwd = process.cwd();
+  let testRoot = '';
+
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    testRoot = path.join(
+      originalCwd,
+      '.vitest-tmp',
+      `classroom-storage-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testRoot);
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
-    await fs.rm(path.join(process.cwd(), 'data', 'classrooms'), {
+    await fs.rm(testRoot, {
       recursive: true,
       force: true,
     });
   });
 
   it('resolves classroom JSON paths inside the classroom data directory', async () => {
-    const { CLASSROOMS_DIR, resolveClassroomJsonPath } = await import('@/lib/server/classroom-storage');
+    const { CLASSROOMS_DIR, resolveClassroomJsonPath } =
+      await import('@/lib/server/classroom-storage');
 
     expect(resolveClassroomJsonPath('safe-id')).toBe(path.resolve(CLASSROOMS_DIR, 'safe-id.json'));
   });
@@ -103,6 +117,31 @@ describe('classroom-storage helpers', () => {
     });
 
     const filePath = path.join(process.cwd(), 'data', 'classrooms', 'atomic-write.json');
+    const { writeJsonFileAtomic } = await import('@/lib/server/classroom-storage');
+
+    await writeJsonFileAtomic(filePath, { ok: true });
+
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toContain('"ok": true');
+    expect(rename).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries atomic writes after a transient temp-file rename ENOENT', async () => {
+    const realRename = fs.rename;
+    const rename = vi.spyOn(fs, 'rename');
+    let attempts = 0;
+
+    rename.mockImplementation(async (from, to) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await fs.rm(from, { force: true }).catch(() => undefined);
+        const error = new Error('missing temp file') as NodeJS.ErrnoException;
+        error.code = 'ENOENT';
+        throw error;
+      }
+      return realRename(from, to);
+    });
+
+    const filePath = path.join(process.cwd(), 'data', 'classrooms', 'atomic-write-enoent.json');
     const { writeJsonFileAtomic } = await import('@/lib/server/classroom-storage');
 
     await writeJsonFileAtomic(filePath, { ok: true });

@@ -49,10 +49,7 @@ function normalizeBaseUrl(rawUrl: string, envName: string) {
 }
 
 function createUrlFromBase(baseUrl: string, relativePath: string) {
-  return new URL(
-    relativePath.replace(/^\/+/, ''),
-    baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
-  );
+  return new URL(relativePath.replace(/^\/+/, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
 }
 
 export function getMiroFishConfig(): MiroFishConfig {
@@ -77,8 +74,7 @@ function getMiroFishTokenWindow() {
   const validityWindowSeconds = 2 * 60 * 60;
   const nowSeconds = Math.floor(Date.now() / 1000);
   const exp =
-    Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds +
-    validityWindowSeconds;
+    Math.floor(nowSeconds / validityWindowSeconds) * validityWindowSeconds + validityWindowSeconds;
 
   return {
     exp,
@@ -86,7 +82,9 @@ function getMiroFishTokenWindow() {
   };
 }
 
-function createSignedMiroFishToken(payloadBody: Record<string, unknown>): SignedMiroFishToken | null {
+function createSignedMiroFishToken(
+  payloadBody: Record<string, unknown>,
+): SignedMiroFishToken | null {
   const { embedSecret } = getMiroFishConfig();
   if (!embedSecret) {
     return null;
@@ -146,7 +144,10 @@ async function validateMiroFishResource(
 }
 
 export async function validateMiroFishSimulation(simulationId: string) {
-  await validateMiroFishResource(`/api/simulation/${encodeURIComponent(simulationId)}`, 'simulation');
+  await validateMiroFishResource(
+    `/api/simulation/${encodeURIComponent(simulationId)}`,
+    'simulation',
+  );
 }
 
 export async function validateMiroFishReport(reportId: string) {
@@ -171,12 +172,14 @@ export function buildMiroFishReportUrl(reportId: string) {
 }
 
 export function createMiroFishEmbedToken(input: MiroFishEmbedTokenInput) {
-  return createSignedMiroFishToken({
-    classroomId: input.classroomId,
-    simulationId: input.simulationId,
-    reportId: input.reportId,
-    tokenType: 'classroom',
-  })?.token ?? null;
+  return (
+    createSignedMiroFishToken({
+      classroomId: input.classroomId,
+      simulationId: input.simulationId,
+      reportId: input.reportId,
+      tokenType: 'classroom',
+    })?.token ?? null
+  );
 }
 
 export function issueMiroFishParticipantToken(
@@ -196,10 +199,7 @@ export function issueMiroFishParticipantToken(
   });
 }
 
-export function withMiroFishEmbedToken(
-  urlString: string,
-  input: MiroFishEmbedTokenInput,
-): string {
+export function withMiroFishEmbedToken(urlString: string, input: MiroFishEmbedTokenInput): string {
   const url = new URL(urlString);
   url.searchParams.set('embed', '1');
 

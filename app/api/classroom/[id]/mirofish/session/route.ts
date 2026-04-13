@@ -29,10 +29,7 @@ interface MiroFishSessionBody {
 
 const log = createLogger('Classroom MiroFish Session');
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
     return apiErrorWithRequestSession(
@@ -99,8 +96,14 @@ export async function POST(
   }
 
   let sharedSimulation = snapshot.sharedSimulation;
-  if (forceNew || !sharedSimulation.mirofishSessionId || sharedSimulation.collaborationState === 'inactive') {
-    const nextSessionId = forceNew ? randomUUID() : sharedSimulation.mirofishSessionId ?? randomUUID();
+  if (
+    forceNew ||
+    !sharedSimulation.mirofishSessionId ||
+    sharedSimulation.collaborationState === 'inactive'
+  ) {
+    const nextSessionId = forceNew
+      ? randomUUID()
+      : (sharedSimulation.mirofishSessionId ?? randomUUID());
     const updated = await updateClassroom(id, (current) => {
       const currentSharedSimulation = current.stage.sharedSimulation;
       if (!currentSharedSimulation) {
@@ -115,9 +118,7 @@ export async function POST(
             ...currentSharedSimulation,
             mirofishSessionId: nextSessionId,
             collaborationState:
-              currentSharedSimulation.collaborationState === 'closed'
-                ? 'closed'
-                : 'live',
+              currentSharedSimulation.collaborationState === 'closed' ? 'closed' : 'live',
             participantCount: snapshot.participants.length,
             lastCollaborationSyncAt: new Date().toISOString(),
           },

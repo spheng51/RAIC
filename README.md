@@ -1,9 +1,9 @@
 <!-- <p align="center">
-  <img src="assets/logo-horizontal.png" alt="OpenMAIC" width="420"/>
+  <img src="public/openraic-logo.svg" alt="OpenRAIC" width="560"/>
 </p> -->
 
 <p align="center">
-  <img src="assets/banner.png" alt="OpenMAIC Banner" width="680"/>
+  <img src="public/openraic-logo.svg" alt="OpenRAIC" width="680"/>
 </p>
 
 <p align="center">
@@ -39,6 +39,19 @@
 ## 🗞️ News
 
 - **2026-03-26** — [v0.1.0 released!](https://github.com/THU-MAIC/OpenMAIC/releases/tag/v0.1.0) Discussion TTS, immersive mode, keyboard shortcuts, whiteboard enhancements, new providers, and more. See [changelog](CHANGELOG.md).
+
+## 📌 What's New in v0.1.0
+
+OpenMAIC's first tagged release introduced:
+
+- **Discussion TTS + immersive classroom mode** for richer, voice-first sessions
+- **Enhanced whiteboard & keyboard controls** for smoother live teaching
+- **Expanded provider support** across LLM, image, video, and audio generation
+- **Server-side media generation + stronger governance/security defaults**
+
+See the full release notes in [CHANGELOG.md](CHANGELOG.md).
+
+---
 
 ## 📖 Overview
 
@@ -131,6 +144,25 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 Operator rollout notes, smoke checks, and release-gate steps are maintained as deployment runbooks alongside release operations.
 
 MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps follow the same release-operations runbook process.
+Operator rollout notes and release details are tracked in the [changelog](CHANGELOG.md).
+
+### Teacher studio Google sign-in
+
+Protected `/studio` access uses Google Identity Services with the existing ID-token flow.
+
+1. Create a Google Cloud OAuth client of type `Web application`
+2. Add your local dev origin as an Authorized JavaScript origin
+   - Use `http://localhost:3000` for the default Next.js dev port
+   - Use `http://localhost:3005` if your local server is running on the same port as this workspace
+3. Set these values in `.env.local`
+
+```env
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+# Optional when the server should verify against a different audience.
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+```
+
+Leave `RAIC_ADMIN_EMAILS` unset during the teacher-only bootstrap so signed-in users land as `teacher` and `/admin` remains protected until you intentionally enable org-admin assignment.
 
 MiniMax quick examples:
 

@@ -22,9 +22,9 @@ export default async function AdminPage() {
           Managed provider connectivity
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
-          Configure which AI providers your organization can use, store encrypted org secrets,
-          set model allowlists and defaults, and control when teachers can layer personal
-          overrides on top of the managed baseline.
+          Configure which AI providers your organization can use, store encrypted org secrets, set
+          model allowlists and defaults, and control when teachers can layer personal overrides on
+          top of the managed baseline.
         </p>
       </div>
 

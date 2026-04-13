@@ -41,10 +41,9 @@ const authContext = {
 } as never;
 
 async function createGovernanceError() {
-  const { GovernedProviderResolutionError } =
-    await vi.importActual<typeof import('@/lib/server/ai-governance')>(
-      '@/lib/server/ai-governance'
-    );
+  const { GovernedProviderResolutionError } = await vi.importActual<
+    typeof import('@/lib/server/ai-governance')
+  >('@/lib/server/ai-governance');
 
   return new GovernedProviderResolutionError(
     'PROVIDER_NOT_APPROVED',

@@ -58,7 +58,8 @@ function decodeJwtPart<T>(value: string): T {
 }
 
 function getGoogleClientId() {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+  const clientId =
+    process.env.GOOGLE_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error('GOOGLE_CLIENT_ID or NEXT_PUBLIC_GOOGLE_CLIENT_ID must be configured');
   }
@@ -123,10 +124,7 @@ async function verifySignature(
   return crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data);
 }
 
-export async function verifyGoogleIdToken(input: {
-  idToken: string;
-  expectedNonce: string;
-}) {
+export async function verifyGoogleIdToken(input: { idToken: string; expectedNonce: string }) {
   const tokenParts = input.idToken.split('.');
   if (tokenParts.length !== 3) {
     throw new Error('Malformed Google credential');
@@ -146,7 +144,12 @@ export async function verifyGoogleIdToken(input: {
     throw new Error('Unable to find Google signing key');
   }
 
-  const isValidSignature = await verifySignature(headerSegment, payloadSegment, signatureSegment, jwk);
+  const isValidSignature = await verifySignature(
+    headerSegment,
+    payloadSegment,
+    signatureSegment,
+    jwk,
+  );
   if (!isValidSignature) {
     throw new Error('Google credential signature verification failed');
   }
@@ -175,8 +178,7 @@ export async function verifyGoogleIdToken(input: {
     throw new Error('Google credential is missing required identity claims');
   }
 
-  const emailVerified =
-    payload.email_verified === true || payload.email_verified === 'true';
+  const emailVerified = payload.email_verified === true || payload.email_verified === 'true';
   if (!emailVerified) {
     throw new Error('Google account email must be verified');
   }

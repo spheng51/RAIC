@@ -249,9 +249,7 @@ function getConfig(): ServerConfig {
   return config;
 }
 
-function getSectionForFamily(
-  family: AIProviderFamily,
-): Record<string, ServerProviderEntry> {
+function getSectionForFamily(family: AIProviderFamily): Record<string, ServerProviderEntry> {
   const config = getConfig();
 
   switch (family) {

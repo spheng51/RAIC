@@ -1,4 +1,8 @@
-import type { PresentationSurface, SharedSimulation, SharedSimulationStatus } from '@/lib/types/stage';
+import type {
+  PresentationSurface,
+  SharedSimulation,
+  SharedSimulationStatus,
+} from '@/lib/types/stage';
 
 export type ClassroomPresentationRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
 export type ClassroomPresentationViewerKind = 'web' | 'classroom';

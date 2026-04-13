@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import { ArrowRight, Clock3, Presentation } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { findValidJoinToken } from '@/lib/auth/classroom-access';
 
@@ -48,8 +55,9 @@ export default async function JoinClassroomPage({
             <span>Valid until {new Date(joinToken.expiresAt).toLocaleString()}</span>
           </div>
           <p>
-            You&apos;ll enter as a classroom-scoped student session, so teacher controls stay hidden while
-            the shared presentation and MiroFish sidecar stay aligned with the rest of the room.
+            You&apos;ll enter as a classroom-scoped student session, so teacher controls stay hidden
+            while the shared presentation and MiroFish sidecar stay aligned with the rest of the
+            room.
           </p>
         </CardContent>
         <CardFooter className="border-t">

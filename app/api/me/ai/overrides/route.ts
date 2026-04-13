@@ -95,12 +95,12 @@ export async function PUT(request: NextRequest) {
           reason: 'personal_overrides_disabled',
         },
       });
-        return apiErrorWithRequestSession(
-          request,
-          'FORBIDDEN',
-          403,
-          'Personal overrides are disabled for this organization.',
-        );
+      return apiErrorWithRequestSession(
+        request,
+        'FORBIDDEN',
+        403,
+        'Personal overrides are disabled for this organization.',
+      );
     }
 
     for (const override of payload.overrides) {

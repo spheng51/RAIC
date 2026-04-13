@@ -105,8 +105,7 @@ export async function findMembershipForUserAndOrganization(
   const store = await readPlatformStore();
   return (
     store.memberships.find(
-      (membership) =>
-        membership.userId === userId && membership.organizationId === organizationId,
+      (membership) => membership.userId === userId && membership.organizationId === organizationId,
     ) ?? null
   );
 }

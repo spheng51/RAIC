@@ -23,7 +23,7 @@ function mapOrganizationRow(row: OrganizationRow): OrganizationRecord {
     domainAllowlist:
       typeof row.domain_allowlist === 'string'
         ? JSON.parse(row.domain_allowlist)
-        : row.domain_allowlist ?? [],
+        : (row.domain_allowlist ?? []),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -37,7 +37,9 @@ function slugify(input: string): string {
     .slice(0, 48);
 }
 
-export async function findOrganizationById(organizationId: string): Promise<OrganizationRecord | null> {
+export async function findOrganizationById(
+  organizationId: string,
+): Promise<OrganizationRecord | null> {
   const rows = await runPostgresQuery<OrganizationRow>(
     `SELECT id, name, slug, kind, domain_allowlist, created_at, updated_at
      FROM organizations
@@ -71,7 +73,9 @@ export async function findOrganizationBySlug(slug: string): Promise<Organization
   return store.organizations.find((org) => org.slug === slug) ?? null;
 }
 
-export async function findOrCreatePersonalOrganization(user: UserRecord): Promise<OrganizationRecord> {
+export async function findOrCreatePersonalOrganization(
+  user: UserRecord,
+): Promise<OrganizationRecord> {
   const preferredSlug = slugify(
     `${user.email.split('@')[0] || user.displayName || 'workspace'}-${user.id.slice(0, 8)}`,
   );

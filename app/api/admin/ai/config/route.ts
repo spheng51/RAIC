@@ -7,10 +7,7 @@ import {
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
 } from '@/lib/server/api-response';
-import {
-  getAdminConfigSnapshot,
-  saveAdminConfigSnapshot,
-} from '@/lib/server/ai-governance';
+import { getAdminConfigSnapshot, saveAdminConfigSnapshot } from '@/lib/server/ai-governance';
 import { hasEncryptionKeyConfigured } from '@/lib/server/encrypted-secrets';
 
 const log = createLogger('AdminAIConfig API');
