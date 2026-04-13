@@ -229,6 +229,7 @@ describe('MiroFishManagerDialog', () => {
   it('passes the selected lease duration and renders the active lease state', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-11T00:00:00.000Z'));
+    const now = new Date().toISOString();
 
     const participants: ClassroomPresentationParticipant[] = [
       {
@@ -236,7 +237,7 @@ describe('MiroFishManagerDialog', () => {
         userId: 'student-1',
         displayName: 'Student One',
         role: 'student',
-        lastSeenAt: '2026-04-11T00:00:00.000Z',
+        lastSeenAt: now,
         isController: true,
       },
       {
@@ -244,7 +245,7 @@ describe('MiroFishManagerDialog', () => {
         userId: 'student-2',
         displayName: 'Student Two',
         role: 'student',
-        lastSeenAt: '2026-04-11T00:00:00.000Z',
+        lastSeenAt: now,
         isController: false,
       },
     ];
@@ -258,6 +259,8 @@ describe('MiroFishManagerDialog', () => {
 
     expect(mounted.container.textContent).toContain('Control: Student One');
     expect(mounted.container.textContent).toContain('Countdown: 5m 00s remaining');
+    expect(mounted.container.textContent).toContain('active');
+    expect(mounted.container.textContent).toContain('just now');
 
     const thirtyMinuteButton = Array.from(mounted.container.querySelectorAll('button')).find(
       (button) => button.textContent?.includes('30 minutes'),
@@ -282,6 +285,9 @@ describe('MiroFishManagerDialog', () => {
   });
 
   it('passes multi-user mode and collaboration actions through the manager UI', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-11T00:00:00.000Z'));
+    const now = new Date().toISOString();
     const onAttach = vi.fn(async () => {});
     const onCollaborationAction = vi.fn(async () => {});
     const mounted = await mountDialog({
@@ -308,7 +314,7 @@ describe('MiroFishManagerDialog', () => {
             userId: 'student-2',
             displayName: 'Student Two',
             role: 'student',
-            lastSeenAt: '2026-04-11T00:00:00.000Z',
+            lastSeenAt: now,
             isRemoved: false,
             isSpotlighted: false,
             canInteract: true,
@@ -357,5 +363,7 @@ describe('MiroFishManagerDialog', () => {
     });
     expect(mounted.container.textContent).toContain('Mode: Multi-user');
     expect(mounted.container.textContent).toContain('Collaboration: live');
+    expect(mounted.container.textContent).toContain('active');
+    expect(mounted.container.textContent).toContain('just now');
   });
 });

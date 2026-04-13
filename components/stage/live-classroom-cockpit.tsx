@@ -27,9 +27,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { ParticipantPresenceCard } from '@/components/participants/participant-presence-card';
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
 import type { PresentationSurface } from '@/lib/types/stage';
 import type { LiveClassroomApprovalItem } from '@/lib/utils/live-classroom-cockpit';
+import {
+  getParticipantActivityLabel,
+  sortParticipantsByPresence,
+} from '@/lib/utils/participant-presence';
 import { cn } from '@/lib/utils';
 
 interface LiveClassroomCockpitProps {
@@ -247,6 +252,14 @@ export function LiveClassroomCockpit({
   const studentParticipants = useMemo(
     () => participants.filter((participant) => participant.role === 'student'),
     [participants],
+  );
+
+  const sortedStudentParticipants = useMemo(
+    () =>
+      sortParticipantsByPresence(studentParticipants, {
+        nowMs: Date.now(),
+      }),
+    [studentParticipants],
   );
 
   return (
@@ -471,26 +484,25 @@ export function LiveClassroomCockpit({
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-                {studentParticipants.length > 0 ? (
+                {sortedStudentParticipants.length > 0 ? (
                   <div className="space-y-2">
-                    {studentParticipants.slice(0, 5).map((participant) => (
-                      <div
-                        key={participant.sessionId}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="truncate text-slate-800 dark:text-slate-200">
-                          {participant.displayName}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {participant.isController ? (
-                            <Badge className="bg-sky-500 text-white">control</Badge>
-                          ) : null}
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {participant.lastSeenAt ? 'live' : 'idle'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                    {sortedStudentParticipants.slice(0, 5).map((participant) => {
+                      const activityLabel = getParticipantActivityLabel(participant.lastSeenAt);
+                      return (
+                        <ParticipantPresenceCard
+                          key={participant.sessionId}
+                          variant="compact-card"
+                          name={participant.displayName}
+                          status={activityLabel.state}
+                          activityLabel={activityLabel.label}
+                          chips={[
+                            ...(participant.isController
+                              ? [{ key: 'controller', label: 'Controller', variant: 'default' as const }]
+                              : []),
+                          ]}
+                        />
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-600 dark:text-slate-400">

@@ -27,6 +27,7 @@ import { ProactiveCard } from '@/components/chat/proactive-card';
 import { PresentationSpeechOverlay } from '@/components/roundtable/presentation-speech-overlay';
 import { AvatarDisplay } from '@/components/ui/avatar-display';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
+import { ParticipantPresenceCard } from '@/components/participants/participant-presence-card';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { DEFAULT_TEACHER_AVATAR, DEFAULT_USER_AVATAR } from '@/components/roundtable/constants';
 import type { DiscussionAction } from '@/lib/types/action';
@@ -1830,8 +1831,8 @@ export function Roundtable({
               }}
             >
               <div className="flex gap-1 w-max py-1">
-                {studentParticipants.map((student) => {
-                  const isSpeaking = speakingAgentId === student.id;
+                      {studentParticipants.map((student) => {
+                        const isSpeaking = speakingAgentId === student.id;
                   const isThinkingAgent =
                     thinkingState?.stage === 'agent_loading' &&
                     thinkingState.agentId === student.id;
@@ -1850,106 +1851,101 @@ export function Roundtable({
                   const hasDescription = !!description;
                   const isDiscussionAgent =
                     !!discussionRequest && discussionRequest.agentId === student.id;
-                  return (
-                    <div
-                      key={student.id}
-                      data-agent-id={student.id}
-                      ref={(el) => {
-                        if (el) studentAvatarRefs.current.set(student.id, el);
-                        else studentAvatarRefs.current.delete(student.id);
-                      }}
-                      className="relative group/student shrink-0"
-                    >
-                      {/* Breathing glow for discussion agent */}
-                      {isDiscussionAgent && (
-                        <motion.div
-                          animate={{
-                            scale: [1, 1.2, 1],
-                            opacity: [0.7, 0, 0.7],
-                          }}
-                          transition={{
-                            repeat: Infinity,
-                            duration: 2,
-                            ease: 'easeInOut',
-                          }}
-                          className="absolute inset-0 rounded-full pointer-events-none"
-                          style={{
-                            border: `2px solid ${agentConfig?.color || '#d97706'}`,
-                          }}
-                        />
-                      )}
-                      <HoverCard openDelay={300} closeDelay={100}>
-                        <HoverCardTrigger asChild>
-                          <div
-                            className={cn(
-                              'relative w-9 h-9 rounded-full transition-all duration-300 cursor-pointer',
-                              isSpeaking
-                                ? 'opacity-100 grayscale-0 scale-110'
-                                : 'opacity-50 grayscale-[0.2] scale-95 hover:opacity-100 hover:grayscale-0 hover:scale-100',
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                'absolute inset-0 rounded-full border-2 transition-all duration-300',
-                                isSpeaking
-                                  ? 'border-purple-500 dark:border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.4)]'
-                                  : 'border-white dark:border-gray-700',
-                              )}
+                  const onlineStatus = student.isOnline ? 'online' : 'offline';
+                        return (
+                          <HoverCard openDelay={300} closeDelay={100} key={student.id}>
+                            <HoverCardTrigger asChild>
+                              <div
+                                data-agent-id={student.id}
+                                ref={(el) => {
+                                  if (el) studentAvatarRefs.current.set(student.id, el);
+                                  else studentAvatarRefs.current.delete(student.id);
+                                }}
+                                className="relative group/student shrink-0"
+                              >
+                          {/* Breathing glow for discussion agent */}
+                          {isDiscussionAgent && (
+                            <motion.div
+                              animate={{
+                                scale: [1, 1.15, 1],
+                                opacity: [0.65, 0.15, 0.65],
+                              }}
+                              transition={{
+                                repeat: Infinity,
+                                duration: 2.2,
+                                ease: 'easeInOut',
+                              }}
+                              className="absolute inset-0 rounded-2xl pointer-events-none"
+                              style={{
+                                border: `2px solid ${agentConfig?.color || '#d97706'}`,
+                                boxShadow:
+                                  `0 0 12px ${agentConfig?.color || '#d97706'}55`,
+                              }}
                             />
-                            <div className="absolute inset-0.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                              <img
-                                src={student.avatar}
-                                alt={student.name}
-                                className="w-full h-full"
-                              />
-                            </div>
-                            {/* Speaking indicator */}
-                            {isSpeaking && (
-                              <div className="absolute -right-0.5 -top-0.5 w-3 h-3 bg-green-500 rounded-full border border-white dark:border-gray-800 z-20 flex items-center justify-center">
-                                <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
-                              </div>
-                            )}
-                            {/* Loading indicator (Issue 5) */}
-                            {isThinkingAgent && (
-                              <div className="absolute inset-0 rounded-full border-2 border-purple-400 border-t-transparent animate-spin z-20" />
-                            )}
-                          </div>
-                        </HoverCardTrigger>
-                        <HoverCardContent
-                          side="bottom"
-                          align="center"
-                          className="w-64 p-3 max-h-[300px] overflow-y-auto"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
-                              <img
-                                src={student.avatar}
-                                alt={student.name}
-                                className="w-full h-full"
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{student.name}</p>
-                              {roleLabel && roleLabel !== `settings.agentRoles.${roleLabelKey}` && (
-                                <span
-                                  className="inline-block text-[10px] leading-tight px-1.5 py-0.5 rounded-full text-white mt-0.5"
-                                  style={{
-                                    backgroundColor: agentConfig?.color || '#6b7280',
-                                  }}
-                                >
-                                  {roleLabel}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {hasDescription && (
-                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed whitespace-pre-line">
-                              {description}
-                            </p>
                           )}
-                        </HoverCardContent>
-                      </HoverCard>
-                    </div>
+
+                          <ParticipantPresenceCard
+                            variant="row"
+                            name={student.name}
+                            avatar={student.avatar}
+                            role={roleLabelKey ? roleLabel : 'student'}
+                            status={isSpeaking ? 'active' : 'idle'}
+                            activityLabel={isSpeaking ? 'speaking' : onlineStatus}
+                            lastActiveText={isSpeaking ? 'live' : 'now'}
+                            statusIcon={isSpeaking ? 'busy' : student.isOnline ? 'online' : 'offline'}
+                            highlight={isSpeaking}
+                            chips={[
+                              ...(isThinkingAgent
+                                ? [{ key: 'loading', label: 'Thinking', variant: 'outline' as const }]
+                                : []),
+                              ...(student.isOnline ? [] : [{ key: 'offline', label: 'offline' }]),
+                            ]}
+                            className={cn(
+                              'min-h-10 min-w-44',
+                              isSpeaking
+                                ? 'border-purple-300/70 dark:border-purple-500/80 shadow-[0_0_12px_rgba(168,85,247,0.24)]'
+                                : 'hover:border-slate-300',
+                              isDiscussionAgent
+                                ? 'bg-white/95 dark:bg-slate-900/80'
+                                : 'bg-white/75 dark:bg-slate-950/55',
+                            )}
+                          />
+                        </div>
+                      </HoverCardTrigger>
+                      <HoverCardContent
+                        side="bottom"
+                        align="center"
+                        className="w-64 p-3 max-h-[300px] overflow-y-auto"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
+                            <img
+                              src={student.avatar}
+                              alt={student.name}
+                              className="w-full h-full"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{student.name}</p>
+                            {roleLabel && roleLabel !== `settings.agentRoles.${roleLabelKey}` && (
+                              <span
+                                className="inline-block text-[10px] leading-tight px-1.5 py-0.5 rounded-full text-white mt-0.5"
+                                style={{
+                                  backgroundColor: agentConfig?.color || '#6b7280',
+                                }}
+                              >
+                                {roleLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {hasDescription && (
+                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed whitespace-pre-line">
+                            {description}
+                          </p>
+                        )}
+                      </HoverCardContent>
+                    </HoverCard>
                   );
                 })}
               </div>

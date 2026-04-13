@@ -95,7 +95,7 @@ async function mountCockpit(
         userId: 'student-1',
         displayName: 'Student One',
         role: 'student',
-        lastSeenAt: '2026-04-11T00:00:00.000Z',
+        lastSeenAt: new Date().toISOString(),
         isController: true,
       },
     ],
@@ -240,5 +240,27 @@ describe('LiveClassroomCockpit', () => {
     expect(props.onSendTeacherPrompt).toHaveBeenCalledWith(
       'Ask one reflective question before moving on.',
     );
+  });
+
+  it('renders student activity labels derived from presence state', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-13T00:00:00.000Z'));
+
+    const { container } = await mountCockpit({
+      participants: [
+        {
+          sessionId: 'student-1',
+          userId: 'student-1',
+          displayName: 'Student One',
+          role: 'student',
+          lastSeenAt: new Date().toISOString(),
+          isController: true,
+        },
+      ],
+    });
+
+    expect(container.textContent).toContain('active');
+    expect(container.textContent).toContain('just now');
+    vi.useRealTimers();
   });
 });

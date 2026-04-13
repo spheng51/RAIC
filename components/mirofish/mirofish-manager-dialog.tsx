@@ -26,6 +26,11 @@ import type {
 } from '@/lib/types/stage';
 import { formatLeaseCountdown, getControllerDisplayName } from '@/lib/utils/classroom-presentation';
 import { toast } from 'sonner';
+import { ParticipantPresenceCard } from '@/components/participants/participant-presence-card';
+import {
+  getParticipantActivityLabel,
+  sortParticipantsByPresence,
+} from '@/lib/utils/participant-presence';
 
 interface MiroFishManagerDialogProps {
   readonly open: boolean;
@@ -115,6 +120,26 @@ export function MiroFishManagerDialog({
 
   const leaseCountdown = formatLeaseCountdown(sharedSimulation?.controlLeaseExpiresAt, leaseNowMs);
   const isMultiUser = collaborationMode === 'multi-user';
+
+  const sortedSingleControllerParticipants = useMemo(
+    () =>
+      sortParticipantsByPresence(participants, {
+        nowMs: Date.now(),
+        getIsController: (participant) => participant.isController,
+      }),
+    [participants],
+  );
+
+  const sortedCollaborationParticipants = useMemo(() => {
+    if (!collaboration?.participants.length) {
+      return [];
+    }
+
+    return sortParticipantsByPresence(collaboration.participants, {
+      nowMs: Date.now(),
+      getIsController: () => false,
+    });
+  }, [collaboration?.participants]);
 
   async function runCollaborationAction(
     action: ClassroomCollaborationAction,
@@ -403,63 +428,66 @@ export function MiroFishManagerDialog({
                     <UserRound className="h-4 w-4" />
                     Live roster
                   </div>
-                  {collaboration?.participants.length ? (
-                    collaboration.participants.map((participant) => (
-                      <div
-                        key={participant.sessionId}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {participant.displayName}
-                            </span>
-                            {participant.isSpotlighted && <Badge>Spotlight</Badge>}
-                            {participant.isRemoved && <Badge variant="outline">Removed</Badge>}
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Last active {new Date(participant.lastSeenAt).toLocaleTimeString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={busyAction !== null || participant.isRemoved}
-                            aria-label={
-                              participant.isSpotlighted
-                                ? `Clear spotlight for ${participant.displayName}`
-                                : `Spotlight ${participant.displayName}`
-                            }
-                            onClick={() => {
-                              void runCollaborationAction(
-                                participant.isSpotlighted ? 'clear_spotlight' : 'spotlight',
-                                participant.isSpotlighted ? undefined : participant.sessionId,
-                              );
-                            }}
-                          >
-                            <Sparkles className="h-4 w-4" />
-                            {participant.isSpotlighted ? 'Clear spotlight' : 'Spotlight'}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={busyAction !== null || participant.isRemoved}
-                            aria-label={`Remove ${participant.displayName}`}
-                            onClick={() => {
-                              void runCollaborationAction(
-                                'remove_participant',
-                                participant.sessionId,
-                              );
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ))
+                  {sortedCollaborationParticipants.length ? (
+                    sortedCollaborationParticipants.map((participant) => {
+                      const activityLabel = getParticipantActivityLabel(participant.lastSeenAt);
+                      return (
+                        <ParticipantPresenceCard
+                          key={participant.sessionId}
+                          variant="compact-card"
+                          name={participant.displayName}
+                          status={activityLabel.state}
+                          activityLabel={activityLabel.label}
+                          chips={[
+                            ...(participant.isSpotlighted
+                              ? [{ key: 'spotlight', label: 'Spotlight' }]
+                              : []),
+                            ...(participant.isRemoved
+                              ? [{ key: 'removed', label: 'Removed', variant: 'outline' }]
+                              : []),
+                          ]}
+                          trailing={
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busyAction !== null || participant.isRemoved}
+                                aria-label={
+                                  participant.isSpotlighted
+                                    ? `Clear spotlight for ${participant.displayName}`
+                                    : `Spotlight ${participant.displayName}`
+                                }
+                                onClick={() => {
+                                  void runCollaborationAction(
+                                    participant.isSpotlighted ? 'clear_spotlight' : 'spotlight',
+                                    participant.isSpotlighted ? undefined : participant.sessionId,
+                                  );
+                                }}
+                              >
+                                <Sparkles className="h-4 w-4" />
+                                {participant.isSpotlighted ? 'Clear spotlight' : 'Spotlight'}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busyAction !== null || participant.isRemoved}
+                                aria-label={`Remove ${participant.displayName}`}
+                                onClick={() => {
+                                  void runCollaborationAction(
+                                    'remove_participant',
+                                    participant.sessionId,
+                                  );
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          }
+                        />
+                      );
+                    })
                   ) : (
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                       Students will appear here once they join the classroom and open the shared
@@ -480,60 +508,60 @@ export function MiroFishManagerDialog({
                       Students will appear here once they join and start polling the classroom.
                     </p>
                   ) : (
-                    participants.map((participant) => (
-                      <div
-                        key={participant.sessionId}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {participant.displayName}
-                            </span>
-                            {participant.isController && <Badge>Controller</Badge>}
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Last active {new Date(participant.lastSeenAt).toLocaleTimeString()}
-                          </p>
-                          {participant.isController && leaseCountdown && (
-                            <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                              Lease: {leaseCountdown}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={participant.isController ? 'secondary' : 'outline'}
-                          disabled={busyAction !== null || !sharedSimulation}
-                          aria-label={
-                            participant.isController
-                              ? `${participant.displayName} currently controls the simulation`
-                              : `Grant control to ${participant.displayName}`
+                    sortedSingleControllerParticipants.map((participant) => {
+                      const activityLabel = getParticipantActivityLabel(participant.lastSeenAt);
+                      const statusLabel =
+                        participant.isController && leaseCountdown
+                          ? `${activityLabel.label} • Lease: ${leaseCountdown}`
+                          : activityLabel.label;
+                      return (
+                        <ParticipantPresenceCard
+                          key={participant.sessionId}
+                          variant="compact-card"
+                          name={participant.displayName}
+                          status={activityLabel.state}
+                          activityLabel={statusLabel}
+                          chips={[
+                            ...(participant.isController
+                              ? [{ key: 'controller', label: 'Controller', variant: 'default' as const }]
+                              : []),
+                          ]}
+                          trailing={
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={participant.isController ? 'secondary' : 'outline'}
+                              disabled={busyAction !== null || !sharedSimulation}
+                              aria-label={
+                                participant.isController
+                                  ? `${participant.displayName} currently controls the simulation`
+                                  : `Grant control to ${participant.displayName}`
+                              }
+                              onClick={async () => {
+                                setBusyAction('grant');
+                                try {
+                                  await onGrantControl(participant.sessionId, leaseMinutes);
+                                } catch (error) {
+                                  toast.error(
+                                    error instanceof Error ? error.message : 'Failed to grant control.',
+                                  );
+                                } finally {
+                                  setBusyAction(null);
+                                }
+                              }}
+                            >
+                              {busyAction === 'grant' && participant.isController ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : participant.isController ? (
+                                'Current controller'
+                              ) : (
+                                'Grant control'
+                              )}
+                            </Button>
                           }
-                          onClick={async () => {
-                            setBusyAction('grant');
-                            try {
-                              await onGrantControl(participant.sessionId, leaseMinutes);
-                            } catch (error) {
-                              toast.error(
-                                error instanceof Error ? error.message : 'Failed to grant control.',
-                              );
-                            } finally {
-                              setBusyAction(null);
-                            }
-                          }}
-                        >
-                          {busyAction === 'grant' && participant.isController ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : participant.isController ? (
-                            'Current controller'
-                          ) : (
-                            'Grant control'
-                          )}
-                        </Button>
-                      </div>
-                    ))
+                        />
+                      );
+                    })
                   )}
                 </div>
               </div>
