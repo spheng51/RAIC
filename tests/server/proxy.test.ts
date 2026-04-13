@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { ACCESS_CODE_COOKIE_NAME, createAccessToken } from '@/lib/server/access-code';
 
 const resolveSessionFromTokenMock = vi.fn();
 
@@ -16,6 +17,7 @@ describe('proxy auth refresh', () => {
   beforeEach(() => {
     vi.resetModules();
     resolveSessionFromTokenMock.mockReset();
+    vi.unstubAllEnvs();
   });
 
   it('refreshes a valid web session on protected page routes', async () => {
@@ -58,5 +60,44 @@ describe('proxy auth refresh', () => {
       'http://localhost/sign-in?next=%2Fstudio%3Ftab%3Drecent',
     );
     expect(response.cookies.get(SESSION_COOKIE_NAME)?.value).toBe('');
+  });
+
+  it('allows access-code bootstrap routes without an access cookie', async () => {
+    vi.stubEnv('ACCESS_CODE', 'secret-code');
+
+    const { proxy } = await import('../../proxy');
+    const response = await proxy(new NextRequest('http://localhost/api/server-providers'));
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects protected api routes when the access-code cookie is missing', async () => {
+    vi.stubEnv('ACCESS_CODE', 'secret-code');
+
+    const { proxy } = await import('../../proxy');
+    const response = await proxy(new NextRequest('http://localhost/api/chat'));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Access code required',
+    });
+  });
+
+  it('allows protected api routes when the access-code cookie is valid', async () => {
+    vi.stubEnv('ACCESS_CODE', 'secret-code');
+
+    const { proxy } = await import('../../proxy');
+    const accessToken = createAccessToken('secret-code');
+    const response = await proxy(
+      new NextRequest('http://localhost/api/chat', {
+        headers: {
+          cookie: `${ACCESS_CODE_COOKIE_NAME}=${accessToken}`,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
   });
 });

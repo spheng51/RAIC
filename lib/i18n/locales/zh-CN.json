@@ -887,5 +887,12 @@
     "voice": "音色",
     "speed": "语速",
     "language": "语言"
+  },
+  "accessCode": {
+    "title": "Enter access code",
+    "description": "This site is protected. Enter the access code to continue.",
+    "placeholder": "Access code",
+    "submit": "Continue",
+    "error": "Incorrect access code. Please try again."
   }
 }
