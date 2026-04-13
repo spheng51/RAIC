@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act, createElement, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClassroomPresentationStatePayload } from '@/lib/types/classroom-presentation';
@@ -51,6 +51,7 @@ class MockEventSource {
 
 interface MountedHook {
   readonly rerender: (classroomId?: string) => Promise<void>;
+  readonly refresh: (silent?: boolean) => Promise<void>;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -93,12 +94,20 @@ async function mountHook(
   mountedRoots.push({ root, container });
 
   let classroomId = initialClassroomId;
+  const hookState: {
+    current?: ReturnType<typeof useClassroomPresentationState>['refreshPresentationState'];
+  } = {};
 
   function Harness({ nextClassroomId }: { nextClassroomId?: string }) {
-    useClassroomPresentationState({
+    const hook = useClassroomPresentationState({
       classroomId: nextClassroomId,
       onStateChange,
     });
+
+    useEffect(() => {
+      hookState.current = hook.refreshPresentationState;
+    }, [hook]);
+
     return createElement('div');
   }
 
@@ -114,6 +123,11 @@ async function mountHook(
     rerender: async (nextClassroomId = classroomId) => {
       classroomId = nextClassroomId;
       await render();
+    },
+    refresh: async (silent = false) => {
+      await act(async () => {
+        await hookState.current?.(silent);
+      });
     },
   };
 }
@@ -303,5 +317,51 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(1);
     });
     expect(MockEventSource.instances).toHaveLength(5);
+  });
+
+  it('queues a manual refresh while a fetch is already in flight', async () => {
+    const bootstrapState = buildPresentationState({ viewerSessionId: 'bootstrap-session' });
+    const refreshedState = buildPresentationState({
+      activeSurface: 'simulation',
+      simulationStatus: 'running',
+      viewerSessionId: 'queued-session',
+    });
+    const onStateChange = vi.fn();
+
+    let resolveFirstFetch: ((value: unknown) => void) | undefined;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstFetch = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...refreshedState,
+        }),
+      });
+
+    const mounted = await mountHook(onStateChange);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const queuedRefresh = mounted.refresh(true);
+
+    await act(async () => {
+      resolveFirstFetch?.({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      });
+      await queuedRefresh;
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onStateChange).toHaveBeenNthCalledWith(1, expect.objectContaining(bootstrapState));
+    expect(onStateChange).toHaveBeenNthCalledWith(2, expect.objectContaining(refreshedState));
   });
 });

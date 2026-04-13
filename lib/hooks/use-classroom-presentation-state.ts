@@ -16,10 +16,19 @@ export function useClassroomPresentationState({
   onStateChange,
 }: UseClassroomPresentationStateOptions) {
   const pollInFlightRef = useRef(false);
+  const queuedRefreshSilentRef = useRef<boolean | null>(null);
 
   const refreshPresentationState = useCallback(
     async (silent = false) => {
-      if (!classroomId || pollInFlightRef.current) {
+      if (!classroomId) {
+        return;
+      }
+
+      if (pollInFlightRef.current) {
+        queuedRefreshSilentRef.current =
+          queuedRefreshSilentRef.current === null
+            ? silent
+            : queuedRefreshSilentRef.current && silent;
         return;
       }
 
@@ -47,6 +56,11 @@ export function useClassroomPresentationState({
         onStateChange(json);
       } finally {
         pollInFlightRef.current = false;
+        const queuedRefreshSilent = queuedRefreshSilentRef.current;
+        if (queuedRefreshSilent !== null) {
+          queuedRefreshSilentRef.current = null;
+          void refreshPresentationState(queuedRefreshSilent);
+        }
       }
     },
     [classroomId, onStateChange],

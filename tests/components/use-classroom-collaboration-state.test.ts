@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act, createElement, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClassroomCollaborationStatePayload } from '@/lib/types/classroom-collaboration';
@@ -51,6 +51,7 @@ class MockEventSource {
 
 interface MountedHook {
   readonly rerender: (classroomId?: string, enabled?: boolean) => Promise<void>;
+  readonly refresh: (silent?: boolean) => Promise<void>;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -95,6 +96,9 @@ async function mountHook(
 
   let classroomId = initialClassroomId;
   let enabled = initialEnabled;
+  const hookState: {
+    current?: ReturnType<typeof useClassroomCollaborationState>['refreshCollaborationState'];
+  } = {};
 
   function Harness({
     nextClassroomId,
@@ -103,11 +107,16 @@ async function mountHook(
     nextClassroomId?: string;
     nextEnabled?: boolean;
   }) {
-    useClassroomCollaborationState({
+    const hook = useClassroomCollaborationState({
       classroomId: nextClassroomId,
       enabled: nextEnabled,
       onStateChange,
     });
+
+    useEffect(() => {
+      hookState.current = hook.refreshCollaborationState;
+    }, [hook]);
+
     return createElement('div');
   }
 
@@ -124,6 +133,11 @@ async function mountHook(
       classroomId = nextClassroomId;
       enabled = nextEnabled;
       await render();
+    },
+    refresh: async (silent = false) => {
+      await act(async () => {
+        await hookState.current?.(silent);
+      });
     },
   };
 }
@@ -248,5 +262,51 @@ describe('useClassroomCollaborationState', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(MockEventSource.instances).toHaveLength(0);
+  });
+
+  it('queues a manual refresh while a fetch is already in flight', async () => {
+    const bootstrapState = buildCollaborationState({ viewerSessionId: 'bootstrap-session' });
+    const refreshedState = buildCollaborationState({
+      collaborationState: 'frozen',
+      viewerInteractionReason: 'frozen',
+      viewerSessionId: 'queued-session',
+    });
+    const onStateChange = vi.fn();
+
+    let resolveFirstFetch: ((value: unknown) => void) | undefined;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstFetch = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...refreshedState,
+        }),
+      });
+
+    const mounted = await mountHook(onStateChange);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const queuedRefresh = mounted.refresh(true);
+
+    await act(async () => {
+      resolveFirstFetch?.({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      });
+      await queuedRefresh;
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onStateChange).toHaveBeenNthCalledWith(1, expect.objectContaining(bootstrapState));
+    expect(onStateChange).toHaveBeenNthCalledWith(2, expect.objectContaining(refreshedState));
   });
 });
