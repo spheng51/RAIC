@@ -125,7 +125,7 @@ export function MiroFishManagerDialog({
     () =>
       sortParticipantsByPresence(participants, {
         nowMs: Date.now(),
-        getIsController: (participant) => participant.isController,
+        getIsController: (participant) => Boolean(participant.isController),
       }),
     [participants],
   );
@@ -438,12 +438,12 @@ export function MiroFishManagerDialog({
                           name={participant.displayName}
                           status={activityLabel.state}
                           activityLabel={activityLabel.label}
-                          chips={[
+                        chips={[
                             ...(participant.isSpotlighted
-                              ? [{ key: 'spotlight', label: 'Spotlight' }]
-                              : []),
+                                ? [{ key: 'spotlight', label: 'Spotlight' }]
+                                : []),
                             ...(participant.isRemoved
-                              ? [{ key: 'removed', label: 'Removed', variant: 'outline' }]
+                              ? [{ key: 'removed', label: 'Removed', variant: 'outline' as const }]
                               : []),
                           ]}
                           trailing={
