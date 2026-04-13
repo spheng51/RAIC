@@ -18,10 +18,19 @@ export function useClassroomCollaborationState({
   onStateChange,
 }: UseClassroomCollaborationStateOptions) {
   const pollInFlightRef = useRef(false);
+  const queuedRefreshSilentRef = useRef<boolean | null>(null);
 
   const refreshCollaborationState = useCallback(
     async (silent = false) => {
-      if (!enabled || !classroomId || pollInFlightRef.current) {
+      if (!enabled || !classroomId) {
+        return;
+      }
+
+      if (pollInFlightRef.current) {
+        queuedRefreshSilentRef.current =
+          queuedRefreshSilentRef.current === null
+            ? silent
+            : queuedRefreshSilentRef.current && silent;
         return;
       }
 
@@ -49,6 +58,11 @@ export function useClassroomCollaborationState({
         onStateChange(json);
       } finally {
         pollInFlightRef.current = false;
+        const queuedRefreshSilent = queuedRefreshSilentRef.current;
+        if (queuedRefreshSilent !== null) {
+          queuedRefreshSilentRef.current = null;
+          void refreshCollaborationState(queuedRefreshSilent);
+        }
       }
     },
     [classroomId, enabled, onStateChange],

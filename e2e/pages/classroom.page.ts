@@ -41,7 +41,7 @@ export class ClassroomPage {
   }
 
   surfaceButton(label: 'Lesson' | 'Simulation' | 'Report') {
-    return this.page.getByRole('button', { name: label, exact: true }).first();
+    return this.page.getByRole('button', { name: label, exact: true }).last();
   }
 
   async switchSurface(label: 'Lesson' | 'Simulation' | 'Report') {

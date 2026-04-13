@@ -52,26 +52,19 @@ async function waitForClassroomAccessCookie(context: BrowserContext) {
 }
 
 async function expectMiroFishFrameSrc(classroom: ClassroomPage, pattern: RegExp, timeout = 15_000) {
-  await expect
-    .poll(async () => (await classroom.miroFishFrame.getAttribute('src')) ?? '', { timeout })
-    .toMatch(pattern);
-}
-
-async function isSimulationSurfaceActive(classroom: ClassroomPage) {
-  const className = (await classroom.surfaceButton('Simulation').getAttribute('class')) ?? '';
-  return className.includes('bg-slate-900') || className.includes('bg-primary');
-}
-
-async function expectSimulationSurface(classroom: ClassroomPage, timeout = 15_000) {
   try {
-    await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
+    await expect
+      .poll(async () => (await classroom.miroFishFrame.getAttribute('src')) ?? '', { timeout })
+      .toMatch(pattern);
     return;
   } catch {
     await classroom.page.reload();
     await classroom.waitForLoaded();
   }
 
-  await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
+  await expect
+    .poll(async () => (await classroom.miroFishFrame.getAttribute('src')) ?? '', { timeout })
+    .toMatch(pattern);
 }
 
 function countClassroomSessions(
@@ -206,6 +199,8 @@ test('single-controller classrooms switch surfaces and reclaim student control',
     const student = await joinClassroom(browser, joinToken.rawToken, 'mirofish-single-room');
     studentContext = student.context;
 
+    await expect(teacher.page.getByText('1 students')).toBeVisible({ timeout: 30_000 });
+
     await teacher.classroom.switchSurface('Simulation');
     await expectMiroFishFrameSrc(teacher.classroom, /\/simulation\/reef-lab\/start/);
     await expectMiroFishFrameSrc(student.classroom, /\/simulation\/reef-lab\/start/);
@@ -316,8 +311,10 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     const studentTwo = await joinClassroom(browser, studentTwoJoin.rawToken, 'mirofish-multi-room');
     studentTwoContext = studentTwo.context;
 
+    await expect(teacher.page.getByText('2 students')).toBeVisible({ timeout: 30_000 });
+
     await teacher.classroom.switchSurface('Simulation');
-    await expectSimulationSurface(teacher.classroom, 30_000);
+    await expectMiroFishFrameSrc(teacher.classroom, /\/simulation\/open-ocean\/start/, 30_000);
 
     const studentSessionResponse = await studentOne.page.request.post(
       `${APP_BASE_URL}/api/classroom/mirofish-multi-room/mirofish/session`,
@@ -333,11 +330,13 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     expect(studentSessionResponse.ok(), JSON.stringify(studentSessionJson)).toBeTruthy();
     expect(studentSessionJson.embedUrl).toContain('participantToken=');
 
-    await expectSimulationSurface(studentOne.classroom, 30_000);
-    await expectSimulationSurface(studentTwo.classroom, 30_000);
-    await expectMiroFishFrameSrc(studentOne.classroom, /participantToken=/);
-    await expectMiroFishFrameSrc(studentOne.classroom, /mirofishSessionId=miro-session-live/);
-    await expectMiroFishFrameSrc(studentTwo.classroom, /participantToken=/);
+    await expectMiroFishFrameSrc(studentOne.classroom, /participantToken=/, 30_000);
+    await expectMiroFishFrameSrc(
+      studentOne.classroom,
+      /mirofishSessionId=miro-session-live/,
+      30_000,
+    );
+    await expectMiroFishFrameSrc(studentTwo.classroom, /participantToken=/, 30_000);
 
     await teacher.classroom.openMiroFishManager();
     const manager = teacher.page.getByRole('dialog');
