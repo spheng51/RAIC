@@ -76,6 +76,50 @@ describe('db client persistence helpers', () => {
     expect(store.users[0]?.id).toBe('user-1');
   });
 
+  it('retries transient JSON read lock errors', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    const platformDir = path.join(testRoot, 'data', 'platform');
+    const platformStorePath = path.join(platformDir, 'platform-store.json');
+    await fs.mkdir(platformDir, { recursive: true });
+    await fs.writeFile(
+      platformStorePath,
+      JSON.stringify({
+        users: [
+          {
+            id: 'user-1',
+            googleSub: null,
+            email: 'teacher@example.com',
+            displayName: 'Teacher',
+            avatarUrl: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastLoginAt: null,
+          },
+        ],
+      }),
+      'utf8',
+    );
+
+    const actualReadFile = fs.readFile.bind(fs);
+    let attempts = 0;
+    const readFileSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (pathLike, options) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('platform store locked') as NodeJS.ErrnoException;
+        error.code = 'EPERM';
+        throw error;
+      }
+
+      return (await actualReadFile(pathLike, options as never)) as never;
+    });
+
+    const { readPlatformStore } = await import('@/lib/db/client');
+    const store = await readPlatformStore();
+
+    expect(store.users[0]?.id).toBe('user-1');
+    expect(readFileSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('throws when DATABASE_URL is set and Postgres schema initialization fails', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://localhost/raic');
     setMockPostgresClient({

@@ -22,8 +22,14 @@ export interface ClassroomAccessContext {
   classroom: PersistedClassroomData;
 }
 
+const CLASSROOM_AUTH_RETRY_COUNT = 5;
+
 function isSecureCookieRequest() {
   return process.env.NODE_ENV === 'production';
+}
+
+async function waitForRetry(attempt: number) {
+  await new Promise((resolve) => setTimeout(resolve, attempt * 25));
 }
 
 export function attachClassroomAccessCookie(
@@ -138,6 +144,21 @@ async function resolveClassroomOwnership(
   return backfilled ?? classroom;
 }
 
+async function resolveClassroomAuthWithRetry(classroomToken: string) {
+  for (let attempt = 1; attempt <= CLASSROOM_AUTH_RETRY_COUNT; attempt += 1) {
+    const classroomAuth = await resolveAuthContextFromToken(classroomToken);
+    if (classroomAuth) {
+      return classroomAuth;
+    }
+
+    if (attempt < CLASSROOM_AUTH_RETRY_COUNT) {
+      await waitForRetry(attempt);
+    }
+  }
+
+  return null;
+}
+
 function canWebSessionAccessClassroom(
   auth: AuthContext,
   classroom: PersistedClassroomData,
@@ -185,7 +206,7 @@ export async function requireClassroomAccess(
     return classroomAccessError('Classroom access required');
   }
 
-  const classroomAuth = await resolveAuthContextFromToken(classroomToken);
+  const classroomAuth = await resolveClassroomAuthWithRetry(classroomToken);
   if (!classroomAuth) {
     return classroomAccessError('Classroom session is invalid or has expired');
   }
