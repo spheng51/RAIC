@@ -104,9 +104,7 @@ function resolveImageProviderConfig(
   const apiKey = config.apiKey?.trim() || '';
 
   if (providerConfig.requiresApiKey && !apiKey) {
-    log.warn(
-      `Skipping ${source} image provider "${providerId}" because it requires an API key`,
-    );
+    log.warn(`Skipping ${source} image provider "${providerId}" because it requires an API key`);
     return null;
   }
 
@@ -118,9 +116,7 @@ function resolveImageProviderConfig(
 
   const baseUrl = config.baseUrl?.trim() || providerConfig.defaultBaseUrl;
   if (!baseUrl) {
-    log.warn(
-      `Skipping ${source} image provider "${providerId}" because no base URL is configured`,
-    );
+    log.warn(`Skipping ${source} image provider "${providerId}" because no base URL is configured`);
     return null;
   }
 

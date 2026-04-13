@@ -451,7 +451,9 @@ export async function generateClassroom(
     try {
       const mediaMap = await generateMediaForClassroom(outlines, stageId, options.baseUrl, {
         organizationId: options.organizationId ?? null,
-        imageProviderOverride: input.enableImageGeneration ? input.imageProviderOverride : undefined,
+        imageProviderOverride: input.enableImageGeneration
+          ? input.imageProviderOverride
+          : undefined,
       });
       replaceMediaPlaceholders(scenes, mediaMap);
       log.info(`Media generation complete: ${Object.keys(mediaMap).length} files`);
