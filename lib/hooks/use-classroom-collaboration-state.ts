@@ -19,6 +19,9 @@ export function useClassroomCollaborationState({
 }: UseClassroomCollaborationStateOptions) {
   const pollInFlightRef = useRef(false);
   const queuedRefreshSilentRef = useRef<boolean | null>(null);
+  const refreshCollaborationStateRef = useRef<(silent?: boolean) => Promise<void>>(
+    async () => undefined,
+  );
 
   const refreshCollaborationState = useCallback(
     async (silent = false) => {
@@ -61,12 +64,14 @@ export function useClassroomCollaborationState({
         const queuedRefreshSilent = queuedRefreshSilentRef.current;
         if (queuedRefreshSilent !== null) {
           queuedRefreshSilentRef.current = null;
-          void refreshCollaborationState(queuedRefreshSilent);
+          void refreshCollaborationStateRef.current(queuedRefreshSilent);
         }
       }
     },
     [classroomId, enabled, onStateChange],
   );
+
+  refreshCollaborationStateRef.current = refreshCollaborationState;
 
   useEffect(() => {
     if (!enabled || !classroomId) {
