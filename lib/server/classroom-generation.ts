@@ -33,6 +33,13 @@ import { AGENT_COLOR_PALETTE, AGENT_DEFAULT_AVATARS } from '@/lib/constants/agen
 
 const log = createLogger('Classroom');
 
+export interface ImageProviderOverride {
+  providerId: string;
+  modelId?: string;
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface GenerateClassroomInput {
   requirement: string;
   pdfContent?: { text: string; images: string[] };
@@ -42,6 +49,7 @@ export interface GenerateClassroomInput {
   enableVideoGeneration?: boolean;
   enableTTS?: boolean;
   agentMode?: 'default' | 'generate';
+  imageProviderOverride?: ImageProviderOverride;
 }
 
 export type ClassroomGenerationStep =
@@ -443,6 +451,7 @@ export async function generateClassroom(
     try {
       const mediaMap = await generateMediaForClassroom(outlines, stageId, options.baseUrl, {
         organizationId: options.organizationId ?? null,
+        imageProviderOverride: input.enableImageGeneration ? input.imageProviderOverride : undefined,
       });
       replaceMediaPlaceholders(scenes, mediaMap);
       log.info(`Media generation complete: ${Object.keys(mediaMap).length} files`);

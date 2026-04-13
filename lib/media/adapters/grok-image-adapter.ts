@@ -71,6 +71,7 @@ export async function generateWithGrokImage(
     body: JSON.stringify({
       model: config.model || DEFAULT_MODEL,
       prompt: options.prompt,
+      aspect_ratio: options.aspectRatio,
       n: 1,
       response_format: 'url',
     }),
@@ -78,7 +79,8 @@ export async function generateWithGrokImage(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Grok image generation failed (${response.status}): ${text}`);
+    const detail = text.trim() || response.statusText || 'Unknown Grok image generation error';
+    throw new Error(`Grok image generation failed (${response.status}): ${detail}`);
   }
 
   const data = await response.json();

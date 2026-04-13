@@ -25,6 +25,7 @@ import type { VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { AIProviderFamily } from '@/lib/types/ai-governance';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
+import type { ImageProviderOverride } from '@/lib/server/classroom-generation';
 
 const log = createLogger('ClassroomMedia');
 
@@ -75,6 +76,110 @@ async function resolveFirstBackgroundProvider<T extends string>(input: {
   return null;
 }
 
+interface ResolvedImageProviderConfig {
+  providerId: ImageProviderId;
+  apiKey: string;
+  baseUrl?: string;
+  modelId?: string;
+}
+
+function resolveImageProviderConfig(
+  source: 'request-scoped override' | 'governed background config',
+  config: {
+    providerId: string;
+    apiKey?: string;
+    baseUrl?: string;
+    modelId?: string;
+  },
+): ResolvedImageProviderConfig | null {
+  if (!(config.providerId in IMAGE_PROVIDERS)) {
+    log.warn(
+      `Skipping ${source} image provider "${config.providerId}" because it is not supported`,
+    );
+    return null;
+  }
+
+  const providerId = config.providerId as ImageProviderId;
+  const providerConfig = IMAGE_PROVIDERS[providerId];
+  const apiKey = config.apiKey?.trim() || '';
+
+  if (providerConfig.requiresApiKey && !apiKey) {
+    log.warn(
+      `Skipping ${source} image provider "${providerId}" because it requires an API key`,
+    );
+    return null;
+  }
+
+  const modelId = config.modelId?.trim() || providerConfig.models[0]?.id;
+  if (!modelId) {
+    log.warn(`Skipping ${source} image provider "${providerId}" because no model is configured`);
+    return null;
+  }
+
+  const baseUrl = config.baseUrl?.trim() || providerConfig.defaultBaseUrl;
+  if (!baseUrl) {
+    log.warn(
+      `Skipping ${source} image provider "${providerId}" because no base URL is configured`,
+    );
+    return null;
+  }
+
+  return {
+    providerId,
+    apiKey,
+    baseUrl,
+    modelId,
+  };
+}
+
+async function resolveImageProviderForClassroom(scope: {
+  organizationId: string | null;
+  imageProviderOverride?: ImageProviderOverride;
+}): Promise<ResolvedImageProviderConfig | null> {
+  if (scope.imageProviderOverride) {
+    const resolvedOverride = resolveImageProviderConfig('request-scoped override', {
+      providerId: scope.imageProviderOverride.providerId,
+      apiKey: scope.imageProviderOverride.apiKey,
+      baseUrl: scope.imageProviderOverride.baseUrl,
+      modelId: scope.imageProviderOverride.modelId,
+    });
+
+    if (resolvedOverride) {
+      log.info(`Using request-scoped image provider override: ${resolvedOverride.providerId}`);
+      return resolvedOverride;
+    }
+
+    log.warn(
+      `Request-scoped image provider override "${scope.imageProviderOverride.providerId}" is invalid, falling back to governed provider`,
+    );
+  }
+
+  const imageProviderIds = Object.keys(IMAGE_PROVIDERS) as ImageProviderId[];
+  const resolvedImageProvider = await resolveFirstBackgroundProvider({
+    family: 'image',
+    providerIds: imageProviderIds,
+    organizationId: scope.organizationId,
+  });
+
+  if (!resolvedImageProvider) {
+    return null;
+  }
+
+  const providerId = resolvedImageProvider.providerId as ImageProviderId;
+  const resolvedBackground = resolveImageProviderConfig('governed background config', {
+    providerId,
+    apiKey: resolvedImageProvider.apiKey,
+    baseUrl: resolvedImageProvider.baseUrl,
+    modelId: resolvedImageProvider.modelId,
+  });
+
+  if (resolvedBackground) {
+    log.info(`Using governed image provider: ${resolvedBackground.providerId}`);
+  }
+
+  return resolvedBackground;
+}
+
 // ---------------------------------------------------------------------------
 // Image / Video generation
 // ---------------------------------------------------------------------------
@@ -85,6 +190,7 @@ export async function generateMediaForClassroom(
   baseUrl: string,
   scope: {
     organizationId: string | null;
+    imageProviderOverride?: ImageProviderOverride;
   },
 ): Promise<Record<string, string>> {
   const mediaDir = path.join(CLASSROOMS_DIR, classroomId, 'media');
@@ -94,14 +200,8 @@ export async function generateMediaForClassroom(
   const requests = outlines.flatMap((o) => o.mediaGenerations ?? []);
   if (requests.length === 0) return {};
 
-  // Resolve providers
-  const imageProviderIds = Object.keys(IMAGE_PROVIDERS) as ImageProviderId[];
   const videoProviderIds = Object.keys(VIDEO_PROVIDERS) as VideoProviderId[];
-  const resolvedImageProvider = await resolveFirstBackgroundProvider({
-    family: 'image',
-    providerIds: imageProviderIds,
-    organizationId: scope.organizationId,
-  });
+  const resolvedImageProvider = await resolveImageProviderForClassroom(scope);
   const resolvedVideoProvider = await resolveFirstBackgroundProvider({
     family: 'video',
     providerIds: videoProviderIds,
@@ -117,6 +217,9 @@ export async function generateMediaForClassroom(
 
   const generateImages = async () => {
     if (!resolvedImageProvider) {
+      if (requests.some((r) => r.type === 'image')) {
+        log.warn('No image provider available for classroom media generation, skipping images');
+      }
       return;
     }
 
@@ -124,7 +227,7 @@ export async function generateMediaForClassroom(
       try {
         const providerId = resolvedImageProvider.providerId as ImageProviderId;
         const providerConfig = IMAGE_PROVIDERS[providerId];
-        const model = resolvedImageProvider.modelId || providerConfig?.models?.[0]?.id;
+        const model = resolvedImageProvider.modelId || providerConfig?.models?.[0]?.id || '';
 
         const result = await generateImage(
           {

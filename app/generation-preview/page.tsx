@@ -49,8 +49,16 @@ interface ClassroomGenerationJobResponse {
     readonly url: string;
   } | null;
   readonly error?: string | null;
+  readonly details?: string | null;
   readonly done?: boolean;
 }
+
+type ImageProviderOverride = {
+  providerId: string;
+  modelId?: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
 
 function GenerationPreviewContent() {
   const router = useRouter();
@@ -209,6 +217,7 @@ function GenerationPreviewContent() {
   const runServerBackedGeneration = useCallback(
     async (currentSession: GenerationSessionState, signal: AbortSignal) => {
       const settings = useSettingsStore.getState();
+      const imageProviderConfig = settings.imageProvidersConfig?.[settings.imageProviderId];
       const enableTTS = settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts';
       const payload = {
         requirement: currentSession.requirements.requirement,
@@ -223,10 +232,22 @@ function GenerationPreviewContent() {
         language: currentSession.requirements.language,
         enableWebSearch: !!currentSession.requirements.webSearch,
         enableImageGeneration: !!settings.imageGenerationEnabled,
+        ...(settings.imageGenerationEnabled && settings.imageProviderId
+          ? {
+              imageProviderOverride: {
+                providerId: settings.imageProviderId,
+                ...(settings.imageModelId ? { modelId: settings.imageModelId } : {}),
+                ...(imageProviderConfig?.apiKey ? { apiKey: imageProviderConfig.apiKey } : {}),
+                ...(imageProviderConfig?.baseUrl ? { baseUrl: imageProviderConfig.baseUrl } : {}),
+              },
+            }
+          : {}),
         enableVideoGeneration: !!settings.videoGenerationEnabled,
         enableTTS,
         agentMode: settings.agentMode === 'auto' ? 'generate' : 'default',
       };
+      const getFailureMessage = (data: { error?: string | null; details?: string | null } | null) =>
+        data?.details || data?.error || t('upload.generateFailed');
 
       const startResponse = await fetch('/api/generate-classroom', {
         method: 'POST',
@@ -241,11 +262,12 @@ function GenerationPreviewContent() {
         | ClassroomGenerationJobResponse
         | {
             readonly error?: string;
+            readonly details?: string;
           }
         | null;
 
       if (!startResponse.ok || !startData || !('pollUrl' in startData)) {
-        throw new Error(startData?.error || t('upload.generateFailed'));
+        throw new Error(getFailureMessage(startData));
       }
 
       setStatusMessage(startData.message || t('generation.generatingCourse'));
@@ -264,11 +286,12 @@ function GenerationPreviewContent() {
           | ClassroomGenerationJobResponse
           | {
               readonly error?: string;
+              readonly details?: string;
             }
           | null;
 
         if (!pollResponse.ok || !pollData || !('pollUrl' in pollData)) {
-          throw new Error(pollData?.error || t('upload.generateFailed'));
+          throw new Error(getFailureMessage(pollData));
         }
 
         setStatusMessage(pollData.message || t('generation.generatingCourse'));
@@ -288,7 +311,7 @@ function GenerationPreviewContent() {
             return;
           }
 
-          throw new Error(pollData.error || t('upload.generateFailed'));
+          throw new Error(getFailureMessage(pollData));
         }
 
         pollUrl = pollData.pollUrl;
