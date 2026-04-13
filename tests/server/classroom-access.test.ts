@@ -205,6 +205,31 @@ describe('classroom access helper', () => {
     });
   });
 
+  it('retries transient classroom auth resolution failures before clearing the cookie', async () => {
+    resolveAuthContextFromTokenMock.mockResolvedValueOnce(null).mockResolvedValue({
+      session: { id: 'session-1', kind: 'classroom', classroomId: 'room-1', role: 'student' },
+      user: { id: 'student-1' },
+    });
+
+    const { requireClassroomAccess } = await import('@/lib/auth/classroom-access');
+    const request = new NextRequest('http://localhost/api/classroom?id=room-1', {
+      headers: {
+        cookie: `${CLASSROOM_ACCESS_COOKIE_NAME}=raw-token`,
+      },
+    });
+    const result = await requireClassroomAccess(request, 'room-1');
+
+    expect(resolveAuthContextFromTokenMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      auth: {
+        session: { id: 'session-1', kind: 'classroom', classroomId: 'room-1', role: 'student' },
+        user: { id: 'student-1' },
+      },
+      source: 'classroom',
+      classroom: classroomRecord(),
+    });
+  });
+
   it('clears the cookie when the classroom session does not match', async () => {
     resolveAuthContextFromTokenMock.mockResolvedValue({
       session: { id: 'session-1', kind: 'classroom', classroomId: 'room-2', role: 'student' },

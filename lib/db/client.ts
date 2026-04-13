@@ -9,6 +9,8 @@ import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
 const runtimeRequire = createRequire(import.meta.url);
 const PLATFORM_DATA_DIR = path.join(process.cwd(), 'data', 'platform');
 const PLATFORM_STORE_PATH = path.join(PLATFORM_DATA_DIR, 'platform-store.json');
+const TRANSIENT_PLATFORM_READ_CODES = new Set(['EPERM', 'EBUSY']);
+const PLATFORM_READ_RETRY_COUNT = 5;
 
 export type PostgresExecutor = {
   unsafe<T>(query: string, params?: unknown[]): Promise<T[]>;
@@ -64,6 +66,10 @@ function normalizePlatformStore(value: unknown): PlatformStore {
 
 async function ensurePlatformDataDir() {
   await fs.mkdir(PLATFORM_DATA_DIR, { recursive: true });
+}
+
+async function waitForRetry(attempt: number) {
+  await new Promise((resolve) => setTimeout(resolve, attempt * 50));
 }
 
 function getDatabaseUrl() {
@@ -176,16 +182,24 @@ export async function runPostgresTransaction<T>(
 
 export async function readPlatformStore(): Promise<PlatformStore> {
   await ensurePlatformDataDir();
-  try {
-    const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf-8');
-    return normalizePlatformStore(JSON.parse(content));
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return structuredClone(EMPTY_PLATFORM_STORE);
+  for (let attempt = 1; attempt <= PLATFORM_READ_RETRY_COUNT; attempt += 1) {
+    try {
+      const content = await fs.readFile(PLATFORM_STORE_PATH, 'utf-8');
+      return normalizePlatformStore(JSON.parse(content));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return structuredClone(EMPTY_PLATFORM_STORE);
+      }
+      if (TRANSIENT_PLATFORM_READ_CODES.has(code ?? '') && attempt < PLATFORM_READ_RETRY_COUNT) {
+        await waitForRetry(attempt);
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  return structuredClone(EMPTY_PLATFORM_STORE);
 }
 
 export async function updatePlatformStore<T>(

@@ -124,4 +124,29 @@ describe('classroom-storage helpers', () => {
     await expect(fs.readFile(filePath, 'utf-8')).resolves.toContain('"ok": true');
     expect(rename).toHaveBeenCalledTimes(2);
   });
+
+  it('retries atomic writes after a transient temp-file rename ENOENT', async () => {
+    const realRename = fs.rename;
+    const rename = vi.spyOn(fs, 'rename');
+    let attempts = 0;
+
+    rename.mockImplementation(async (from, to) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await fs.rm(from, { force: true }).catch(() => undefined);
+        const error = new Error('missing temp file') as NodeJS.ErrnoException;
+        error.code = 'ENOENT';
+        throw error;
+      }
+      return realRename(from, to);
+    });
+
+    const filePath = path.join(process.cwd(), 'data', 'classrooms', 'atomic-write-enoent.json');
+    const { writeJsonFileAtomic } = await import('@/lib/server/classroom-storage');
+
+    await writeJsonFileAtomic(filePath, { ok: true });
+
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toContain('"ok": true');
+    expect(rename).toHaveBeenCalledTimes(2);
+  });
 });

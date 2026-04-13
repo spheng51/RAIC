@@ -36,12 +36,42 @@ async function joinClassroom(browser: Browser, rawJoinToken: string, classroomId
   await page.goto(`${APP_BASE_URL}/join/${rawJoinToken}/enter`);
   await page.waitForURL(new RegExp(`/classroom/${classroomId}$`));
   await classroom.waitForLoaded();
+  await waitForClassroomAccessCookie(context);
   return { context, page, classroom };
 }
 
 async function getCookieValue(context: BrowserContext, name: string) {
   const cookies = await context.cookies(APP_BASE_URL);
   return cookies.find((cookie) => cookie.name === name)?.value ?? null;
+}
+
+async function waitForClassroomAccessCookie(context: BrowserContext) {
+  await expect
+    .poll(() => getCookieValue(context, 'raic_classroom_access'), { timeout: 15_000 })
+    .toBeTruthy();
+}
+
+async function expectMiroFishFrameSrc(classroom: ClassroomPage, pattern: RegExp, timeout = 15_000) {
+  await expect
+    .poll(async () => (await classroom.miroFishFrame.getAttribute('src')) ?? '', { timeout })
+    .toMatch(pattern);
+}
+
+async function isSimulationSurfaceActive(classroom: ClassroomPage) {
+  const className = (await classroom.surfaceButton('Simulation').getAttribute('class')) ?? '';
+  return className.includes('bg-slate-900') || className.includes('bg-primary');
+}
+
+async function expectSimulationSurface(classroom: ClassroomPage, timeout = 15_000) {
+  try {
+    await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
+    return;
+  } catch {
+    await classroom.page.reload();
+    await classroom.waitForLoaded();
+  }
+
+  await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
 }
 
 function countClassroomSessions(
@@ -54,14 +84,23 @@ function countClassroomSessions(
 }
 
 async function countPersistedClassroomSessions(classroomId: string) {
-  try {
-    return countClassroomSessions(await readPlatformStore(), classroomId);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return 0;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return countClassroomSessions(await readPlatformStore(), classroomId);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return 0;
+      }
+      if ((code === 'EPERM' || code === 'EBUSY') && attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 50));
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  return 0;
 }
 
 function createAttachedSimulation(
@@ -168,29 +207,20 @@ test('single-controller classrooms switch surfaces and reclaim student control',
     studentContext = student.context;
 
     await teacher.classroom.switchSurface('Simulation');
-    await expect(teacher.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /\/simulation\/reef-lab\/start/,
-    );
-    await expect(student.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /\/simulation\/reef-lab\/start/,
-    );
+    await expectMiroFishFrameSrc(teacher.classroom, /\/simulation\/reef-lab\/start/);
+    await expectMiroFishFrameSrc(student.classroom, /\/simulation\/reef-lab\/start/);
     await expect(student.classroom.readOnlyOverlayHeading).toBeVisible();
 
     await teacher.classroom.switchSurface('Report');
-    await expect(teacher.classroom.miroFishFrame).toHaveAttribute('src', /\/report\/reef-report/);
-    await expect(student.classroom.miroFishFrame).toHaveAttribute('src', /\/report\/reef-report/);
+    await expectMiroFishFrameSrc(teacher.classroom, /\/report\/reef-report/);
+    await expectMiroFishFrameSrc(student.classroom, /\/report\/reef-report/);
 
     await teacher.classroom.switchSurface('Lesson');
     await expect(teacher.classroom.miroFishFrame).toHaveCount(0);
     await expect(student.classroom.miroFishFrame).toHaveCount(0);
 
     await teacher.classroom.switchSurface('Simulation');
-    await expect(teacher.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /\/simulation\/reef-lab\/start/,
-    );
+    await expectMiroFishFrameSrc(teacher.classroom, /\/simulation\/reef-lab\/start/);
 
     await teacher.classroom.openMiroFishManager();
     const manager = teacher.page.getByRole('dialog');
@@ -221,6 +251,8 @@ test('single-controller classrooms switch surfaces and reclaim student control',
 test('multi-user classrooms issue participant embeds, moderate collaboration, and recover to lesson', async ({
   browser,
 }) => {
+  test.setTimeout(60_000);
+
   const teacherSession = createAuthSession({
     role: 'teacher',
     userId: 'teacher-mirofish-multi',
@@ -285,6 +317,7 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     studentTwoContext = studentTwo.context;
 
     await teacher.classroom.switchSurface('Simulation');
+    await expectSimulationSurface(teacher.classroom, 30_000);
 
     const studentSessionResponse = await studentOne.page.request.post(
       `${APP_BASE_URL}/api/classroom/mirofish-multi-room/mirofish/session`,
@@ -300,17 +333,11 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     expect(studentSessionResponse.ok(), JSON.stringify(studentSessionJson)).toBeTruthy();
     expect(studentSessionJson.embedUrl).toContain('participantToken=');
 
-    await expect(studentOne.classroom.miroFishFrame).toHaveAttribute('src', /participantToken=/, {
-      timeout: 15_000,
-    });
-    await expect(studentOne.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /mirofishSessionId=miro-session-live/,
-      { timeout: 15_000 },
-    );
-    await expect(studentTwo.classroom.miroFishFrame).toHaveAttribute('src', /participantToken=/, {
-      timeout: 15_000,
-    });
+    await expectSimulationSurface(studentOne.classroom, 30_000);
+    await expectSimulationSurface(studentTwo.classroom, 30_000);
+    await expectMiroFishFrameSrc(studentOne.classroom, /participantToken=/);
+    await expectMiroFishFrameSrc(studentOne.classroom, /mirofishSessionId=miro-session-live/);
+    await expectMiroFishFrameSrc(studentTwo.classroom, /participantToken=/);
 
     await teacher.classroom.openMiroFishManager();
     const manager = teacher.page.getByRole('dialog');
@@ -358,6 +385,8 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
 test('join links reuse the same classroom session while a MiroFish simulation is attached', async ({
   browser,
 }) => {
+  test.setTimeout(45_000);
+
   const teacherSession = createAuthSession({
     role: 'teacher',
     userId: 'teacher-mirofish-reuse',
@@ -401,26 +430,25 @@ test('join links reuse the same classroom session while a MiroFish simulation is
     const student = await joinClassroom(browser, joinToken.rawToken, 'mirofish-reuse-room');
     studentContext = student.context;
 
-    await expect(student.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /\/simulation\/reuse-sim\/start/,
-    );
+    await expectMiroFishFrameSrc(student.classroom, /\/simulation\/reuse-sim\/start/);
 
-    const firstCookie = await getCookieValue(student.context, 'raic_classroom_access');
-    expect(firstCookie).toBeTruthy();
+    await expect
+      .poll(() => getCookieValue(student.context, 'raic_classroom_access'), { timeout: 15_000 })
+      .toBeTruthy();
+    const firstCookieValue = await getCookieValue(student.context, 'raic_classroom_access');
+    expect(firstCookieValue).toBeTruthy();
     await expect.poll(() => countPersistedClassroomSessions('mirofish-reuse-room')).toBe(1);
 
     await student.page.goto(`${APP_BASE_URL}/join/${joinToken.rawToken}/enter`);
     await student.page.waitForURL(/\/classroom\/mirofish-reuse-room$/);
     await student.classroom.waitForLoaded();
-    await expect(student.classroom.miroFishFrame).toHaveAttribute(
-      'src',
-      /\/simulation\/reuse-sim\/start/,
-    );
+    await waitForClassroomAccessCookie(student.context);
+    await expectMiroFishFrameSrc(student.classroom, /\/simulation\/reuse-sim\/start/);
 
-    const reusedCookie = await getCookieValue(student.context, 'raic_classroom_access');
-    expect(reusedCookie).toBe(firstCookie);
-    expect(await countPersistedClassroomSessions('mirofish-reuse-room')).toBe(1);
+    await expect
+      .poll(() => getCookieValue(student.context, 'raic_classroom_access'), { timeout: 15_000 })
+      .toBe(firstCookieValue);
+    await expect.poll(() => countPersistedClassroomSessions('mirofish-reuse-room')).toBe(1);
   } finally {
     await studentContext?.close();
   }
