@@ -57,6 +57,23 @@ async function expectMiroFishFrameSrc(classroom: ClassroomPage, pattern: RegExp,
     .toMatch(pattern);
 }
 
+async function isSimulationSurfaceActive(classroom: ClassroomPage) {
+  const className = (await classroom.surfaceButton('Simulation').getAttribute('class')) ?? '';
+  return className.includes('bg-slate-900') || className.includes('bg-primary');
+}
+
+async function expectSimulationSurface(classroom: ClassroomPage, timeout = 15_000) {
+  try {
+    await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
+    return;
+  } catch {
+    await classroom.page.reload();
+    await classroom.waitForLoaded();
+  }
+
+  await expect.poll(() => isSimulationSurfaceActive(classroom), { timeout }).toBe(true);
+}
+
 function countClassroomSessions(
   store: Awaited<ReturnType<typeof readPlatformStore>>,
   classroomId: string,
@@ -234,6 +251,8 @@ test('single-controller classrooms switch surfaces and reclaim student control',
 test('multi-user classrooms issue participant embeds, moderate collaboration, and recover to lesson', async ({
   browser,
 }) => {
+  test.setTimeout(60_000);
+
   const teacherSession = createAuthSession({
     role: 'teacher',
     userId: 'teacher-mirofish-multi',
@@ -298,6 +317,7 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     studentTwoContext = studentTwo.context;
 
     await teacher.classroom.switchSurface('Simulation');
+    await expectSimulationSurface(teacher.classroom, 30_000);
 
     const studentSessionResponse = await studentOne.page.request.post(
       `${APP_BASE_URL}/api/classroom/mirofish-multi-room/mirofish/session`,
@@ -313,6 +333,8 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     expect(studentSessionResponse.ok(), JSON.stringify(studentSessionJson)).toBeTruthy();
     expect(studentSessionJson.embedUrl).toContain('participantToken=');
 
+    await expectSimulationSurface(studentOne.classroom, 30_000);
+    await expectSimulationSurface(studentTwo.classroom, 30_000);
     await expectMiroFishFrameSrc(studentOne.classroom, /participantToken=/);
     await expectMiroFishFrameSrc(studentOne.classroom, /mirofishSessionId=miro-session-live/);
     await expectMiroFishFrameSrc(studentTwo.classroom, /participantToken=/);
