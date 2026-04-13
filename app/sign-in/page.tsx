@@ -69,8 +69,8 @@ export default async function SignInPage({
             <CardTitle>Teacher sign-in</CardTitle>
             <CardDescription>
               Use your Google account to enter the protected RAIC studio. Student participation
-              stays on a separate join-token flow, and org-admin rollout can stay disabled until
-              you are ready to assign it explicitly.
+              stays on a separate join-token flow, and org-admin rollout can stay disabled until you
+              are ready to assign it explicitly.
             </CardDescription>
           </CardHeader>
           <CardContent>

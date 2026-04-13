@@ -237,9 +237,12 @@ function GenerationPreviewContent() {
         signal,
       });
 
-      const startData = (await startResponse.json().catch(() => null)) as ClassroomGenerationJobResponse | {
-        readonly error?: string;
-      } | null;
+      const startData = (await startResponse.json().catch(() => null)) as
+        | ClassroomGenerationJobResponse
+        | {
+            readonly error?: string;
+          }
+        | null;
 
       if (!startResponse.ok || !startData || !('pollUrl' in startData)) {
         throw new Error(startData?.error || t('upload.generateFailed'));
@@ -257,9 +260,12 @@ function GenerationPreviewContent() {
           cache: 'no-store',
           signal,
         });
-        const pollData = (await pollResponse.json().catch(() => null)) as ClassroomGenerationJobResponse | {
-          readonly error?: string;
-        } | null;
+        const pollData = (await pollResponse.json().catch(() => null)) as
+          | ClassroomGenerationJobResponse
+          | {
+              readonly error?: string;
+            }
+          | null;
 
         if (!pollResponse.ok || !pollData || !('pollUrl' in pollData)) {
           throw new Error(pollData?.error || t('upload.generateFailed'));
@@ -984,7 +990,9 @@ function GenerationPreviewContent() {
     abortControllerRef.current?.abort();
     sessionStorage.removeItem('generationSession');
     clearClassroomLaunchContext();
-    router.push(session?.homePath ?? getHomePathForLaunchMode(session?.launchMode ?? 'public-demo'));
+    router.push(
+      session?.homePath ?? getHomePathForLaunchMode(session?.launchMode ?? 'public-demo'),
+    );
   };
 
   // Still loading session from sessionStorage

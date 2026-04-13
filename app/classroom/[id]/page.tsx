@@ -55,8 +55,7 @@ export default function ClassroomDetailPage() {
   const homePath = classroomSource
     ? getHomePathForLaunchMode(classroomSource)
     : getHomePathForLaunchMode('public-demo');
-  const classroomNotice =
-    classroomSource === 'public-demo' ? t('classroom.localDemoNotice') : null;
+  const classroomNotice = classroomSource === 'public-demo' ? t('classroom.localDemoNotice') : null;
 
   const buildClassroomErrorState = useCallback(
     (
@@ -145,7 +144,9 @@ export default function ClassroomDetailPage() {
             );
           } else {
             const notFoundError = new Error(
-              expectServerBacked ? t('classroom.teacherAccessMissing') : t('classroom.classroomNotFound'),
+              expectServerBacked
+                ? t('classroom.teacherAccessMissing')
+                : t('classroom.classroomNotFound'),
             ) as Error & { status?: number };
             notFoundError.status = 404;
             throw notFoundError;
@@ -247,7 +248,9 @@ export default function ClassroomDetailPage() {
       const nextErrorState = buildClassroomErrorState(status, {
         preferTeacherStudio: expectServerBacked,
       });
-      setError(err instanceof Error ? err.message || nextErrorState.message : nextErrorState.message);
+      setError(
+        err instanceof Error ? err.message || nextErrorState.message : nextErrorState.message,
+      );
       setErrorAction(nextErrorState.action);
       setClassroomSource(null);
     } finally {

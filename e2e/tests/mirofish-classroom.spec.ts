@@ -54,14 +54,23 @@ function countClassroomSessions(
 }
 
 async function countPersistedClassroomSessions(classroomId: string) {
-  try {
-    return countClassroomSessions(await readPlatformStore(), classroomId);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return 0;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return countClassroomSessions(await readPlatformStore(), classroomId);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return 0;
+      }
+      if ((code === 'EPERM' || code === 'EBUSY') && attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 50));
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  return 0;
 }
 
 function createAttachedSimulation(
@@ -420,7 +429,7 @@ test('join links reuse the same classroom session while a MiroFish simulation is
 
     const reusedCookie = await getCookieValue(student.context, 'raic_classroom_access');
     expect(reusedCookie).toBe(firstCookie);
-    expect(await countPersistedClassroomSessions('mirofish-reuse-room')).toBe(1);
+    await expect.poll(() => countPersistedClassroomSessions('mirofish-reuse-room')).toBe(1);
   } finally {
     await studentContext?.close();
   }
