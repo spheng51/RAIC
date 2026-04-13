@@ -345,7 +345,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center p-4 pt-16 md:p-8 md:pt-16 overflow-x-hidden">
+    <main className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center p-4 pt-16 md:p-8 md:pt-16 overflow-x-hidden">
       {/* ═══ Top-right pill (unchanged) ═══ */}
       <div
         ref={toolbarRef}
@@ -464,6 +464,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           classrooms.length === 0 ? 'justify-center min-h-[calc(100dvh-8rem)]' : 'mt-[10vh]',
         )}
       >
+        <h1 className="sr-only">{t('home.slogan')}</h1>
         {/* ── Logo ── */}
         <motion.div
           initial={{ opacity: 0, scale: 0.92 }}
@@ -695,7 +696,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
         OpenRAIC Open Source Project
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -837,25 +838,7 @@ function GreetingBar() {
           >
             <div className="rounded-2xl bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06] shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_8px_-2px_rgba(0,0,0,0.3)] px-2.5 py-2">
               {/* ── Row: avatar + name ── */}
-              <div
-                role="button"
-                tabIndex={0}
-                className="flex items-center gap-2.5 cursor-pointer transition-all duration-200"
-                aria-label={t('common.close')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setOpen(false);
-                    setEditingName(false);
-                    setAvatarPickerOpen(false);
-                  }
-                }}
-                onClick={() => {
-                  setOpen(false);
-                  setEditingName(false);
-                  setAvatarPickerOpen(false);
-                }}
-              >
+              <div className="flex items-center gap-2.5 transition-all duration-200">
                 {/* Avatar */}
                 <button
                   type="button"
@@ -903,6 +886,8 @@ function GreetingBar() {
                         className="flex-1 min-w-0 h-6 bg-transparent border-b border-border/80 text-[13px] font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
                       />
                       <button
+                        type="button"
+                        aria-label="Save profile name"
                         onClick={commitName}
                         className="shrink-0 size-5 rounded flex items-center justify-center text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/30"
                       >
@@ -910,7 +895,10 @@ function GreetingBar() {
                       </button>
                     </div>
                   ) : (
-                    <span
+                    <button
+                      type="button"
+                      aria-label={t('profile.editTooltip')}
+                      title={t('profile.editTooltip')}
                       onClick={(e) => {
                         e.stopPropagation();
                         startEditName();
@@ -921,18 +909,25 @@ function GreetingBar() {
                         {displayName}
                       </span>
                       <Pencil className="size-2.5 text-muted-foreground/30 opacity-0 group-hover/name:opacity-100 transition-opacity" />
-                    </span>
+                    </button>
                   )}
                 </div>
 
                 {/* Collapse arrow */}
-                <motion.div
+                <motion.button
+                  type="button"
+                  aria-label={t('common.close')}
+                  onClick={() => {
+                    setOpen(false);
+                    setEditingName(false);
+                    setAvatarPickerOpen(false);
+                  }}
                   initial={{ opacity: 0, y: -2 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="shrink-0 size-6 rounded-full flex items-center justify-center hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
                 >
                   <ChevronUp className="size-3.5 text-muted-foreground/50" />
-                </motion.div>
+                </motion.button>
               </div>
 
               {/* ── Expandable content ── */}
@@ -963,7 +958,8 @@ function GreetingBar() {
                             <img src={url} alt="" className="size-full" />
                           </button>
                         ))}
-                        <label
+                        <button
+                          type="button"
                           aria-label={t('profile.uploadAvatar')}
                           className={cn(
                             'size-7 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 border border-dashed',
@@ -976,7 +972,7 @@ function GreetingBar() {
                           title={t('profile.uploadAvatar')}
                         >
                           <ImagePlus className="size-3" />
-                        </label>
+                        </button>
                       </div>
                     </motion.div>
                   )}
