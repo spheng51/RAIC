@@ -506,6 +506,8 @@ OpenMAIC/
 
 ### How to Contribute
 
+This repository now uses a single-branch operating model for post-merge stability. See [OPS.md](./OPS.md) for branch hygiene, scratch-branch workflow, required validation gates, and deferred #13 follow-up provenance.
+
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
