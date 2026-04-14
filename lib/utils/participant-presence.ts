@@ -91,20 +91,20 @@ export function getParticipantActivityLabel(
   if (state === 'active') {
     return {
       state,
-      label: `active · ${relative}`,
+      label: `active - ${relative}`,
     };
   }
 
   if (state === 'just-left') {
     return {
       state,
-      label: `just-left · ${relative}`,
+      label: `just-left - ${relative}`,
     };
   }
 
   return {
     state,
-    label: `idle · ${relative}`,
+    label: `idle - ${relative}`,
   };
 }
 

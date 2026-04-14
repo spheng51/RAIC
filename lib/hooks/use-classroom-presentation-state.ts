@@ -8,11 +8,13 @@ const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000] as const;
 
 interface UseClassroomPresentationStateOptions {
   readonly classroomId?: string;
+  readonly enabled?: boolean;
   readonly onStateChange: (nextState: ClassroomPresentationStatePayload | null) => void;
 }
 
 export function useClassroomPresentationState({
   classroomId,
+  enabled = true,
   onStateChange,
 }: UseClassroomPresentationStateOptions) {
   const pollInFlightRef = useRef(false);
@@ -23,7 +25,7 @@ export function useClassroomPresentationState({
 
   const refreshPresentationState = useCallback(
     async (silent = false) => {
-      if (!classroomId) {
+      if (!enabled || !classroomId) {
         return;
       }
 
@@ -66,13 +68,13 @@ export function useClassroomPresentationState({
         }
       }
     },
-    [classroomId, onStateChange],
+    [classroomId, enabled, onStateChange],
   );
 
   refreshPresentationStateRef.current = refreshPresentationState;
 
   useEffect(() => {
-    if (!classroomId) {
+    if (!enabled || !classroomId) {
       return;
     }
 
@@ -173,7 +175,7 @@ export function useClassroomPresentationState({
       stopPolling();
       closeEventSource();
     };
-  }, [classroomId, onStateChange, refreshPresentationState]);
+  }, [classroomId, enabled, onStateChange, refreshPresentationState]);
 
   return {
     refreshPresentationState,

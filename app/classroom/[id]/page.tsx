@@ -18,6 +18,7 @@ import {
   canUseLocalClassroomFallback,
   clearClassroomLaunchContext,
   getHomePathForLaunchMode,
+  isPublicDemoLaunchContext,
   isTeacherServerLaunchContext,
   readClassroomLaunchContext,
   type ClassroomLaunchMode,
@@ -115,87 +116,94 @@ export default function ClassroomDetailPage() {
   const loadClassroom = useCallback(async () => {
     const launchContext = readClassroomLaunchContext();
     const expectServerBacked = isTeacherServerLaunchContext(launchContext, classroomId);
+    const preferLocalDemo = isPublicDemoLaunchContext(launchContext, classroomId);
 
     try {
       let hasServerRecord = false;
-      let shouldFallbackToStorage = false;
+      const hasLocalStage = await stageExists(classroomId);
+      let shouldFallbackToStorage = preferLocalDemo && hasLocalStage;
       let resolvedSource: ClassroomLaunchMode | null = null;
 
-      try {
-        const res = await fetch(`/api/classroom?id=${encodeURIComponent(classroomId)}`);
-        if (res.status === 401 || res.status === 403) {
-          const body = await res.json().catch(() => ({ error: 'Classroom access denied' }));
-          const error = new Error(body.error) as Error & { status?: number };
-          error.status = res.status;
-          throw error;
-        }
+      if (preferLocalDemo && hasLocalStage) {
+        log.info('Classroom launch context prefers local IndexedDB for:', classroomId);
+      }
 
-        if (res.status === 404) {
-          const hasLocalStage = await stageExists(classroomId);
-          shouldFallbackToStorage = canUseLocalClassroomFallback({
-            expectServerBacked,
-            hasLocalStage,
-          });
-
-          if (shouldFallbackToStorage) {
-            log.info(
-              'Classroom not found in server storage, trying local IndexedDB for:',
-              classroomId,
-            );
-          } else {
-            const notFoundError = new Error(
-              expectServerBacked
-                ? t('classroom.teacherAccessMissing')
-                : t('classroom.classroomNotFound'),
-            ) as Error & { status?: number };
-            notFoundError.status = 404;
-            throw notFoundError;
+      if (!shouldFallbackToStorage) {
+        try {
+          const res = await fetch(`/api/classroom?id=${encodeURIComponent(classroomId)}`);
+          if (res.status === 401 || res.status === 403) {
+            const body = await res.json().catch(() => ({ error: 'Classroom access denied' }));
+            const error = new Error(body.error) as Error & { status?: number };
+            error.status = res.status;
+            throw error;
           }
-        } else if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.classroom) {
-            const { stage, scenes } = json.classroom;
-            useStageStore.getState().setStage(stage);
-            useStageStore.setState({
-              scenes,
-              currentSceneId: scenes[0]?.id ?? null,
-            });
-            hasServerRecord = true;
-            resolvedSource = 'teacher-server';
-            log.info('Loaded from server-side storage:', classroomId);
 
-            // Hydrate server-generated agents into IndexedDB + registry.
-            // Don't set selectedAgentIds here yet — the general agent
-            // restoration logic below handles it uniformly.
-            if (stage.generatedAgentConfigs?.length) {
-              const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
-              await saveGeneratedAgents(stage.id, stage.generatedAgentConfigs);
-              log.info('Hydrated server-generated agents for stage:', stage.id);
+          if (res.status === 404) {
+            shouldFallbackToStorage = canUseLocalClassroomFallback({
+              expectServerBacked,
+              hasLocalStage,
+            });
+
+            if (shouldFallbackToStorage) {
+              log.info(
+                'Classroom not found in server storage, trying local IndexedDB for:',
+                classroomId,
+              );
+            } else {
+              const notFoundError = new Error(
+                expectServerBacked
+                  ? t('classroom.teacherAccessMissing')
+                  : t('classroom.classroomNotFound'),
+              ) as Error & { status?: number };
+              notFoundError.status = 404;
+              throw notFoundError;
+            }
+          } else if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.classroom) {
+              const { stage, scenes } = json.classroom;
+              useStageStore.getState().setStage(stage);
+              useStageStore.setState({
+                scenes,
+                currentSceneId: scenes[0]?.id ?? null,
+              });
+              hasServerRecord = true;
+              resolvedSource = 'teacher-server';
+              log.info('Loaded from server-side storage:', classroomId);
+
+              // Hydrate server-generated agents into IndexedDB + registry.
+              // Don't set selectedAgentIds here yet — the general agent
+              // restoration logic below handles it uniformly.
+              if (stage.generatedAgentConfigs?.length) {
+                const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
+                await saveGeneratedAgents(stage.id, stage.generatedAgentConfigs);
+                log.info('Hydrated server-generated agents for stage:', stage.id);
+              }
+            } else {
+              throw new Error('Classroom payload is missing');
             }
           } else {
-            throw new Error('Classroom payload is missing');
+            const body = await res.json().catch(() => ({ error: 'Failed to load classroom' }));
+            throw new Error(body.error);
           }
-        } else {
-          const body = await res.json().catch(() => ({ error: 'Failed to load classroom' }));
-          throw new Error(body.error);
-        }
-      } catch (fetchErr) {
-        if (
-          fetchErr instanceof Error &&
-          ((fetchErr as Error & { status?: number }).status === 401 ||
-            (fetchErr as Error & { status?: number }).status === 403 ||
-            (fetchErr as Error & { status?: number }).status === 404 ||
-            fetchErr.message === 'Classroom payload is missing' ||
-            fetchErr.message === t('classroom.teacherAccessMissing') ||
-            fetchErr.message === t('classroom.classroomNotFound') ||
-            !classroomId)
-        ) {
-          throw fetchErr;
-        }
+        } catch (fetchErr) {
+          if (
+            fetchErr instanceof Error &&
+            ((fetchErr as Error & { status?: number }).status === 401 ||
+              (fetchErr as Error & { status?: number }).status === 403 ||
+              (fetchErr as Error & { status?: number }).status === 404 ||
+              fetchErr.message === 'Classroom payload is missing' ||
+              fetchErr.message === t('classroom.teacherAccessMissing') ||
+              fetchErr.message === t('classroom.classroomNotFound') ||
+              !classroomId)
+          ) {
+            throw fetchErr;
+          }
 
-        if (!shouldFallbackToStorage) {
-          log.warn('Server-side storage check failed:', fetchErr);
-          throw fetchErr;
+          if (!shouldFallbackToStorage) {
+            log.warn('Server-side storage check failed:', fetchErr);
+            throw fetchErr;
+          }
         }
       }
 

@@ -19,6 +19,13 @@ export function isTeacherServerLaunchContext(
   return context?.launchMode === 'teacher-server' && context.classroomId === classroomId;
 }
 
+export function isPublicDemoLaunchContext(
+  context: ClassroomLaunchContext | null,
+  classroomId: string,
+): boolean {
+  return context?.launchMode === 'public-demo' && context.classroomId === classroomId;
+}
+
 export function canUseLocalClassroomFallback(input: {
   expectServerBacked: boolean;
   hasLocalStage: boolean;

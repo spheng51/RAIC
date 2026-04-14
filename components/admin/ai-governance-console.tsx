@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -340,6 +340,25 @@ function nextCustomProviderId(registry: Record<AIProviderFamily, RegistryProvide
     index += 1;
   }
   return `custom-org-${index}`;
+}
+
+function handleSelectableRowKeyDown(
+  event: ReactKeyboardEvent<HTMLElement>,
+  onActivate: () => void,
+) {
+  if (event.target !== event.currentTarget) {
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    onActivate();
+    return;
+  }
+
+  if (event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    onActivate();
+  }
 }
 
 export function AIGovernanceConsole({
@@ -758,13 +777,19 @@ export function AIGovernanceConsole({
                           selectedFamily === family;
 
                         return (
-                          <button
+                          <div
                             key={provider.providerId}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             data-testid={`admin-provider-${provider.family}-${provider.providerId}`}
                             onClick={() => setSelectedProviderId(provider.providerId)}
+                            onKeyDown={(event) =>
+                              handleSelectableRowKeyDown(event, () =>
+                                setSelectedProviderId(provider.providerId),
+                              )
+                            }
                             className={cn(
-                              'w-full rounded-2xl border p-4 text-left transition-colors',
+                              'w-full cursor-pointer rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                               isSelected
                                 ? 'border-primary/60 bg-primary/5 shadow-sm'
                                 : 'border-border/60 bg-background hover:border-primary/30 hover:bg-muted/40',
@@ -801,7 +826,7 @@ export function AIGovernanceConsole({
                               {provider.isCustom && <Badge variant="outline">Custom</Badge>}
                               {draft.hasSecret && <Badge variant="outline">Secret stored</Badge>}
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>

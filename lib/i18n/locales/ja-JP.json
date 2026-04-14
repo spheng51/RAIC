@@ -263,6 +263,9 @@
     "notReady": "生成完了後に利用できます"
   },
   "classroom": {
+    "localDemoBadge": "ローカル教室",
+    "localDemoNotice": "この教室はこのブラウザーのローカルストレージから読み込まれており、この端末でのみ利用できます。",
+    "teacherBackedBadge": "教師管理の教室",
     "recentClassrooms": "最近の教室",
     "loading": "教室を読み込み中...",
     "today": "今日",

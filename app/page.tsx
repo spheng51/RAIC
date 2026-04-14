@@ -52,6 +52,7 @@ import {
   clearClassroomLaunchContext,
   getHomePathForLaunchMode,
   type ClassroomLaunchMode,
+  writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
 
 const log = createLogger('Home');
@@ -680,6 +681,11 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                         onCancelDelete={() => setPendingDeleteId(null)}
                         onClick={() => {
                           clearClassroomLaunchContext();
+                          writeClassroomLaunchContext({
+                            classroomId: classroom.id,
+                            launchMode,
+                            homePath: getHomePathForLaunchMode(launchMode),
+                          });
                           router.push(`/classroom/${classroom.id}`);
                         }}
                       />

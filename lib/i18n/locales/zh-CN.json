@@ -263,6 +263,9 @@
     "notReady": "生成完成后可分享"
   },
   "classroom": {
+    "localDemoBadge": "本地课堂",
+    "localDemoNotice": "此课堂已从当前浏览器的本地存储中加载，仅可在此设备上使用。",
+    "teacherBackedBadge": "教师托管课堂",
     "recentClassrooms": "最近学习",
     "loading": "正在加载课堂...",
     "today": "今天",

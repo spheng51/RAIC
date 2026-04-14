@@ -50,7 +50,7 @@ class MockEventSource {
 }
 
 interface MountedHook {
-  readonly rerender: (classroomId?: string) => Promise<void>;
+  readonly rerender: (classroomId?: string, enabled?: boolean) => Promise<void>;
   readonly refresh: (silent?: boolean) => Promise<void>;
 }
 
@@ -84,6 +84,7 @@ function buildPresentationState(
 async function mountHook(
   onStateChange: (state: ClassroomPresentationStatePayload | null) => void,
   initialClassroomId = 'room-1',
+  initialEnabled = true,
 ): Promise<MountedHook> {
   const { useClassroomPresentationState } =
     await import('@/lib/hooks/use-classroom-presentation-state');
@@ -94,13 +95,21 @@ async function mountHook(
   mountedRoots.push({ root, container });
 
   let classroomId = initialClassroomId;
+  let enabled = initialEnabled;
   const hookState: {
     current?: ReturnType<typeof useClassroomPresentationState>['refreshPresentationState'];
   } = {};
 
-  function Harness({ nextClassroomId }: { nextClassroomId?: string }) {
+  function Harness({
+    nextClassroomId,
+    nextEnabled,
+  }: {
+    nextClassroomId?: string;
+    nextEnabled?: boolean;
+  }) {
     const hook = useClassroomPresentationState({
       classroomId: nextClassroomId,
+      enabled: nextEnabled,
       onStateChange,
     });
 
@@ -113,15 +122,21 @@ async function mountHook(
 
   const render = async () => {
     await act(async () => {
-      root.render(createElement(Harness, { nextClassroomId: classroomId }));
+      root.render(
+        createElement(Harness, {
+          nextClassroomId: classroomId,
+          nextEnabled: enabled,
+        }),
+      );
     });
   };
 
   await render();
 
   return {
-    rerender: async (nextClassroomId = classroomId) => {
+    rerender: async (nextClassroomId = classroomId, nextEnabled = enabled) => {
       classroomId = nextClassroomId;
+      enabled = nextEnabled;
       await render();
     },
     refresh: async (silent = false) => {
@@ -317,6 +332,14 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(1);
     });
     expect(MockEventSource.instances).toHaveLength(5);
+  });
+
+  it('does not fetch while disabled', async () => {
+    const onStateChange = vi.fn();
+    await mountHook(onStateChange, 'room-1', false);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(MockEventSource.instances).toHaveLength(0);
   });
 
   it('queues a manual refresh while a fetch is already in flight', async () => {

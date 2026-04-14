@@ -458,6 +458,7 @@ export function Stage({
 
   const { refreshPresentationState } = useClassroomPresentationState({
     classroomId: stage?.id,
+    enabled: classroomSource === 'teacher-server',
     onStateChange: syncPresentationState,
   });
   const { refreshCollaborationState } = useClassroomCollaborationState({

@@ -19,6 +19,7 @@ import {
   cleanupOldImages,
   storeImages,
 } from '@/lib/utils/image-storage';
+import { prefetchSceneSpeechAudio } from '@/lib/audio/prefetch-scene-tts';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { db } from '@/lib/utils/database';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
@@ -906,63 +907,32 @@ function GenerationPreviewContent() {
       }
 
       // Generate TTS for first scene (part of actions step — blocking)
-      if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
-        const ttsProviderConfig = settings.ttsProvidersConfig?.[settings.ttsProviderId];
-        const speechActions = (data.scene.actions || []).filter(
-          (a: { type: string; text?: string }) => a.type === 'speech' && a.text,
+      const ttsResult = await prefetchSceneSpeechAudio({
+        scene: data.scene,
+        settings: {
+          ttsEnabled: settings.ttsEnabled,
+          ttsProviderId: settings.ttsProviderId,
+          ttsVoice: settings.ttsVoice,
+          ttsSpeed: settings.ttsSpeed,
+          ttsProvidersConfig: settings.ttsProvidersConfig,
+        },
+        messages: {
+          speechFailed: t('generation.speechFailed'),
+        },
+        signal,
+        deps: {
+          storeAudioFile: async (file) => {
+            await db.audioFiles.put(file);
+          },
+          warn: (...args) => log.warn(...args),
+        },
+      });
+
+      const { warningMessage } = ttsResult;
+      if (warningMessage) {
+        setTruncationWarnings((prev) =>
+          prev.includes(warningMessage) ? prev : [...prev, warningMessage],
         );
-
-        let ttsFailCount = 0;
-        for (const action of speechActions) {
-          const audioId = `tts_${action.id}`;
-          action.audioId = audioId;
-          try {
-            const resp = await fetch('/api/generate/tts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: action.text,
-                audioId,
-                ttsProviderId: settings.ttsProviderId,
-                ttsModelId: ttsProviderConfig?.modelId,
-                ttsVoice: settings.ttsVoice,
-                ttsSpeed: settings.ttsSpeed,
-                ttsApiKey: ttsProviderConfig?.apiKey || undefined,
-                ttsBaseUrl:
-                  ttsProviderConfig?.baseUrl ||
-                  ttsProviderConfig?.customDefaultBaseUrl ||
-                  undefined,
-              }),
-              signal,
-            });
-            if (!resp.ok) {
-              ttsFailCount++;
-              continue;
-            }
-            const ttsData = await resp.json();
-            if (!ttsData.success) {
-              ttsFailCount++;
-              continue;
-            }
-            const binary = atob(ttsData.base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const blob = new Blob([bytes], { type: `audio/${ttsData.format}` });
-            await db.audioFiles.put({
-              id: audioId,
-              blob,
-              format: ttsData.format,
-              createdAt: Date.now(),
-            });
-          } catch (err) {
-            log.warn(`[TTS] Failed for ${audioId}:`, err);
-            ttsFailCount++;
-          }
-        }
-
-        if (ttsFailCount > 0 && speechActions.length > 0) {
-          throw new Error(t('generation.speechFailed'));
-        }
       }
 
       // Add scene to store and navigate
@@ -983,6 +953,12 @@ function GenerationPreviewContent() {
         }),
       );
 
+      clearClassroomLaunchContext();
+      writeClassroomLaunchContext({
+        classroomId: stage.id,
+        launchMode: 'public-demo',
+        homePath: currentSession.homePath ?? getHomePathForLaunchMode('public-demo'),
+      });
       sessionStorage.removeItem('generationSession');
       await store.saveToStorage();
       router.push(`/classroom/${stage.id}`);

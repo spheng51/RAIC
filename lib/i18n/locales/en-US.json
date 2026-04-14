@@ -263,6 +263,9 @@
     "notReady": "Available after generation completes"
   },
   "classroom": {
+    "localDemoBadge": "Local classroom",
+    "localDemoNotice": "This classroom was loaded from this browser's local storage and is only available on this device.",
+    "teacherBackedBadge": "Teacher-backed classroom",
     "recentClassrooms": "Recent",
     "loading": "Loading classroom...",
     "today": "Today",

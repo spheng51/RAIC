@@ -5,6 +5,7 @@ import {
   canUseLocalClassroomFallback,
   clearClassroomLaunchContext,
   getHomePathForLaunchMode,
+  isPublicDemoLaunchContext,
   isTeacherServerLaunchContext,
   readClassroomLaunchContext,
   writeClassroomLaunchContext,
@@ -52,6 +53,17 @@ describe('classroom launch helpers', () => {
 
     expect(isTeacherServerLaunchContext(readClassroomLaunchContext(), 'room-123')).toBe(true);
     expect(isTeacherServerLaunchContext(readClassroomLaunchContext(), 'room-456')).toBe(false);
+  });
+
+  it('recognizes when a public-demo launch should load from local storage first', () => {
+    writeClassroomLaunchContext({
+      classroomId: 'room-123',
+      launchMode: 'public-demo',
+      homePath: '/',
+    });
+
+    expect(isPublicDemoLaunchContext(readClassroomLaunchContext(), 'room-123')).toBe(true);
+    expect(isPublicDemoLaunchContext(readClassroomLaunchContext(), 'room-456')).toBe(false);
   });
 
   it('only allows IndexedDB fallback for explicit local/demo contexts', () => {
