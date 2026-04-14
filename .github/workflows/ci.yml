@@ -11,6 +11,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ops_drift:
+    name: Ops Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Branch and ref context
+        run: |
+          echo "[ci] event=${{ github.event_name }}"
+          echo "[ci] ref=${{ github.ref }}"
+          echo "[ci] ref_name=${{ github.ref_name }}"
+          echo "[ci] head_ref=${{ github.head_ref || 'n/a' }}"
+          echo "[ci] base_ref=${{ github.base_ref || 'n/a' }}"
+
+      - name: Ops drift check
+        run: pnpm run ops:drift:ci
+
   mirofish_contract:
     name: MiroFish Contract Gate
     runs-on: ubuntu-latest

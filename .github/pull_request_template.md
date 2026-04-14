@@ -49,3 +49,9 @@
 - [ ] I have performed a self-review of my code
 - [ ] I have added/updated documentation as needed
 - [ ] My changes do not introduce new warnings
+- [ ] I ran required local release gates (`pnpm run ops:drift` and `pnpm run ops:verify`)
+
+## Operational Notes
+
+- [ ] This PR is single-purpose (one concern only).
+- [ ] This PR follows this repository's one-branch merge model and local scratch-branch workflow.

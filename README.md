@@ -143,7 +143,9 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 
 Operator rollout notes, smoke checks, and release-gate steps are maintained as deployment runbooks alongside release operations.
 
-MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps follow the same release-operations runbook process.
+For the enforced one-branch operating model, post-merge verification contract, and branch hygiene checks, see [OPS.md](./OPS.md) (`pnpm run ops:drift`, `pnpm run ops:verify`).
+
+MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps follow the same release-operations process.
 Operator rollout notes and release details are tracked in the [changelog](CHANGELOG.md).
 
 ### Teacher studio Google sign-in

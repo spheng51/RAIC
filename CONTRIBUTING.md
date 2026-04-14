@@ -60,6 +60,15 @@ pnpm dev
 4. Run **all CI checks** before committing (see below).
 5. Open a **Pull Request** against `main`.
 
+### Maintainer Workflow (single shared branch)
+
+This repository's default branch workflow is `main`-centric.
+
+1. Work in short-lived local `codex/*` scratch branches.
+2. Merge a validated slice into local `main`.
+3. Run `pnpm run ops:drift` and `pnpm run ops:verify` before pushing `main`.
+4. Remove the scratch branch locally after merge.
+
 ## Before You Submit a PR
 
 Run the following checks locally — CI will run them too, but catching issues early saves everyone time:
@@ -73,6 +82,12 @@ pnpm lint --fix
 
 # 3. TypeScript type checking
 npx tsc --noEmit
+```
+
+For maintainer release slices, use the repo runbook baseline instead:
+
+```bash
+pnpm run ops:verify
 ```
 
 If formatting or lint auto-fixes produce changes, include them in your commit.
