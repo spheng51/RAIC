@@ -43,7 +43,7 @@ const SECRET_VALUE_INDICATORS = [
 
 const SENSITIVE_ENV_SUFFIX_RE = /(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PASSPHRASE|ENCRYPTION_KEY|CREDENTIAL|ACCESS_KEY|AUTH_TOKEN)$/i;
 const NEXT_PUBLIC_SECRET_RE = /^NEXT_PUBLIC_.*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)/i;
-const PLACEHOLDER_VALUE_RE = /^(?:["']?\s*$|["']?(?:your|replace|replace-me|placeholder|example|sample|dummy|changeme|to-be-filled|todo|redacted|<.*>|\\$\{.*\})\s*["']?)$/i;
+const PLACEHOLDER_VALUE_RE = /^\s*["']?(?:\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
 function normalizeArgv(argv) {
   const args = { mode: null, ci: false, strictRemoteBacklog: false };
@@ -207,7 +207,7 @@ function findSecretFindings() {
     const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
-      const envMatch = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
+      const envMatch = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
 
       if (envMatch) {
         const [, name, rawValue] = envMatch;
