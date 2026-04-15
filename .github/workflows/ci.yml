@@ -37,6 +37,9 @@ jobs:
       - name: Ops drift check
         run: pnpm run ops:drift:ci
 
+      - name: Secrets scan
+        run: pnpm run secrets:scan
+
   mirofish_contract:
     name: MiroFish Contract Gate
     runs-on: ubuntu-latest

@@ -40,6 +40,7 @@
 <!-- Attach at least one: logs, screenshots, recordings, or before/after comparisons. -->
 
 - [ ] CI passes (`pnpm check && pnpm lint && npx tsc --noEmit`)
+- [ ] Secret safety passed (`pnpm run secrets:scan`)
 - [ ] Manually tested locally
 - [ ] Screenshots / recordings attached (if UI changes)
 

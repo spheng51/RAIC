@@ -20,6 +20,7 @@
     "test:mirofish:e2e": "playwright test e2e/tests/mirofish-classroom.spec.ts",
     "test:mirofish:release": "npm run test:mirofish && npm run test:mirofish:gate && npm run test:mirofish:e2e",
     "ops:drift": "node scripts/ops-check.mjs drift",
+    "secrets:scan": "node scripts/ops-check.mjs secrets",
     "ops:verify": "node scripts/ops-check.mjs verify",
     "ops:drift:ci": "node scripts/ops-check.mjs drift --ci",
     "verify:mirofish:deployment": "node scripts/verify-mirofish-deployment.mjs",

@@ -207,7 +207,31 @@ pnpm build && pnpm start
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTHU-MAIC%2FOpenMAIC&envDescription=Configure%20at%20least%20one%20LLM%20provider%20API%20key%20(e.g.%20OPENAI_API_KEY%2C%20ANTHROPIC_API_KEY).%20All%20providers%20are%20optional.&envLink=https%3A%2F%2Fgithub.com%2FTHU-MAIC%2FOpenMAIC%2Fblob%2Fmain%2F.env.example&project-name=openmaic&framework=nextjs)
 
-Or manually:
+#### Production domain setup (`open-raic.com`)
+
+This repository is configured for Vercel-first releases.
+
+1. Connect this repository in Vercel and import branch `main`.
+2. Set production environment variables in Vercel (`Production` + `Preview` scope):
+   - provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.),
+   - `RAIC_SECRET_ENCRYPTION_KEY`,
+   - database URL and MIROFISH variables,
+   - admin/access and auth configuration as needed.
+3. Add `open-raic.com` in Project → Domains.
+   - If using Vercel DNS, update registrar nameservers.
+   - Otherwise add the registrar/Apex + optional `www` records exactly as prompted by Vercel.
+4. Security preflight before first public cut:
+   - ensure `.env.local` and `server-providers*.yml` are ignored and **not tracked**;
+   - keep keys/server secrets only in Vercel environment variables, never in repo files or `NEXT_PUBLIC_*`.
+5. Run `pnpm run secrets:scan` before any publish, then `pnpm run ops:verify`.
+6. Keep `www.open-raic.com` as optional redirect target (if you want, configure one-way redirect at your DNS/proxy layer).
+7. Deploy and verify:
+   - `/api/health`
+   - `/api/server-providers` (public projection only; internal credentials remain server-side)
+   - sign-in path
+   - classroom join flow
+
+ Or manually:
 
 1. Fork this repository
 2. Import into [Vercel](https://vercel.com/new)

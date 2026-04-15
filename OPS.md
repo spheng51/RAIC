@@ -43,11 +43,22 @@ Use `pnpm run ops:verify` for the full required set, or run the same commands ma
 
 Run these gates after each slice merge and before pushing `main`:
 
+- `pnpm run secrets:scan`
 - `pnpm run check`
 - `pnpm run build`
 - `pnpm run test:mirofish:gate`
 - `pnpm run test:mirofish:e2e`
 - `CI=1 pnpm run test:e2e` (PowerShell: `$env:CI='1'; pnpm run test:e2e`)
+
+## Release security guardrails
+
+- `pnpm run secrets:scan` is mandatory before any production publish and blocks if:
+  - a blocked secret-bearing file is tracked (`.env.local`, `server-providers*.yml`);
+  - a blocked file exists in tree but is not ignored by git (`.gitignore` guard);
+  - a tracked file contains a sensitive assignment (`*_SECRET`, `*_TOKEN`, `*_API_KEY`, etc.);
+  - a tracked file leaks obvious secret-like token text.
+- `NEXT_PUBLIC_*` variables must never carry secret material. Keep only non-sensitive runtime configuration in `NEXT_PUBLIC_*`.
+- Treat `server-providers` overrides as internal: use production environment variables (`RAIC_*`, provider keys, etc.) only.
 
 ## Drift prevention after each push
 
@@ -62,6 +73,7 @@ Run these gates after each slice merge and before pushing `main`:
 
 The canonical local release flow is:
 
+- `pnpm run secrets:scan`
 - `pnpm run ops:drift`
 - `pnpm run check`
 - `pnpm run build`

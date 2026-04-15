@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 
 const STALE_BRANCH_PATTERNS = [
@@ -10,6 +11,39 @@ const STALE_BRANCH_PATTERNS = [
   /main-health/i,
   /platform-ops/i,
 ];
+
+const TRACKED_SECRET_FILE_BLOCKLIST = [
+  '.env.local',
+  /^server-providers(?:-[^/\\]+)?\.ya?ml$/i,
+];
+const SECRET_FILE_PATHS = [
+  '.env.local',
+  'server-providers.yml',
+  'server-providers-local.yml',
+  'server-providers-dev.yml',
+  'server-providers-stage.yml',
+  'server-providers-production.yml',
+];
+
+const SECRET_SCANNERS = [
+  { name: 'gitleaks', command: 'gitleaks detect --source . --no-git' },
+  { name: 'detect-secrets', command: 'detect-secrets scan .' },
+];
+
+const SECRET_VALUE_INDICATORS = [
+  /\bsk-[A-Za-z0-9]{20,}\b/g,
+  /\bAIza[0-9A-Za-z-_]{30,}\b/g,
+  /\bAKIA[0-9A-Z]{16,}\b/g,
+  /\bghp_[A-Za-z0-9]{24,}\b/g,
+  /\bgho_[A-Za-z0-9]{20,}\b/g,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  /\bpk_(?:test|live)_[A-Za-z0-9]{24,}\b/g,
+  /\beyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b/g,
+];
+
+const SENSITIVE_ENV_SUFFIX_RE = /(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PASSPHRASE|ENCRYPTION_KEY|CREDENTIAL|ACCESS_KEY|AUTH_TOKEN)$/i;
+const NEXT_PUBLIC_SECRET_RE = /^NEXT_PUBLIC_.*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)/i;
+const PLACEHOLDER_VALUE_RE = /^(?:["']?\s*$|["']?(?:your|replace|replace-me|placeholder|example|sample|dummy|changeme|to-be-filled|todo|redacted|<.*>|\\$\{.*\})\s*["']?)$/i;
 
 function normalizeArgv(argv) {
   const args = { mode: null, ci: false, strictRemoteBacklog: false };
@@ -54,6 +88,48 @@ function fail(message, { details = [] } = {}) {
   process.exit(1);
 }
 
+function commandExists(commandName) {
+  const probe = process.platform === 'win32' ? `where.exe ${commandName}` : `command -v ${commandName}`;
+  try {
+    execSync(probe, {
+      encoding: 'utf8',
+      stdio: 'ignore',
+      shell: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runSecretScanCommand(command) {
+  try {
+    execSync(command, {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      shell: true,
+    });
+    return { found: false, output: '' };
+  } catch (error) {
+    const output = [
+      String(error.stdout || ''),
+      String(error.stderr || ''),
+      String(error.message || ''),
+    ]
+      .join('\n')
+      .trim();
+
+    if (!output) {
+      return {
+        found: true,
+        output: `command failed without diagnostics: ${command}`,
+      };
+    }
+
+    return { found: true, output };
+  }
+}
+
 function runGitCommand(command, { parse = false, env = {} } = {}) {
   const result = execSync(command, {
     encoding: 'utf8',
@@ -83,6 +159,180 @@ function runCommand(command, { env = {} } = {}) {
   } catch {
     fail(`Command failed: ${command}`);
   }
+}
+
+function listTrackedFiles() {
+  return runGitCommand('git ls-files', { parse: true });
+}
+
+function isFileIgnored(path) {
+  try {
+    execSync(`git check-ignore -q "${path}"`, {
+      encoding: 'utf8',
+      stdio: 'ignore',
+      shell: true,
+  });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isTrackedSecretFile(path) {
+  return TRACKED_SECRET_FILE_BLOCKLIST.some((pattern) =>
+    typeof pattern === 'string' ? path === pattern : pattern.test(path),
+  );
+}
+
+function findSecretFindings() {
+  const trackedFiles = listTrackedFiles();
+  const findings = [];
+
+  for (const file of trackedFiles) {
+    if (!file || file.startsWith('.next/') || file.startsWith('.git/')) {
+      continue;
+    }
+
+    let content;
+    try {
+      content = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+
+    if (content.includes('\u0000')) {
+      continue;
+    }
+
+    const lines = content.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const envMatch = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
+
+      if (envMatch) {
+        const [, name, rawValue] = envMatch;
+        const value = rawValue.replace(/["']$/g, '').replace(/^["']/, '').trim();
+        const isNextPublicSecret =
+          NEXT_PUBLIC_SECRET_RE.test(name) && !PLACEHOLDER_VALUE_RE.test(value);
+
+        if (isNextPublicSecret) {
+          findings.push({
+            file,
+            line: i + 1,
+            snippet: line.trim(),
+            pattern: 'next-public secret key',
+          });
+          continue;
+        }
+
+        if (SENSITIVE_ENV_SUFFIX_RE.test(name) && !PLACEHOLDER_VALUE_RE.test(value)) {
+          findings.push({
+            file,
+            line: i + 1,
+            snippet: line.trim(),
+            pattern: 'sensitive env assignment',
+          });
+        }
+      }
+
+      for (const pattern of SECRET_VALUE_INDICATORS) {
+        const match = line.match(pattern);
+        if (match) {
+          findings.push({
+            file,
+            line: i + 1,
+            snippet: line.trim(),
+            pattern: `secret-style token (${pattern.source})`,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  return findings;
+}
+
+function checkSecretSafety() {
+  const trackedFiles = listTrackedFiles();
+  const trackedSecretFileLeaks = trackedFiles.filter(isTrackedSecretFile);
+
+  if (trackedSecretFileLeaks.length > 0) {
+    fail('Tracked secret-bearing files found in git.', {
+      details: [
+        'Remove before deploy:',
+        ...trackedSecretFileLeaks.map((file) => `- ${file}`),
+      ],
+    });
+  }
+
+  const presentUnignoredSecretFiles = SECRET_FILE_PATHS.filter((path) => {
+    if (!existsSync(path)) {
+      return false;
+    }
+
+    return !isFileIgnored(path);
+  });
+
+  if (presentUnignoredSecretFiles.length > 0) {
+    fail('Secret-bearing files exist but are not ignored.', {
+      details: [
+        ...presentUnignoredSecretFiles.map(
+          (file) => `- ${file}: add to .gitignore or remove before publish`,
+        ),
+      ],
+    });
+  }
+
+  const scannerOutput = [];
+  let scannerUsed = false;
+  for (const scanner of SECRET_SCANNERS) {
+    if (!commandExists(scanner.name)) {
+      continue;
+    }
+
+    scannerUsed = true;
+    const result = runSecretScanCommand(scanner.command);
+    if (!result.found) {
+      console.log(`[ops-check] ${scanner.name} completed with no findings.`);
+      continue;
+    }
+
+    scannerOutput.push(
+      `[ops-check] ${scanner.name} reported potential findings:`,
+      ...result.output
+        .split('\n')
+        .slice(0, 20)
+        .map((line) => `  ${line}`),
+    );
+    break;
+  }
+
+  if (scannerOutput.length > 0) {
+    fail('External secret scanner reported potential secret findings.', {
+      details: scannerOutput.slice(0, 50),
+    });
+  }
+
+  if (!scannerUsed) {
+    console.log(
+      '[ops-check] No optional external scanner found (gitleaks/detect-secrets not installed); using built-in heuristic checks.',
+    );
+  }
+
+  const findings = findSecretFindings().slice(0, 200);
+
+  if (findings.length === 0) {
+    console.log('[ops-check] Secret scan passed.');
+    return;
+  }
+
+  fail('Potential secret leakage found in tracked files.', {
+    details: findings.map(
+      (finding) =>
+        `${finding.file}:${finding.line}: ${finding.pattern} :: ${finding.snippet.slice(0, 220)}`,
+    ),
+  });
 }
 
 function getWorkingToplevel() {
@@ -253,6 +503,7 @@ function checkVerify() {
   console.log('[ops-check] Starting verification gates in canonical order.');
 
   const gates = [
+    { name: `${PNPM_COMMAND} run secrets:scan`, command: `${PNPM_COMMAND} run secrets:scan` },
     { name: `${PNPM_COMMAND} run check`, command: `${PNPM_COMMAND} run check` },
     { name: `${PNPM_COMMAND} run build`, command: `${PNPM_COMMAND} run build` },
     {
@@ -267,6 +518,7 @@ function checkVerify() {
   ];
 
   checkDrift();
+  checkSecretSafety();
 
   for (const gate of gates) {
     console.log(`[ops-check] Executing gate: ${gate.name}`);
@@ -288,4 +540,10 @@ if (options.mode === 'verify') {
   process.exit(0);
 }
 
-fail(`Unknown mode: ${options.mode}. Use \"drift\" or \"verify\".`);
+if (options.mode === 'secrets') {
+  checkDrift();
+  checkSecretSafety();
+  process.exit(0);
+}
+
+fail(`Unknown mode: ${options.mode}. Use \"drift\", \"verify\", or \"secrets\".`);
