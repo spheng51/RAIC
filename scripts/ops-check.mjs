@@ -34,6 +34,17 @@ function normalizeArgv(argv) {
 }
 
 const options = normalizeArgv(process.argv.slice(2));
+const PNPM_COMMAND = (() => {
+  try {
+    execSync(
+      process.platform === 'win32' ? 'where.exe pnpm' : 'command -v pnpm',
+      { encoding: 'utf8', stdio: 'pipe', shell: true },
+    );
+    return 'pnpm';
+  } catch {
+    return 'corepack pnpm';
+  }
+})();
 
 function fail(message, { details = [] } = {}) {
   console.error(`\n[ops-check] ERROR: ${message}`);
@@ -242,11 +253,17 @@ function checkVerify() {
   console.log('[ops-check] Starting verification gates in canonical order.');
 
   const gates = [
-    { name: 'pnpm run check', command: 'pnpm run check' },
-    { name: 'pnpm run build', command: 'pnpm run build' },
-    { name: 'pnpm run test:mirofish:gate', command: 'pnpm run test:mirofish:gate' },
-    { name: 'pnpm run test:mirofish:e2e', command: 'pnpm run test:mirofish:e2e' },
-    { name: 'CI=1 pnpm run test:e2e', command: 'pnpm run test:e2e', env: { CI: '1' } },
+    { name: `${PNPM_COMMAND} run check`, command: `${PNPM_COMMAND} run check` },
+    { name: `${PNPM_COMMAND} run build`, command: `${PNPM_COMMAND} run build` },
+    {
+      name: `${PNPM_COMMAND} run test:mirofish:gate`,
+      command: `${PNPM_COMMAND} run test:mirofish:gate`,
+    },
+    {
+      name: `${PNPM_COMMAND} run test:mirofish:e2e`,
+      command: `${PNPM_COMMAND} run test:mirofish:e2e`,
+    },
+    { name: `CI=1 ${PNPM_COMMAND} run test:e2e`, command: `${PNPM_COMMAND} run test:e2e`, env: { CI: '1' } },
   ];
 
   checkDrift();
