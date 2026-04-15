@@ -269,7 +269,10 @@ describe('media generation routes', () => {
     });
 
     const formData = new FormData();
-    formData.set('pdf', new File([new Uint8Array([1, 2, 3])], 'lesson.pdf', { type: 'application/pdf' }));
+    formData.set(
+      'pdf',
+      new File([new Uint8Array([1, 2, 3])], 'lesson.pdf', { type: 'application/pdf' }),
+    );
 
     const { POST } = await import('@/app/api/parse-pdf/route');
     const response = await POST(
@@ -309,7 +312,10 @@ describe('media generation routes', () => {
     transcribeAudioMock.mockResolvedValue({ text: 'Hello world' });
 
     const formData = new FormData();
-    formData.set('audio', new File([new Uint8Array([1, 2, 3])], 'speech.wav', { type: 'audio/wav' }));
+    formData.set(
+      'audio',
+      new File([new Uint8Array([1, 2, 3])], 'speech.wav', { type: 'audio/wav' }),
+    );
     formData.set('providerId', 'openai-whisper');
 
     const { POST } = await import('@/app/api/transcription/route');

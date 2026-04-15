@@ -67,7 +67,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       pollIntervalMs: 5000,
       scenesGenerated: job.scenesGenerated,
       totalScenes: job.totalScenes,
-      result: job.result,
+      result: job.result
+        ? {
+            id: job.result.classroomId,
+            url: job.result.url,
+            scenesCount: job.result.scenesCount,
+          }
+        : null,
       error: job.error,
       done: job.status === 'succeeded' || job.status === 'failed',
     });

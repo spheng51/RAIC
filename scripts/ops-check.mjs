@@ -12,10 +12,7 @@ const STALE_BRANCH_PATTERNS = [
   /platform-ops/i,
 ];
 
-const TRACKED_SECRET_FILE_BLOCKLIST = [
-  '.env.local',
-  /^server-providers(?:-[^/\\]+)?\.ya?ml$/i,
-];
+const TRACKED_SECRET_FILE_BLOCKLIST = ['.env.local', /^server-providers(?:-[^/\\]+)?\.ya?ml$/i];
 const SECRET_FILE_PATHS = [
   '.env.local',
   'server-providers.yml',
@@ -41,9 +38,12 @@ const SECRET_VALUE_INDICATORS = [
   /\beyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b/g,
 ];
 
-const SENSITIVE_ENV_SUFFIX_RE = /(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PASSPHRASE|ENCRYPTION_KEY|CREDENTIAL|ACCESS_KEY|AUTH_TOKEN)$/i;
-const NEXT_PUBLIC_SECRET_RE = /^NEXT_PUBLIC_.*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)/i;
-const PLACEHOLDER_VALUE_RE = /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
+const SENSITIVE_ENV_SUFFIX_RE =
+  /(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PASSPHRASE|ENCRYPTION_KEY|CREDENTIAL|ACCESS_KEY|AUTH_TOKEN)$/i;
+const NEXT_PUBLIC_SECRET_RE =
+  /^NEXT_PUBLIC_.*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)/i;
+const PLACEHOLDER_VALUE_RE =
+  /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
 function normalizeArgv(argv) {
   const args = { mode: null, ci: false, strictRemoteBacklog: false };
@@ -70,10 +70,11 @@ function normalizeArgv(argv) {
 const options = normalizeArgv(process.argv.slice(2));
 const PNPM_COMMAND = (() => {
   try {
-    execSync(
-      process.platform === 'win32' ? 'where.exe pnpm' : 'command -v pnpm',
-      { encoding: 'utf8', stdio: 'pipe', shell: true },
-    );
+    execSync(process.platform === 'win32' ? 'where.exe pnpm' : 'command -v pnpm', {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      shell: true,
+    });
     return 'pnpm';
   } catch {
     return 'corepack pnpm';
@@ -89,7 +90,8 @@ function fail(message, { details = [] } = {}) {
 }
 
 function commandExists(commandName) {
-  const probe = process.platform === 'win32' ? `where.exe ${commandName}` : `command -v ${commandName}`;
+  const probe =
+    process.platform === 'win32' ? `where.exe ${commandName}` : `command -v ${commandName}`;
   try {
     execSync(probe, {
       encoding: 'utf8',
@@ -171,7 +173,7 @@ function isFileIgnored(path) {
       encoding: 'utf8',
       stdio: 'ignore',
       shell: true,
-  });
+    });
     return true;
   } catch {
     return false;
@@ -259,10 +261,7 @@ function checkSecretSafety() {
 
   if (trackedSecretFileLeaks.length > 0) {
     fail('Tracked secret-bearing files found in git.', {
-      details: [
-        'Remove before deploy:',
-        ...trackedSecretFileLeaks.map((file) => `- ${file}`),
-      ],
+      details: ['Remove before deploy:', ...trackedSecretFileLeaks.map((file) => `- ${file}`)],
     });
   }
 
@@ -514,7 +513,11 @@ function checkVerify() {
       name: `${PNPM_COMMAND} run test:mirofish:e2e`,
       command: `${PNPM_COMMAND} run test:mirofish:e2e`,
     },
-    { name: `CI=1 ${PNPM_COMMAND} run test:e2e`, command: `${PNPM_COMMAND} run test:e2e`, env: { CI: '1' } },
+    {
+      name: `CI=1 ${PNPM_COMMAND} run test:e2e`,
+      command: `${PNPM_COMMAND} run test:e2e`,
+      env: { CI: '1' },
+    },
   ];
 
   checkDrift();

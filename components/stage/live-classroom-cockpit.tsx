@@ -497,7 +497,13 @@ export function LiveClassroomCockpit({
                           activityLabel={activityLabel.label}
                           chips={[
                             ...(participant.isController
-                              ? [{ key: 'controller', label: 'Controller', variant: 'default' as const }]
+                              ? [
+                                  {
+                                    key: 'controller',
+                                    label: 'Controller',
+                                    variant: 'default' as const,
+                                  },
+                                ]
                               : []),
                           ]}
                         />

@@ -111,11 +111,9 @@ export async function prefetchSceneSpeechAudio(params: {
       });
 
       if (!response.ok) {
-        const errorData = (await response
-          .json()
-          .catch(() => ({
-            error: `TTS request failed: HTTP ${response.status}`,
-          }))) as TTSApiResponse;
+        const errorData = (await response.json().catch(() => ({
+          error: `TTS request failed: HTTP ${response.status}`,
+        }))) as TTSApiResponse;
         lastError =
           errorData.error || errorData.details || `TTS request failed: HTTP ${response.status}`;
         failedCount++;

@@ -125,9 +125,24 @@ providers:
     apiKey: sk-...
   anthropic:
     apiKey: sk-ant-...
+  lmstudio:
+    baseUrl: http://127.0.0.1:1234/v1
+    models:
+      - qwen3.5-4b
 ```
 
-Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, and any OpenAI-compatible API.
+Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, **LM Studio**, **Ollama**, and any OpenAI-compatible API.
+
+LM Studio quick example:
+
+```env
+LMSTUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LMSTUDIO_MODELS=qwen3.5-4b
+DEFAULT_MODEL=lmstudio:qwen3.5-4b
+```
+
+- `LMSTUDIO_API_KEY` is optional and only needed if you enabled LM Studio auth.
+- If you prefer not to use the built-in provider, you can still add LM Studio as a custom OpenAI-compatible provider in Settings.
 
 ### Org-managed AI connectivity
 
@@ -144,6 +159,13 @@ Set `RAIC_SECRET_ENCRYPTION_KEY` to enable encrypted org-managed saves in `/admi
 Operator rollout notes, smoke checks, and release-gate steps are maintained as deployment runbooks alongside release operations.
 
 For the enforced one-branch operating model, post-merge verification contract, and branch hygiene checks, see [OPS.md](./OPS.md) (`pnpm run ops:drift`, `pnpm run ops:verify`).
+For feature decomposition and next-cycle originality work, see:
+
+- [Adaptive Classroom Intelligence](./docs/feature-briefs/adaptive-classroom-intelligence.md)
+- [Experimentation & Provider Composer](./docs/feature-briefs/experimentation-provider-composer.md)
+- [Learning Analytics + Reflection](./docs/feature-briefs/learning-analytics-reflection.md)
+- [Future Roadmap](./docs/future-roadmap.md)
+- [Performance budgets](./ops/perf-budgets.json)
 
 MiroFish classroom rollout notes, sidecar contract checks, and release-gate steps follow the same release-operations process.
 Operator rollout notes and release details are tracked in the [changelog](CHANGELOG.md).

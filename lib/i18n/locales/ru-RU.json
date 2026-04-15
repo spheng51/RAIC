@@ -420,7 +420,8 @@
       "glm": "GLM",
       "siliconflow": "SiliconFlow",
       "doubao": "Doubao",
-      "ollama": "Ollama (Локальный)"
+      "ollama": "Ollama (Локальный)",
+      "lmstudio": "LM Studio"
     },
     "providerTypes": {
       "openai": "Протокол OpenAI",
@@ -858,6 +859,8 @@
     "noVisionWarning": "Текущая модель не поддерживает зрение. Изображения по-прежнему можно размещать на слайдах, но модель не сможет понимать содержимое изображений для оптимизации",
     "serverConfigured": "Сервер",
     "serverConfiguredNotice": "Администратор настроил API-ключ для этого провайдера на сервере. Можете использовать его напрямую или ввести свой ключ.",
+    "personalConfiguredNotice": "This provider is saved to your signed-in Google account for this workspace.",
+    "legacyBrowserOnlyNotice": "Using a one-release legacy browser credential fallback for this provider. Save it while signed in with Google to attach it to your account for this workspace and avoid future breakage.",
     "optionalOverride": "Необязательно — оставьте пустым для серверной конфигурации",
     "setupNeeded": "Требуется настройка",
     "modelNotConfigured": "Пожалуйста, выберите модель для начала работы",

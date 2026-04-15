@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ACCESS_CODE_COOKIE_NAME, ACCESS_CODE_TOKEN_TTL_SECONDS, createAccessToken } from '@/lib/server/access-code';
+import {
+  ACCESS_CODE_COOKIE_NAME,
+  ACCESS_CODE_TOKEN_TTL_SECONDS,
+  createAccessToken,
+} from '@/lib/server/access-code';
 
 const cookieStore = {
   get: vi.fn(),

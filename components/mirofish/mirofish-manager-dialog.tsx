@@ -438,10 +438,10 @@ export function MiroFishManagerDialog({
                           name={participant.displayName}
                           status={activityLabel.state}
                           activityLabel={activityLabel.label}
-                        chips={[
+                          chips={[
                             ...(participant.isSpotlighted
-                                ? [{ key: 'spotlight', label: 'Spotlight' }]
-                                : []),
+                              ? [{ key: 'spotlight', label: 'Spotlight' }]
+                              : []),
                             ...(participant.isRemoved
                               ? [{ key: 'removed', label: 'Removed', variant: 'outline' as const }]
                               : []),
@@ -523,7 +523,13 @@ export function MiroFishManagerDialog({
                           activityLabel={statusLabel}
                           chips={[
                             ...(participant.isController
-                              ? [{ key: 'controller', label: 'Controller', variant: 'default' as const }]
+                              ? [
+                                  {
+                                    key: 'controller',
+                                    label: 'Controller',
+                                    variant: 'default' as const,
+                                  },
+                                ]
                               : []),
                           ]}
                           trailing={
@@ -543,7 +549,9 @@ export function MiroFishManagerDialog({
                                   await onGrantControl(participant.sessionId, leaseMinutes);
                                 } catch (error) {
                                   toast.error(
-                                    error instanceof Error ? error.message : 'Failed to grant control.',
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'Failed to grant control.',
                                   );
                                 } finally {
                                   setBusyAction(null);

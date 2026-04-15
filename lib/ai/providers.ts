@@ -46,7 +46,7 @@ const log = createLogger('AIProviders');
 export type { ProviderId, ProviderConfig, ModelInfo, ModelConfig };
 
 /** Provider IDs whose logos are monochrome-dark and need `dark:invert` in dark mode */
-export const MONO_LOGO_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'ollama']);
+export const MONO_LOGO_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'ollama', 'lmstudio']);
 
 /**
  * Provider registry
@@ -856,7 +856,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/grok.svg',
     models: [
       {
-        id: 'grok-4.20-beta-0309-reasoning',
+        id: 'grok-4.20-reasoning',
         name: 'Grok 4.20 Reasoning',
         contextWindow: 2000000,
         outputWindow: 131072,
@@ -872,7 +872,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
         },
       },
       {
-        id: 'grok-4.20-beta-0309-non-reasoning',
+        id: 'grok-4.20-beta-latest-non-reasoning',
         name: 'Grok 4.20',
         contextWindow: 2000000,
         outputWindow: 131072,
@@ -932,7 +932,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
         capabilities: { streaming: true, tools: true, vision: true },
       },
       {
-        id: 'grok-4-0709',
+        id: 'grok-4',
         name: 'Grok 4',
         contextWindow: 256000,
         outputWindow: 32768,
@@ -1021,6 +1021,17 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
       },
     ],
   },
+
+  lmstudio: {
+    id: 'lmstudio',
+    name: 'LM Studio',
+    type: 'openai',
+    defaultBaseUrl: 'http://127.0.0.1:1234/v1',
+    requiresApiKey: false,
+    supportsOptionalApiKey: true,
+    icon: '/logos/lmstudio.svg',
+    models: [],
+  },
 };
 
 /**
@@ -1047,6 +1058,7 @@ function getProviderConfig(providerId: ProviderId): ProviderConfig | null {
             defaultBaseUrl: providerSettings.defaultBaseUrl,
             icon: providerSettings.icon,
             requiresApiKey: providerSettings.requiresApiKey,
+            supportsOptionalApiKey: providerSettings.supportsOptionalApiKey,
             models: providerSettings.models,
           };
         }
@@ -1106,6 +1118,20 @@ function getCompatThinkingBodyParams(
   return undefined;
 }
 
+const GROK_MODEL_ALIASES: Record<string, string> = {
+  'grok-4.20-beta-0309-reasoning': 'grok-4.20-reasoning',
+  'grok-4.20-beta-0309-non-reasoning': 'grok-4.20-beta-latest-non-reasoning',
+  'grok-4-0709': 'grok-4',
+};
+
+function normalizeProviderModelId(providerId: ProviderId, modelId: string): string {
+  if (providerId === 'grok') {
+    return GROK_MODEL_ALIASES[modelId] ?? modelId;
+  }
+
+  return modelId;
+}
+
 function normalizeMiniMaxAnthropicBaseUrl(
   providerId: ProviderId,
   baseUrl?: string,
@@ -1160,6 +1186,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
     config.providerId,
     config.baseUrl || provider?.defaultBaseUrl || undefined,
   );
+  const normalizedModelId = normalizeProviderModelId(config.providerId, config.modelId);
 
   let model: LanguageModel;
 
@@ -1199,7 +1226,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
       }
 
       const openai = createOpenAI(openaiOptions);
-      model = openai.chat(config.modelId);
+      model = openai.chat(normalizedModelId);
       break;
     }
 
@@ -1208,7 +1235,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
         apiKey: effectiveApiKey,
         baseURL: effectiveBaseUrl,
       });
-      model = anthropic.chat(config.modelId);
+      model = anthropic.chat(normalizedModelId);
       break;
     }
 
@@ -1229,7 +1256,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
           }).then((r: unknown) => r as Response)) as typeof fetch;
       }
       const google = createGoogleGenerativeAI(googleOptions);
-      model = google.chat(config.modelId);
+      model = google.chat(normalizedModelId);
       break;
     }
 
@@ -1238,7 +1265,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
   }
 
   // Look up model info from the provider registry
-  const modelInfo = provider?.models.find((m) => m.id === config.modelId) || null;
+  const modelInfo = provider?.models.find((m) => m.id === normalizedModelId) || null;
 
   return { model, modelInfo };
 }
@@ -1292,5 +1319,6 @@ export function getProvider(providerId: ProviderId): ProviderConfig | undefined 
  */
 export function getModelInfo(providerId: ProviderId, modelId: string): ModelInfo | undefined {
   const provider = PROVIDERS[providerId];
-  return provider?.models.find((m) => m.id === modelId);
+  const normalizedModelId = normalizeProviderModelId(providerId, modelId);
+  return provider?.models.find((m) => m.id === normalizedModelId);
 }

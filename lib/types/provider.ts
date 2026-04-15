@@ -17,7 +17,8 @@ export type BuiltInProviderId =
   | 'siliconflow'
   | 'doubao'
   | 'grok'
-  | 'ollama';
+  | 'ollama'
+  | 'lmstudio';
 
 /**
  * Provider ID (built-in or custom)
@@ -136,6 +137,7 @@ export interface ProviderConfig {
   type: ProviderType;
   defaultBaseUrl?: string;
   requiresApiKey: boolean;
+  supportsOptionalApiKey?: boolean;
   icon?: string;
   models: ModelInfo[];
 }

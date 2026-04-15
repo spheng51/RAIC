@@ -25,6 +25,7 @@ import type {
   AIProviderSource,
   EffectiveAIOptionsResponse,
 } from '@/lib/types/ai-governance';
+import type { ModelInfo } from '@/lib/types/provider';
 
 const log = createLogger('Settings');
 
@@ -291,12 +292,13 @@ const getDefaultProvidersConfig = (): ProvidersConfig => {
     config[pid as ProviderId] = {
       apiKey: '',
       baseUrl: '',
-      models: provider.models,
+      models: [...provider.models],
       name: provider.name,
       type: provider.type,
       defaultBaseUrl: provider.defaultBaseUrl,
       icon: provider.icon,
       requiresApiKey: provider.requiresApiKey,
+      supportsOptionalApiKey: provider.supportsOptionalApiKey,
       isBuiltIn: true,
     };
   });
@@ -403,6 +405,32 @@ function getGovernedMetadata(
   };
 }
 
+function createDynamicLLMModel(modelId: string): ModelInfo {
+  return {
+    id: modelId,
+    name: modelId,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+    },
+  };
+}
+
+function mergeAllowedLLMModels(
+  currentModels: ModelInfo[],
+  allowedModelIds?: string[],
+): ModelInfo[] {
+  if (!allowedModelIds?.length) {
+    return currentModels;
+  }
+
+  const currentModelsById = new Map(currentModels.map((model) => [model.id, model]));
+  return allowedModelIds.map(
+    (modelId) => currentModelsById.get(modelId) ?? createDynamicLLMModel(modelId),
+  );
+}
+
 /**
  * Check whether a provider ID exists in the given provider registry.
  */
@@ -494,6 +522,7 @@ function ensureBuiltInProviders(state: Partial<SettingsState>): void {
         defaultBaseUrl: existing.defaultBaseUrl || provider.defaultBaseUrl,
         icon: provider.icon || existing.icon,
         requiresApiKey: existing.requiresApiKey ?? provider.requiresApiKey,
+        supportsOptionalApiKey: existing.supportsOptionalApiKey ?? provider.supportsOptionalApiKey,
         isBuiltIn: existing.isBuiltIn ?? true,
       };
     }
@@ -958,15 +987,7 @@ export const useSettingsStore = create<SettingsState>()(
                   newProvidersConfig[key] = {
                     apiKey: '',
                     baseUrl: '',
-                    models: (option.allowedModels || []).map((modelId) => ({
-                      id: modelId,
-                      name: modelId,
-                      capabilities: {
-                        streaming: true,
-                        tools: true,
-                        vision: false,
-                      },
-                    })),
+                    models: (option.allowedModels || []).map(createDynamicLLMModel),
                     name: option.displayName || pid,
                     type: option.providerType || 'openai',
                     defaultBaseUrl: option.baseUrl,
@@ -991,15 +1012,14 @@ export const useSettingsStore = create<SettingsState>()(
                 const key = pid as ProviderId;
                 if (newProvidersConfig[key]) {
                   const option = providerOptions.llm[pid];
-                  const currentModels = newProvidersConfig[key].models;
-                  // When server specifies allowed models, filter the models list
-                  const filteredModels = info.models?.length
-                    ? currentModels.filter((m) => info.models!.includes(m.id))
-                    : currentModels;
+                  const mergedModels = mergeAllowedLLMModels(
+                    newProvidersConfig[key].models,
+                    info.models ?? option?.allowedModels,
+                  );
                   newProvidersConfig[key] = {
                     ...newProvidersConfig[key],
                     ...getGovernedMetadata(option),
-                    models: filteredModels,
+                    models: mergedModels,
                   };
                 }
               }

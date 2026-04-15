@@ -112,9 +112,24 @@ providers:
     apiKey: sk-...
   anthropic:
     apiKey: sk-ant-...
+  lmstudio:
+    baseUrl: http://127.0.0.1:1234/v1
+    models:
+      - qwen3.5-4b
 ```
 
-支持的服务商：**OpenAI**、**Anthropic**、**Google Gemini**、**DeepSeek**、**MiniMax**、**Grok (xAI)** 以及任何兼容 OpenAI API 的服务。
+支持的服务商：**OpenAI**、**Anthropic**、**Google Gemini**、**DeepSeek**、**MiniMax**、**Grok (xAI)**、**LM Studio**、**Ollama** 以及任何兼容 OpenAI API 的服务。
+
+LM Studio 快速示例：
+
+```env
+LMSTUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LMSTUDIO_MODELS=qwen3.5-4b
+DEFAULT_MODEL=lmstudio:qwen3.5-4b
+```
+
+- `LMSTUDIO_API_KEY` 是可选项，仅在你启用了 LM Studio 鉴权时需要配置。
+- 如果你不想使用内置 provider，也可以在设置里把 LM Studio 作为自定义 OpenAI 兼容 provider 添加。
 
 MiniMax 快速示例：
 

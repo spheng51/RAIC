@@ -50,6 +50,12 @@ Run these gates after each slice merge and before pushing `main`:
 - `pnpm run test:mirofish:e2e`
 - `CI=1 pnpm run test:e2e` (PowerShell: `$env:CI='1'; pnpm run test:e2e`)
 
+### Performance planning
+
+- Performance budget targets are tracked in `ops/perf-budgets.json`.
+- Use that budget file to evaluate latency-sensitive classroom/runtime changes when a deterministic benchmark harness exists for the touched path.
+- Attach benchmark evidence to release notes or PR notes for critical-path changes rather than relying on ad hoc claims.
+
 ## Release security guardrails
 
 - `pnpm run secrets:scan` is mandatory before any production publish and blocks if:
@@ -69,6 +75,30 @@ Run these gates after each slice merge and before pushing `main`:
 - Verify no stale temporary repo directories remain in the parent workspace.
 - Confirm no open PRs/issues tied to old merge-train branches are still active.
 
+## Future Execution Tracks
+
+This cycle is split into three tracks for deliberate originality and performance progress:
+
+- Originality track
+  - Adaptive Classroom Intelligence
+  - Experimentation & Provider Composer
+  - Learning Analytics + Reflection
+- Performance track
+  - Provider metadata cache reuse and deterministic classroom state reuse
+  - Collaboration and presentation-state render-path reduction
+  - Artifact capture and deterministic e2e fixture hygiene
+- Reliability/ops hardening
+  - Post-merge cleanup automation and evidence attachment
+  - PR template and docs checklists for performance risk and benchmark links
+  - Non-blocking CI trend reporting
+
+Feature stack details are documented in:
+
+- `docs/feature-briefs/adaptive-classroom-intelligence.md`
+- `docs/feature-briefs/experimentation-provider-composer.md`
+- `docs/feature-briefs/learning-analytics-reflection.md`
+- `docs/future-roadmap.md`
+
 ## Verification command order
 
 The canonical local release flow is:
@@ -82,6 +112,15 @@ The canonical local release flow is:
 - `CI=1 pnpm run test:e2e`
 
 Failure output is intentionally short and gate-oriented; the ops script prints gate labels so CI logs indicate where failure occurred.
+
+## Deferred test coverage debt
+
+The following intentionally skipped tests remain follow-up hardening work:
+
+- `tests/components/use-classroom-collaboration-state.test.ts`
+- `tests/components/use-classroom-presentation-state.test.ts`
+
+These duplicate-state emission tests remain skipped until a deterministic hook event-order harness is added for refresh/manual SSE interactions.
 
 ## PR #13 Decomposition Streams
 

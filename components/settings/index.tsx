@@ -338,6 +338,45 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     };
   }, [isResizing]);
 
+  const shouldPersistOverride = ({
+    isBuiltIn,
+    hasOrganizationConfig,
+    hasPersonalOverride,
+    apiKey,
+    baseUrl,
+  }: {
+    isBuiltIn: boolean;
+    hasOrganizationConfig?: boolean;
+    hasPersonalOverride?: boolean;
+    apiKey: string;
+    baseUrl: string;
+  }) => {
+    const hasServerBackedOverride = !!hasOrganizationConfig || !!hasPersonalOverride;
+    const hasSelfServiceCredentials = !!apiKey.trim() || !!baseUrl.trim();
+    return hasServerBackedOverride || (isBuiltIn && hasSelfServiceCredentials);
+  };
+
+  const getPersistedBaseUrl = ({
+    isBuiltIn,
+    hasOrganizationConfig,
+    baseUrl,
+  }: {
+    isBuiltIn: boolean;
+    hasOrganizationConfig?: boolean;
+    baseUrl: string;
+  }) => {
+    const trimmedBaseUrl = baseUrl.trim();
+    if (!trimmedBaseUrl) {
+      return undefined;
+    }
+
+    if (aiPolicy.allowPersonalCustomBaseUrls || (isBuiltIn && !hasOrganizationConfig)) {
+      return trimmedBaseUrl;
+    }
+
+    return undefined;
+  };
+
   const handleSave = async () => {
     setSaveStatus('idle');
 
@@ -349,99 +388,267 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
       baseUrl?: string | null;
       preferredModel?: string | null;
     }> = [];
+    const persistedLLMProviders: ProviderId[] = [];
+    const persistedTTSProviders: TTSProviderId[] = [];
+    const persistedASRProviders: ASRProviderId[] = [];
+    const persistedPDFProviders: PDFProviderId[] = [];
+    const persistedImageProviders: ImageProviderId[] = [];
+    const persistedVideoProviders: VideoProviderId[] = [];
+    const persistedWebSearchProviders: WebSearchProviderId[] = [];
 
     for (const [pid, config] of Object.entries(providersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = config.isBuiltIn === true;
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedLLMProviders.push(pid as ProviderId);
       overrides.push({
         family: 'llm',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
         preferredModel: providerId === pid ? modelId || null : null,
       });
     }
 
     for (const [pid, config] of Object.entries(ttsProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = !isCustomTTSProvider(pid);
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedTTSProviders.push(pid as TTSProviderId);
       overrides.push({
         family: 'tts',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
         preferredModel: ttsProviderId === pid ? config.modelId || null : null,
       });
     }
 
     for (const [pid, config] of Object.entries(asrProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = !isCustomASRProvider(pid);
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedASRProviders.push(pid as ASRProviderId);
       overrides.push({
         family: 'asr',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
         preferredModel: asrProviderId === pid ? config.modelId || null : null,
       });
     }
 
     for (const [pid, config] of Object.entries(pdfProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = pid in PDF_PROVIDERS;
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedPDFProviders.push(pid as PDFProviderId);
       overrides.push({
         family: 'pdf',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
       });
     }
 
     for (const [pid, config] of Object.entries(imageProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = pid in IMAGE_PROVIDERS;
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedImageProviders.push(pid as ImageProviderId);
       overrides.push({
         family: 'image',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
         preferredModel: imageProviderId === pid ? imageModelId || null : null,
       });
     }
 
     for (const [pid, config] of Object.entries(videoProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = pid in VIDEO_PROVIDERS;
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedVideoProviders.push(pid as VideoProviderId);
       overrides.push({
         family: 'video',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
         preferredModel: videoProviderId === pid ? videoModelId || null : null,
       });
     }
 
     for (const [pid, config] of Object.entries(webSearchProvidersConfig)) {
-      if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
+      const isBuiltInProvider = pid in WEB_SEARCH_PROVIDERS;
+      if (
+        !shouldPersistOverride({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          hasPersonalOverride: config.hasPersonalOverride,
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        })
+      ) {
+        continue;
+      }
+
+      persistedWebSearchProviders.push(pid as WebSearchProviderId);
       overrides.push({
         family: 'webSearch',
         providerId: pid,
         enabled: config.serverEnabled !== false,
         ...(config.apiKey.trim() ? { secret: config.apiKey.trim() } : {}),
-        ...(aiPolicy.allowPersonalCustomBaseUrls && config.baseUrl.trim()
-          ? { baseUrl: config.baseUrl.trim() }
+        ...(getPersistedBaseUrl({
+          isBuiltIn: isBuiltInProvider,
+          hasOrganizationConfig: config.hasOrganizationConfig,
+          baseUrl: config.baseUrl,
+        })
+          ? {
+              baseUrl: getPersistedBaseUrl({
+                isBuiltIn: isBuiltInProvider,
+                hasOrganizationConfig: config.hasOrganizationConfig,
+                baseUrl: config.baseUrl,
+              }),
+            }
           : {}),
       });
     }
@@ -460,13 +667,6 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         body: JSON.stringify({ overrides }),
       });
 
-      if (response.status === 401) {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
-        onOpenChange(false);
-        return;
-      }
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: t('settings.saveFailed') }));
         setSaveStatus('error');
@@ -474,33 +674,26 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         return;
       }
 
-      for (const [pid, config] of Object.entries(providersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setProviderConfig(pid as ProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedLLMProviders) {
+        setProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(ttsProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setTTSProviderConfig(pid as TTSProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedTTSProviders) {
+        setTTSProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(asrProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setASRProviderConfig(pid as ASRProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedASRProviders) {
+        setASRProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(pdfProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setPDFProviderConfig(pid as PDFProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedPDFProviders) {
+        setPDFProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(imageProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setImageProviderConfig(pid as ImageProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedImageProviders) {
+        setImageProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(videoProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setVideoProviderConfig(pid as VideoProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedVideoProviders) {
+        setVideoProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
-      for (const [pid, config] of Object.entries(webSearchProvidersConfig)) {
-        if (!config.hasOrganizationConfig && !config.hasPersonalOverride) continue;
-        setWebSearchProviderConfig(pid as WebSearchProviderId, { apiKey: '', baseUrl: '' });
+      for (const pid of persistedWebSearchProviders) {
+        setWebSearchProviderConfig(pid, { apiKey: '', baseUrl: '' });
       }
 
       await fetchServerProviders();
@@ -543,6 +736,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         defaultBaseUrl: providersConfig[selectedProviderId].defaultBaseUrl,
         icon: providersConfig[selectedProviderId].icon,
         requiresApiKey: providersConfig[selectedProviderId].requiresApiKey,
+        supportsOptionalApiKey: providersConfig[selectedProviderId].supportsOptionalApiKey,
         models: providersConfig[selectedProviderId].models,
       }
     : undefined;
@@ -646,6 +840,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         defaultBaseUrl: providerData.baseUrl || undefined,
         icon: providerData.icon || undefined,
         requiresApiKey: providerData.requiresApiKey,
+        supportsOptionalApiKey: false,
         isBuiltIn: false,
       },
     };
@@ -702,6 +897,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     defaultBaseUrl: config.defaultBaseUrl,
     icon: config.icon,
     requiresApiKey: config.requiresApiKey,
+    supportsOptionalApiKey: config.supportsOptionalApiKey,
     models: config.models,
     isServerConfigured: config.isServerConfigured,
   }));

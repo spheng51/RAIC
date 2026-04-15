@@ -2,7 +2,14 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronRight, Image as ImageIcon, Mic, SlidersHorizontal, Video, Volume2 } from 'lucide-react';
+import {
+  ChevronRight,
+  Image as ImageIcon,
+  Mic,
+  SlidersHorizontal,
+  Video,
+  Volume2,
+} from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -128,12 +135,13 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
           groupName: provider.name,
           groupIcon: IMAGE_PROVIDER_ICONS[provider.id],
           available: true,
-          items: [...provider.models, ...(imageProvidersConfig[provider.id]?.customModels || [])].map(
-            (model) => ({
-              id: model.id,
-              name: model.name,
-            }),
-          ),
+          items: [
+            ...provider.models,
+            ...(imageProvidersConfig[provider.id]?.customModels || []),
+          ].map((model) => ({
+            id: model.id,
+            name: model.name,
+          })),
         })),
     [imageProvidersConfig],
   );
@@ -149,12 +157,13 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
           groupName: provider.name,
           groupIcon: VIDEO_PROVIDER_ICONS[provider.id],
           available: true,
-          items: [...provider.models, ...(videoProvidersConfig[provider.id]?.customModels || [])].map(
-            (model) => ({
-              id: model.id,
-              name: model.name,
-            }),
-          ),
+          items: [
+            ...provider.models,
+            ...(videoProvidersConfig[provider.id]?.customModels || []),
+          ].map((model) => ({
+            id: model.id,
+            name: model.name,
+          })),
         })),
     [videoProvidersConfig],
   );
@@ -185,7 +194,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
       }
 
       const requiresApiKey = config.requiresApiKey === true;
-      const hasApiKey = typeof config.apiKey === "string" && config.apiKey.trim().length > 0;
+      const hasApiKey = typeof config.apiKey === 'string' && config.apiKey.trim().length > 0;
       if (requiresApiKey && !hasApiKey && config.isServerConfigured !== true) {
         continue;
       }
@@ -390,7 +399,11 @@ function TabPanel({
         >
           {label}
         </span>
-        <Switch checked={enabled} onCheckedChange={onToggle} className="origin-right scale-[0.85]" />
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          className="origin-right scale-[0.85]"
+        />
       </div>
       {enabled && children}
     </div>
@@ -412,8 +425,7 @@ function GroupedSelect({
   const selectedGroup =
     groups.find(
       (group) =>
-        group.groupId === selectedGroupId &&
-        group.items.some((item) => item.id === selectedItemId),
+        group.groupId === selectedGroupId && group.items.some((item) => item.id === selectedItemId),
     ) || groups.find((group) => group.groupId === selectedGroupId);
 
   return (

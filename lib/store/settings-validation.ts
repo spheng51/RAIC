@@ -8,12 +8,23 @@
 export type ProviderCfgLike = {
   isServerConfigured?: boolean;
   apiKey?: string;
+  requiresApiKey?: boolean;
+  supportsOptionalApiKey?: boolean;
+  baseUrl?: string;
+  defaultBaseUrl?: string;
+  serverBaseUrl?: string;
 };
 
 /** Check whether a provider has a usable path (server config or client key). */
 export function isProviderUsable(cfg: ProviderCfgLike | undefined): boolean {
   if (!cfg) return false;
-  return !!cfg.isServerConfigured || !!cfg.apiKey;
+  if (cfg.isServerConfigured) return true;
+  if (cfg.apiKey) return true;
+
+  const hasBaseUrl = !!cfg.baseUrl || !!cfg.defaultBaseUrl || !!cfg.serverBaseUrl;
+  if (!hasBaseUrl) return false;
+
+  return cfg.requiresApiKey === false || cfg.supportsOptionalApiKey === true;
 }
 
 /**

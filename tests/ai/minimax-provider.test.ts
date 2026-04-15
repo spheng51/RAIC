@@ -20,3 +20,17 @@ describe('MiniMax provider defaults', () => {
     ]);
   });
 });
+
+describe('LM Studio provider defaults', () => {
+  it('uses the local OpenAI-compatible endpoint by default', () => {
+    expect(getProvider('lmstudio')).toMatchObject({
+      defaultBaseUrl: 'http://127.0.0.1:1234/v1',
+      requiresApiKey: false,
+      supportsOptionalApiKey: true,
+    });
+  });
+
+  it('starts with an empty built-in model catalog', () => {
+    expect(getProvider('lmstudio')?.models).toEqual([]);
+  });
+});

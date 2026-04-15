@@ -52,6 +52,7 @@ pnpm dev
    ```bash
    git checkout -b feat/your-feature main
    ```
+   (In this repository's maintainer flow, development in the main shared clone is done in short-lived local `codex/*` scratch branches, merged into local `main`, and then pushed.)
 2. **Branch naming convention:**
    - `feat/` — new features or enhancements
    - `fix/` — bug fixes
@@ -89,6 +90,8 @@ For maintainer release slices, use the repo runbook baseline instead:
 ```bash
 pnpm run ops:verify
 ```
+
+For behavior slices that may affect perf-critical classroom paths, attach benchmark evidence if a deterministic harness exists for that path.
 
 If formatting or lint auto-fixes produce changes, include them in your commit.
 

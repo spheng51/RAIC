@@ -1,0 +1,29 @@
+{
+  "commandThresholds": [
+    {
+      "name": "pnpm run build",
+      "thresholdMs": 600000,
+      "description": "Main production build on a clean environment."
+    },
+    {
+      "name": "pnpm run test:mirofish:gate",
+      "thresholdMs": 600000,
+      "description": "Governance and core classroom contract path."
+    },
+    {
+      "name": "pnpm exec playwright test e2e/tests/home-to-generation.spec.ts --reporter=line",
+      "thresholdMs": 480000,
+      "description": "Startup + classroom key generation smoke path."
+    }
+  ],
+  "metricTargets": {
+    "firstMeaningfulPaintMs": 2500,
+    "classroomStartToFirstSceneMs": 8000,
+    "providerRoundtripP95Ms": 3500,
+    "classroomReuseReconnectMs": 2500
+  },
+  "notes": [
+    "These values are baseline budgets for trend monitoring and are not hard product-level SLOs.",
+    "Future `mirofish` and provider-path benchmark tests should enrich this file with measurable service-level targets."
+  ]
+}

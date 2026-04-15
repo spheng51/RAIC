@@ -374,6 +374,10 @@ function getBuiltInCatalog(): Record<AIProviderFamily, Record<string, ProviderCa
 
 const BUILTIN_CATALOG = getBuiltInCatalog();
 
+export function isBuiltInProvider(family: AIProviderFamily, providerId: string) {
+  return !!BUILTIN_CATALOG[family][providerId];
+}
+
 function entryFromDefinition(
   providerId: string,
   definition: AIProviderDefinition,
@@ -490,24 +494,31 @@ function getEffectiveOptionForScope(
 
   const bootstrap = getBootstrapCandidate(family, entry);
   const hasOrganizationScope = !!scope.organizationId;
-  const canUsePersonalOverride =
+  const canUseSelfServicePersonalOverride =
+    hasOrganizationScope && !!scope.userId && !entry.isCustom && !organizationConfig;
+  const canUseGovernedPersonalOverride =
     hasOrganizationScope &&
     !!scope.userId &&
     !!organizationConfig &&
     scope.policy.allowPersonalOverrides;
-  const canUsePersonalBaseUrl = canUsePersonalOverride && scope.policy.allowPersonalCustomBaseUrls;
+  const canUsePersonalOverride =
+    canUseSelfServicePersonalOverride || canUseGovernedPersonalOverride;
+  const canUsePersonalBaseUrl =
+    canUseSelfServicePersonalOverride ||
+    (canUseGovernedPersonalOverride && scope.policy.allowPersonalCustomBaseUrls);
+  const personalOverrideApplies = canUsePersonalOverride && !!userOverride;
 
   const organizationDisabled = organizationConfig ? !organizationConfig.enabled : false;
-  const personalDisabled = canUsePersonalOverride && userOverride ? !userOverride.enabled : false;
+  const personalDisabled = personalOverrideApplies ? !userOverride.enabled : false;
 
   const allowedModels = getAllowedModels(entry, organizationConfig, bootstrap);
   const defaultModel = chooseModelId({
-    preferredModel: userOverride?.preferredModel,
+    preferredModel: personalOverrideApplies ? userOverride?.preferredModel : undefined,
     defaultModel: organizationConfig?.defaultModel,
     allowedModels,
   });
 
-  const hasPersonalSecret = canUsePersonalOverride && !!userOverride?.encryptedSecret;
+  const hasPersonalSecret = personalOverrideApplies && !!userOverride?.encryptedSecret;
   const hasOrganizationSecret = !!organizationConfig?.encryptedSecret;
   const hasBootstrapSecret = !!bootstrap?.apiKey;
   const hasSecret = hasPersonalSecret || hasOrganizationSecret || hasBootstrapSecret;
@@ -526,8 +537,7 @@ function getEffectiveOptionForScope(
   } else if (organizationDisabled) {
     source = 'organization';
   } else if (
-    canUsePersonalOverride &&
-    userOverride &&
+    personalOverrideApplies &&
     (hasPersonalSecret ||
       (canUsePersonalBaseUrl && !!userOverride.baseUrl) ||
       !!userOverride.preferredModel)
@@ -642,13 +652,23 @@ async function resolveProviderCredentials(input: {
   }
 
   const bootstrap = getBootstrapCandidate(input.family, entry);
-  const canUsePersonalOverride =
+  const canUseSelfServicePersonalOverride =
+    mode === 'interactive' &&
+    hasOrganizationScope &&
+    !!scope.userId &&
+    !entry.isCustom &&
+    !organizationConfig;
+  const canUseGovernedPersonalOverride =
     mode === 'interactive' &&
     hasOrganizationScope &&
     !!scope.userId &&
     !!organizationConfig &&
     scope.policy.allowPersonalOverrides;
-  const canUsePersonalBaseUrl = canUsePersonalOverride && scope.policy.allowPersonalCustomBaseUrls;
+  const canUsePersonalOverride =
+    canUseSelfServicePersonalOverride || canUseGovernedPersonalOverride;
+  const canUsePersonalBaseUrl =
+    canUseSelfServicePersonalOverride ||
+    (canUseGovernedPersonalOverride && scope.policy.allowPersonalCustomBaseUrls);
   const legacyBlocked = !!organizationConfig || !!userOverride || !!bootstrap;
   const legacyFallbackAllowed =
     mode === 'interactive' && !legacyBlocked && !entry.clientOnly && !entry.isCustom;

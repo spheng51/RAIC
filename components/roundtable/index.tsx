@@ -1831,8 +1831,8 @@ export function Roundtable({
               }}
             >
               <div className="flex gap-1 w-max py-1">
-                      {studentParticipants.map((student) => {
-                        const isSpeaking = speakingAgentId === student.id;
+                {studentParticipants.map((student) => {
+                  const isSpeaking = speakingAgentId === student.id;
                   const isThinkingAgent =
                     thinkingState?.stage === 'agent_loading' &&
                     thinkingState.agentId === student.id;
@@ -1852,17 +1852,17 @@ export function Roundtable({
                   const isDiscussionAgent =
                     !!discussionRequest && discussionRequest.agentId === student.id;
                   const onlineStatus = student.isOnline ? 'online' : 'offline';
-                        return (
-                          <HoverCard openDelay={300} closeDelay={100} key={student.id}>
-                            <HoverCardTrigger asChild>
-                              <div
-                                data-agent-id={student.id}
-                                ref={(el) => {
-                                  if (el) studentAvatarRefs.current.set(student.id, el);
-                                  else studentAvatarRefs.current.delete(student.id);
-                                }}
-                                className="relative group/student shrink-0"
-                              >
+                  return (
+                    <HoverCard openDelay={300} closeDelay={100} key={student.id}>
+                      <HoverCardTrigger asChild>
+                        <div
+                          data-agent-id={student.id}
+                          ref={(el) => {
+                            if (el) studentAvatarRefs.current.set(student.id, el);
+                            else studentAvatarRefs.current.delete(student.id);
+                          }}
+                          className="relative group/student shrink-0"
+                        >
                           {/* Breathing glow for discussion agent */}
                           {isDiscussionAgent && (
                             <motion.div
@@ -1878,8 +1878,7 @@ export function Roundtable({
                               className="absolute inset-0 rounded-2xl pointer-events-none"
                               style={{
                                 border: `2px solid ${agentConfig?.color || '#d97706'}`,
-                                boxShadow:
-                                  `0 0 12px ${agentConfig?.color || '#d97706'}55`,
+                                boxShadow: `0 0 12px ${agentConfig?.color || '#d97706'}55`,
                               }}
                             />
                           )}
@@ -1892,11 +1891,19 @@ export function Roundtable({
                             status={isSpeaking ? 'active' : 'idle'}
                             activityLabel={isSpeaking ? 'speaking' : onlineStatus}
                             lastActiveText={isSpeaking ? 'live' : 'now'}
-                            statusIcon={isSpeaking ? 'busy' : student.isOnline ? 'online' : 'offline'}
+                            statusIcon={
+                              isSpeaking ? 'busy' : student.isOnline ? 'online' : 'offline'
+                            }
                             highlight={isSpeaking}
                             chips={[
                               ...(isThinkingAgent
-                                ? [{ key: 'loading', label: 'Thinking', variant: 'outline' as const }]
+                                ? [
+                                    {
+                                      key: 'loading',
+                                      label: 'Thinking',
+                                      variant: 'outline' as const,
+                                    },
+                                  ]
                                 : []),
                               ...(student.isOnline ? [] : [{ key: 'offline', label: 'offline' }]),
                             ]}

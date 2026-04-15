@@ -48,6 +48,7 @@ interface ClassroomGenerationJobResponse {
   readonly result?: {
     readonly id: string;
     readonly url: string;
+    readonly scenesCount?: number;
   } | null;
   readonly error?: string | null;
   readonly details?: string | null;
@@ -293,6 +294,7 @@ function GenerationPreviewContent() {
 
         if (pollData.done) {
           if (pollData.status === 'succeeded' && pollData.result?.id && pollData.result.url) {
+            const destination = new URL(pollData.result.url, window.location.origin);
             clearClassroomLaunchContext();
             writeClassroomLaunchContext({
               classroomId: pollData.result.id,
@@ -301,7 +303,11 @@ function GenerationPreviewContent() {
             });
             sessionStorage.removeItem('generationParams');
             sessionStorage.removeItem('generationSession');
-            router.push(pollData.result.url);
+            if (destination.origin === window.location.origin) {
+              router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+            } else {
+              window.location.assign(destination.toString());
+            }
             return;
           }
 

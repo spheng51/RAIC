@@ -69,6 +69,8 @@ export function ProviderConfigPanel({
 }: ProviderConfigPanelProps) {
   const { t } = useI18n();
   const aiPolicy = useSettingsStore((state) => state.aiPolicy);
+  const currentProviderId = useSettingsStore((state) => state.providerId);
+  const currentModelId = useSettingsStore((state) => state.modelId);
 
   // Local state for this provider
   const [apiKey, setApiKey] = useState(initialApiKey);
@@ -114,14 +116,16 @@ export function ProviderConfigPanel({
     setTestMessage('');
 
     const availableModels = providersConfig[provider.id]?.models || [];
+    const testModelId =
+      (provider.id === currentProviderId ? currentModelId : '') ||
+      providersConfig[provider.id]?.serverDefaultModel ||
+      availableModels[0]?.id;
 
-    if (availableModels.length === 0) {
+    if (!testModelId) {
       setTestStatus('error');
       setTestMessage(t('settings.noModelsAvailable') || 'No models available for testing');
       return;
     }
-
-    const testModelId = availableModels[0].id;
 
     try {
       const response = await fetch('/api/verify-model', {
@@ -149,19 +153,40 @@ export function ProviderConfigPanel({
       setTestStatus('error');
       setTestMessage(t('settings.connectionFailed'));
     }
-  }, [apiKey, baseUrl, provider.id, provider.type, requiresApiKey, providersConfig, t]);
+  }, [
+    apiKey,
+    baseUrl,
+    currentModelId,
+    currentProviderId,
+    provider.id,
+    provider.type,
+    requiresApiKey,
+    providersConfig,
+    t,
+  ]);
 
-  const models = providersConfig[provider.id]?.models || [];
-  const isServerConfigured = providersConfig[provider.id]?.isServerConfigured;
-  const isGovernedProvider = !!providersConfig[provider.id]?.hasOrganizationConfig;
-  const legacyFallbackAllowed = providersConfig[provider.id]?.legacyFallbackAllowed !== false;
+  const governedConfig = providersConfig[provider.id];
+  const models = governedConfig?.models || [];
+  const isServerConfigured = governedConfig?.isServerConfigured;
+  const isGovernedProvider = !!governedConfig?.hasOrganizationConfig;
+  const hasPersonalOverride = !!governedConfig?.hasPersonalOverride;
+  const source = governedConfig?.source;
+  const legacyFallbackAllowed = governedConfig?.legacyFallbackAllowed !== false;
   const isLegacyFallbackInUse = !!apiKey && !isServerConfigured && legacyFallbackAllowed;
   const canOverrideBaseUrl = !isGovernedProvider || aiPolicy.allowPersonalCustomBaseUrls;
+  const canUseOptionalApiKey = provider.supportsOptionalApiKey === true;
+  const canEditApiKey = requiresApiKey || isServerConfigured || canUseOptionalApiKey;
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {source === 'personal' && hasPersonalOverride && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+          {t('settings.personalConfiguredNotice')}
+        </div>
+      )}
+
       {/* Server-configured notice */}
-      {isServerConfigured && (
+      {isServerConfigured && source !== 'personal' && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
           {t('settings.serverConfiguredNotice')}
         </div>
@@ -172,8 +197,7 @@ export function ProviderConfigPanel({
           data-testid="legacy-fallback-notice"
           className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300"
         >
-          Using a one-release legacy browser credential fallback for this provider. Ask an org admin
-          to save it server-side to avoid future breakage.
+          {t('settings.legacyBrowserOnlyNotice')}
         </div>
       )}
 
@@ -194,14 +218,14 @@ export function ProviderConfigPanel({
               value={apiKey}
               onChange={(e) => handleApiKeyChange(e.target.value)}
               onBlur={onSave}
-              disabled={!requiresApiKey && !isServerConfigured}
+              disabled={!canEditApiKey}
               className="h-8 pr-8"
             />
             <button
               type="button"
               onClick={() => setShowApiKey(!showApiKey)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              disabled={!requiresApiKey}
+              disabled={!canEditApiKey}
             >
               {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>

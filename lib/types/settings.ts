@@ -29,6 +29,7 @@ export interface ProviderSettings {
   defaultBaseUrl?: string;
   icon?: string;
   requiresApiKey: boolean;
+  supportsOptionalApiKey?: boolean;
   isBuiltIn: boolean; // true for built-in providers, false for custom
 
   // Server-side configuration (set by fetchServerProviders)

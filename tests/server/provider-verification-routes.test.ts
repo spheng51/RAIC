@@ -236,6 +236,59 @@ describe('provider and verification routes', () => {
     });
   });
 
+  it('verifies LM Studio models without requiring an API key', async () => {
+    generateTextMock.mockResolvedValue({ text: 'OK' });
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'lmstudio:qwen3.5-4b',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveModelMock).toHaveBeenCalledWith({
+      modelString: 'lmstudio:qwen3.5-4b',
+      apiKey: '',
+      baseUrl: undefined,
+      providerType: 'openai',
+      auth: authContext,
+    });
+    expect(body).toEqual({
+      success: true,
+      message: 'Connection successful',
+      response: 'OK',
+    });
+  });
+
+  it('includes the tested model id in verification failures', async () => {
+    resolveModelMock.mockResolvedValue({
+      model: 'resolved-model',
+      modelString: 'grok:grok-4.20-reasoning',
+    });
+    generateTextMock.mockRejectedValue(new Error('403 forbidden'));
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'grok:grok-4.20-reasoning',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toContain('grok:grok-4.20-reasoning');
+  });
+
   it('requires a provider id before verifying PDF connectivity', async () => {
     const { POST } = await import('@/app/api/verify-pdf-provider/route');
     const response = await POST(

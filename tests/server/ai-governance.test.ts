@@ -214,6 +214,36 @@ describe('ai-governance resolver', () => {
     expect(withPersonalOverride.source).toBe('personal');
   });
 
+  it('resolves built-in personal overrides without org provider config', async () => {
+    listUserProviderOverridesMock.mockResolvedValue([
+      {
+        id: 'override-1',
+        organizationId: 'org-1',
+        userId: 'user-1',
+        family: 'llm',
+        providerId: 'grok',
+        encryptedSecret: 'user-secret',
+        baseUrl: 'https://api.x.ai/v1',
+        preferredModel: 'grok-4.20-reasoning',
+        enabled: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ]);
+
+    const { resolveLLMGovernedConfig } = await import('@/lib/server/ai-governance');
+    const resolved = await resolveLLMGovernedConfig({
+      auth: authContext,
+      providerId: 'grok',
+      modelId: 'grok-4.20-reasoning',
+    });
+
+    expect(resolved.apiKey).toBe('decrypted:user-secret');
+    expect(resolved.baseUrl).toBe('https://api.x.ai/v1');
+    expect(resolved.modelId).toBe('grok-4.20-reasoning');
+    expect(resolved.source).toBe('personal');
+  });
+
   it('marks legacy fallback available for built-in org-scoped providers when no server-backed config exists', async () => {
     const { getEffectiveAIOptions } = await import('@/lib/server/ai-governance');
 
@@ -232,5 +262,53 @@ describe('ai-governance resolver', () => {
     const options = await getEffectiveAIOptions(authContext);
 
     expect(options.providers.llm.openai?.legacyFallbackAllowed).toBe(false);
+  });
+
+  it('reports built-in personal overrides without org config as personal and disables legacy fallback', async () => {
+    listUserProviderOverridesMock.mockResolvedValue([
+      {
+        id: 'override-1',
+        organizationId: 'org-1',
+        userId: 'user-1',
+        family: 'llm',
+        providerId: 'grok',
+        encryptedSecret: 'user-secret',
+        baseUrl: 'https://api.x.ai/v1',
+        preferredModel: 'grok-4.20-reasoning',
+        enabled: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ]);
+
+    const { getEffectiveAIOptions } = await import('@/lib/server/ai-governance');
+    const options = await getEffectiveAIOptions(authContext);
+
+    expect(options.providers.llm.grok).toMatchObject({
+      source: 'personal',
+      legacyFallbackAllowed: false,
+      hasPersonalOverride: true,
+      hasOrganizationConfig: false,
+      defaultModel: 'grok-4.20-reasoning',
+    });
+  });
+
+  it('allows LM Studio bootstrap config without an API key', async () => {
+    getBootstrapProviderConfigMock.mockReturnValue({
+      baseUrl: 'http://127.0.0.1:1234/v1',
+      models: ['qwen3.5-4b'],
+    });
+
+    const { resolveLLMGovernedConfig } = await import('@/lib/server/ai-governance');
+    const resolved = await resolveLLMGovernedConfig({
+      auth: authContext,
+      providerId: 'lmstudio',
+      modelId: 'qwen3.5-4b',
+    });
+
+    expect(resolved.apiKey).toBe('');
+    expect(resolved.baseUrl).toBe('http://127.0.0.1:1234/v1');
+    expect(resolved.modelId).toBe('qwen3.5-4b');
+    expect(resolved.source).toBe('bootstrap');
   });
 });

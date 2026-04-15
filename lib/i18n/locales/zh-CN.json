@@ -420,7 +420,8 @@
       "glm": "GLM",
       "siliconflow": "硅基流动",
       "doubao": "豆包",
-      "ollama": "Ollama（本地模型）"
+      "ollama": "Ollama（本地模型）",
+      "lmstudio": "LM Studio"
     },
     "providerTypes": {
       "openai": "OpenAI 协议",
@@ -857,6 +858,8 @@
     "noVisionWarning": "当前模型不支持视觉能力，图片仍可放入幻灯片，但模型无法理解图片内容来优化选择和布局",
     "serverConfigured": "服务端",
     "serverConfiguredNotice": "管理员已在服务端配置了此提供方的 API Key，可直接使用。也可输入自己的 Key 覆盖。",
+    "personalConfiguredNotice": "This provider is saved to your signed-in Google account for this workspace.",
+    "legacyBrowserOnlyNotice": "Using a one-release legacy browser credential fallback for this provider. Save it while signed in with Google to attach it to your account for this workspace and avoid future breakage.",
     "optionalOverride": "可选，留空则使用服务端配置",
     "setupNeeded": "请先完成配置",
     "modelNotConfigured": "请选择一个模型以开始使用",

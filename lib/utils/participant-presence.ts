@@ -76,9 +76,7 @@ export function getParticipantRelativeActivityText(
   }
 
   const inactiveDays = Math.floor(inactiveHours / 24);
-  return inactiveDays < 7
-    ? `${inactiveDays}d ago`
-    : `${Math.floor(inactiveDays / 7)}w ago`;
+  return inactiveDays < 7 ? `${inactiveDays}d ago` : `${Math.floor(inactiveDays / 7)}w ago`;
 }
 
 export function getParticipantActivityLabel(
@@ -114,7 +112,8 @@ export function sortParticipantsByPresence<T extends ParticipantPresenceSortable
 ): T[] {
   const nowMs = options.nowMs ?? Date.now();
   const isSpeaking = options.getIsSpeaking ?? ((participant) => Boolean(participant.isSpeaking));
-  const isController = options.getIsController ?? ((participant) => Boolean(participant.isController));
+  const isController =
+    options.getIsController ?? ((participant) => Boolean(participant.isController));
   const getLastSeenAt = (participant: T) => participant.lastSeenAt;
 
   const activityOrder: Record<ParticipantActivityState, number> = {

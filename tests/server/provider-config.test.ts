@@ -18,6 +18,7 @@ const PROVIDER_ENV_PREFIXES = [
   'DOUBAO',
   'GROK',
   'OLLAMA',
+  'LMSTUDIO',
   'TTS_OPENAI',
   'TTS_AZURE',
   'TTS_GLM',
@@ -188,6 +189,20 @@ providers:
 
       expect(providers.openai).toBeUndefined();
     });
+
+    it('includes LM Studio when only BASE_URL is configured', async () => {
+      vi.stubEnv('LMSTUDIO_BASE_URL', 'http://127.0.0.1:1234/v1');
+      vi.stubEnv('LMSTUDIO_MODELS', 'qwen3.5-4b,llama-4-scout');
+
+      const { getServerProviders } = await import('@/lib/server/provider-config');
+      const providers = getServerProviders();
+
+      expect(providers.lmstudio).toEqual({
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        models: ['qwen3.5-4b', 'llama-4-scout'],
+      });
+      expect((providers.lmstudio as Record<string, unknown>).apiKey).toBeUndefined();
+    });
   });
 
   describe('env var model parsing', () => {
@@ -215,6 +230,45 @@ providers:
   });
 
   describe('baseUrl-only providers (e.g. mineru)', () => {
+    it('includes LM Studio from YAML when only baseUrl is configured', async () => {
+      yamlOverride = `
+providers:
+  lmstudio:
+    baseUrl: http://127.0.0.1:1234/v1
+    models:
+      - qwen3.5-4b
+`;
+      const { getServerProviders } = await import('@/lib/server/provider-config');
+      const providers = getServerProviders();
+
+      expect(providers.lmstudio).toEqual({
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        models: ['qwen3.5-4b'],
+      });
+    });
+
+    it('lets env override YAML for LM Studio baseUrl and models', async () => {
+      yamlOverride = `
+providers:
+  lmstudio:
+    apiKey: yaml-token
+    baseUrl: http://127.0.0.1:1234/v1
+    models:
+      - qwen3.5-4b
+`;
+      vi.stubEnv('LMSTUDIO_BASE_URL', 'http://localhost:4321/v1');
+      vi.stubEnv('LMSTUDIO_MODELS', 'glm-5.1');
+
+      const { getServerProviders, resolveApiKey } = await import('@/lib/server/provider-config');
+      const providers = getServerProviders();
+
+      expect(providers.lmstudio).toEqual({
+        baseUrl: 'http://localhost:4321/v1',
+        models: ['glm-5.1'],
+      });
+      expect(resolveApiKey('lmstudio')).toBe('yaml-token');
+    });
+
     it('includes PDF provider from YAML when only baseUrl is configured (no apiKey)', async () => {
       yamlOverride = `
 pdf:

@@ -6,10 +6,9 @@ process.env.RAIC_SECRET_ENCRYPTION_KEY ??=
 const nodeBinDir = path.dirname(process.execPath);
 const webServerPath = `${nodeBinDir}${path.delimiter}${process.env.PATH ?? ''}`;
 const standaloneOutputEnabled = !process.env.VERCEL && process.platform !== 'win32';
-const ciWebServerCommand =
-  standaloneOutputEnabled
-    ? 'corepack pnpm build && node .next/standalone/server.js'
-    : 'corepack pnpm build && corepack pnpm exec next start';
+const ciWebServerCommand = standaloneOutputEnabled
+  ? 'corepack pnpm build && node .next/standalone/server.js'
+  : 'corepack pnpm build && corepack pnpm exec next start';
 const useDevServer = process.env.PLAYWRIGHT_USE_DEV_SERVER === 'true';
 const webServerCommand = useDevServer ? 'corepack pnpm dev' : ciWebServerCommand;
 

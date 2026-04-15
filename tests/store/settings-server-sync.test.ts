@@ -40,6 +40,16 @@ vi.mock('@/lib/ai/providers', () => ({
         { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' },
       ],
     },
+    lmstudio: {
+      id: 'lmstudio',
+      name: 'LM Studio',
+      type: 'openai',
+      defaultBaseUrl: 'http://127.0.0.1:1234/v1',
+      requiresApiKey: false,
+      supportsOptionalApiKey: true,
+      icon: '/logos/lmstudio.svg',
+      models: [],
+    },
   },
 }));
 
@@ -189,8 +199,8 @@ function mockServerResponse(overrides: MockServerResponse = {}) {
         allowedModels: config.models,
         defaultModel: config.models?.[0] ?? null,
         baseUrl: config.baseUrl,
-        hasSecret: true,
-        requiresApiKey: true,
+        hasSecret: providerId !== 'lmstudio',
+        requiresApiKey: providerId !== 'lmstudio',
         hasOrganizationConfig: true,
       },
     ]),
@@ -397,6 +407,52 @@ describe('fetchServerProviders — provider availability sync', () => {
     expect(store.getState().providersConfig.openai.isServerConfigured).toBe(true);
   });
 
+  it('reflects personal built-in overrides from /api/ai/options and disables legacy fallback', async () => {
+    const store = await getStore();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        policy: {
+          allowPersonalOverrides: false,
+          allowPersonalCustomBaseUrls: false,
+        },
+        providers: {
+          llm: {
+            openai: {
+              providerId: 'openai',
+              enabled: true,
+              source: 'personal',
+              allowedModels: ['gpt-4o'],
+              defaultModel: 'gpt-4o',
+              hasSecret: true,
+              requiresApiKey: true,
+              legacyFallbackAllowed: false,
+              hasPersonalOverride: true,
+              hasOrganizationConfig: false,
+            },
+          },
+          tts: {},
+          asr: {},
+          pdf: {},
+          image: {},
+          video: {},
+          webSearch: {},
+        },
+      }),
+    });
+
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providersConfig.openai).toMatchObject({
+      isServerConfigured: true,
+      source: 'personal',
+      legacyFallbackAllowed: false,
+      hasPersonalOverride: true,
+      hasOrganizationConfig: false,
+      serverDefaultModel: 'gpt-4o',
+    });
+  });
+
   it('fills modelId from governed server models when provider is usable but no model is selected', async () => {
     const store = await getStore();
     store.setState({
@@ -479,6 +535,50 @@ describe('fetchServerProviders — provider availability sync', () => {
     // This is the condition model-selector uses to decide if a provider is usable:
     const isUsable = !config.requiresApiKey || !!config.apiKey || !!config.isServerConfigured;
     expect(isUsable).toBe(false);
+  });
+
+  it('keeps LM Studio selected when it only has a local default base URL', async () => {
+    const store = await getStore();
+    store.getState().setProviderConfig('lmstudio', {
+      models: [{ id: 'local-model', name: 'Local Model' }],
+    });
+    store.getState().setModel('lmstudio', 'local-model');
+
+    mockServerResponse({});
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providerId).toBe('lmstudio');
+    expect(store.getState().modelId).toBe('local-model');
+  });
+
+  it('creates selectable synthetic models for unknown LM Studio server model ids', async () => {
+    const store = await getStore();
+    store.setState({
+      providerId: 'lmstudio',
+      modelId: '',
+    });
+
+    mockServerResponse({
+      providers: {
+        lmstudio: { models: ['qwen3.5-4b'] },
+      },
+    });
+
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providersConfig.lmstudio.models).toEqual([
+      {
+        id: 'qwen3.5-4b',
+        name: 'qwen3.5-4b',
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+        },
+      },
+    ]);
+    expect(store.getState().providerId).toBe('lmstudio');
+    expect(store.getState().modelId).toBe('qwen3.5-4b');
   });
 
   // ---- Multiple providers ----

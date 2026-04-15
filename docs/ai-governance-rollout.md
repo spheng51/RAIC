@@ -10,6 +10,8 @@ This checklist hardens the hybrid org-managed AI connectivity release before pro
   - Base64 that decodes to 32 bytes
   - Any passphrase, hashed server-side with SHA-256
 - If the key is missing, env and `server-providers.yml` bootstrap providers still work, but `/api/admin/ai/config` and `/api/me/ai/overrides` reject secret writes.
+- If you bootstrap a local LM Studio instance server-side, set `LMSTUDIO_BASE_URL` or `providers.lmstudio.baseUrl`.
+- In production, localhost LM Studio still depends on `ALLOW_LOCAL_NETWORKS=true` if requests can originate from client-supplied base URLs.
 - For Postgres deployments, confirm the server creates and uses:
   - `organization_ai_policies`
   - `organization_provider_configs`
@@ -51,6 +53,7 @@ Verify with one `org_admin` user and one `teacher` user in the target organizati
 
 - Admin can save org defaults for LLM, web search, TTS, ASR, PDF, image, and video.
 - Teacher can use an org-managed LLM without entering a browser key.
+- Teacher can use LM Studio through server bootstrap with base URL only, and with an optional token when one is configured.
 - Teacher personal override beats org default when policy allows it.
 - Teacher cannot save a custom base URL when `allowPersonalCustomBaseUrls` is off.
 - Org-approved custom LLM is visible and selectable in `/studio`.

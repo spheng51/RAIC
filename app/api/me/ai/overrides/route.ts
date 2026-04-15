@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireRequestRole } from '@/lib/auth/authorize';
+import type { AuthContext } from '@/lib/auth/current-user';
 import { appendAuditLog } from '@/lib/db/repositories/audit-logs';
 import { findOrganizationAIPolicy } from '@/lib/db/repositories/organization-ai-policies';
 import { createLogger } from '@/lib/logger';
@@ -12,6 +13,7 @@ import {
 import {
   findApprovedOrganizationProvider,
   getUserOverridesSnapshot,
+  isBuiltInProvider,
   saveUserOverridesSnapshot,
 } from '@/lib/server/ai-governance';
 import { hasEncryptionKeyConfigured } from '@/lib/server/encrypted-secrets';
@@ -41,6 +43,10 @@ function encryptionUnavailableResponse() {
   );
 }
 
+function hasGoogleBackedWebSession(auth: AuthContext) {
+  return auth.session.kind === 'web' && !!auth.user.googleSub?.trim();
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
   if ('status' in auth) {
@@ -68,7 +74,24 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
   if ('status' in auth) {
-    return auth;
+    if (auth.status === 401) {
+      return Response.json(
+        {
+          success: false,
+          errorCode: 'UNAUTHORIZED',
+          error:
+            'Sign in with Google on a web session to save personal AI provider credentials for this workspace.',
+        },
+        { status: 401 },
+      );
+    }
+
+    return apiErrorWithRequestSession(
+      request,
+      'FORBIDDEN',
+      auth.status,
+      'Sign in with Google on a web session to save personal AI provider credentials for this workspace.',
+    );
   }
 
   if (!hasEncryptionKeyConfigured()) {
@@ -80,37 +103,50 @@ export async function PUT(request: NextRequest) {
     return apiError('INVALID_REQUEST', 400, 'Active organization is required');
   }
 
+  if (!hasGoogleBackedWebSession(auth)) {
+    return apiErrorWithRequestSession(
+      request,
+      'FORBIDDEN',
+      403,
+      'Sign in with Google on a web session to save personal AI provider credentials for this workspace.',
+    );
+  }
+
   try {
     const payload = overridePayloadSchema.parse(await request.json());
     const policyRecord = await findOrganizationAIPolicy(organizationId);
 
-    if (!policyRecord?.allowPersonalOverrides) {
-      await appendAuditLog({
-        organizationId,
-        userId: auth.user.id,
-        actorRole: auth.session.role,
-        action: 'user_provider_override.denied',
-        resourceType: 'organization_ai_policy',
-        metadata: {
-          reason: 'personal_overrides_disabled',
-        },
-      });
-      return apiErrorWithRequestSession(
-        request,
-        'FORBIDDEN',
-        403,
-        'Personal overrides are disabled for this organization.',
-      );
-    }
-
     for (const override of payload.overrides) {
+      const isBuiltIn = isBuiltInProvider(override.family as AIProviderFamily, override.providerId);
       const approvedProvider = await findApprovedOrganizationProvider({
         organizationId,
         family: override.family as AIProviderFamily,
         providerId: override.providerId,
       });
+      const isBuiltInSelfService = isBuiltIn && !approvedProvider;
 
-      if (!approvedProvider) {
+      if (!isBuiltInSelfService && !policyRecord?.allowPersonalOverrides) {
+        await appendAuditLog({
+          organizationId,
+          userId: auth.user.id,
+          actorRole: auth.session.role,
+          action: 'user_provider_override.denied',
+          resourceType: 'organization_ai_policy',
+          metadata: {
+            family: override.family,
+            providerId: override.providerId,
+            reason: 'personal_overrides_disabled',
+          },
+        });
+        return apiErrorWithRequestSession(
+          request,
+          'FORBIDDEN',
+          403,
+          'Personal overrides are disabled for this organization.',
+        );
+      }
+
+      if (!isBuiltInSelfService && !approvedProvider) {
         await appendAuditLog({
           organizationId,
           userId: auth.user.id,
@@ -131,7 +167,7 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      if (override.baseUrl && !policyRecord.allowPersonalCustomBaseUrls) {
+      if (override.baseUrl && !isBuiltInSelfService && !policyRecord?.allowPersonalCustomBaseUrls) {
         await appendAuditLog({
           organizationId,
           userId: auth.user.id,

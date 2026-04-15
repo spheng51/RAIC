@@ -19,9 +19,24 @@ export function useClassroomPresentationState({
 }: UseClassroomPresentationStateOptions) {
   const pollInFlightRef = useRef(false);
   const queuedRefreshSilentRef = useRef<boolean | null>(null);
+  const lastStateRef = useRef<string | null>(null);
   const refreshPresentationStateRef = useRef<(silent?: boolean) => Promise<void>>(
     async () => undefined,
   );
+
+  const applyIfChanged = (nextState: ClassroomPresentationStatePayload | null) => {
+    if (!nextState) {
+      return;
+    }
+
+    const payloadKey = JSON.stringify(nextState);
+    if (payloadKey === lastStateRef.current) {
+      return;
+    }
+
+    lastStateRef.current = payloadKey;
+    onStateChange(nextState);
+  };
 
   const refreshPresentationState = useCallback(
     async (silent = false) => {
@@ -58,7 +73,7 @@ export function useClassroomPresentationState({
           return;
         }
 
-        onStateChange(json);
+        applyIfChanged(json);
       } finally {
         pollInFlightRef.current = false;
         const queuedRefreshSilent = queuedRefreshSilentRef.current;
@@ -77,6 +92,8 @@ export function useClassroomPresentationState({
     if (!enabled || !classroomId) {
       return;
     }
+
+    lastStateRef.current = null;
 
     let disposed = false;
     let retryIndex = 0;
@@ -137,7 +154,7 @@ export function useClassroomPresentationState({
         const message = event as MessageEvent<string>;
         try {
           const payload = JSON.parse(message.data) as ClassroomPresentationStatePayload;
-          onStateChange(payload);
+          applyIfChanged(payload);
           retryIndex = 0;
           stopPolling();
         } catch {

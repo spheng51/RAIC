@@ -420,7 +420,8 @@
       "glm": "GLM",
       "siliconflow": "SiliconFlow",
       "doubao": "豆包",
-      "ollama": "Ollama（ローカルモデル）"
+      "ollama": "Ollama（ローカルモデル）",
+      "lmstudio": "LM Studio"
     },
     "providerTypes": {
       "openai": "OpenAIプロトコル",
@@ -857,6 +858,8 @@
     "noVisionWarning": "現在のモデルは画像認識に対応していません。スライドに画像を配置することは可能ですが、モデルは画像の内容を理解して選択やレイアウトを最適化することができません",
     "serverConfigured": "サーバー",
     "serverConfiguredNotice": "管理者がこのプロバイダーのAPIキーをサーバーに設定済みです。そのまま使用するか、独自のキーを入力して上書きできます。",
+    "personalConfiguredNotice": "This provider is saved to your signed-in Google account for this workspace.",
+    "legacyBrowserOnlyNotice": "Using a one-release legacy browser credential fallback for this provider. Save it while signed in with Google to attach it to your account for this workspace and avoid future breakage.",
     "optionalOverride": "任意 — 空欄の場合はサーバー設定を使用",
     "setupNeeded": "設定が必要です",
     "modelNotConfigured": "モデルを選択して開始してください",

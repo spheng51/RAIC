@@ -420,7 +420,8 @@
       "glm": "GLM",
       "siliconflow": "SiliconFlow",
       "doubao": "Doubao",
-      "ollama": "Ollama (Local)"
+      "ollama": "Ollama (Local)",
+      "lmstudio": "LM Studio"
     },
     "providerTypes": {
       "openai": "OpenAI Protocol",
@@ -857,6 +858,8 @@
     "noVisionWarning": "Current model does not support vision. Images can still be placed in slides, but the model cannot understand image content to optimize selection and layout",
     "serverConfigured": "Server",
     "serverConfiguredNotice": "Admin has configured an API key for this provider on the server. You can use it directly or enter your own key to override.",
+    "personalConfiguredNotice": "This provider is saved to your signed-in Google account for this workspace.",
+    "legacyBrowserOnlyNotice": "Using a one-release legacy browser credential fallback for this provider. Save it while signed in with Google to attach it to your account for this workspace and avoid future breakage.",
     "optionalOverride": "Optional — leave empty to use server config",
     "setupNeeded": "Setup required",
     "modelNotConfigured": "Please select a model to get started",

@@ -19,6 +19,24 @@ describe('isProviderUsable', () => {
     expect(isProviderUsable({ apiKey: 'sk-xxx', isServerConfigured: true })).toBe(true);
   });
 
+  it('returns true for a keyless provider when it has a usable default base URL', () => {
+    expect(
+      isProviderUsable({
+        requiresApiKey: false,
+        defaultBaseUrl: 'http://127.0.0.1:1234/v1',
+      }),
+    ).toBe(true);
+  });
+
+  it('returns true for an optional-token provider when it has a usable base URL', () => {
+    expect(
+      isProviderUsable({
+        supportsOptionalApiKey: true,
+        baseUrl: 'http://127.0.0.1:1234/v1',
+      }),
+    ).toBe(true);
+  });
+
   it('returns false when has neither client key nor server config', () => {
     expect(isProviderUsable({ apiKey: '', isServerConfigured: false })).toBe(false);
   });
@@ -54,6 +72,17 @@ describe('validateProvider', () => {
   it('keeps current provider when it has client API key', () => {
     const configMap = {
       'provider-a': cfg({ apiKey: 'sk-xxx' }),
+      'provider-b': cfg(),
+    };
+    expect(validateProvider('provider-a', configMap, ['provider-b'])).toBe('provider-a');
+  });
+
+  it('keeps current provider when it is keyless but has a default base URL', () => {
+    const configMap = {
+      'provider-a': cfg({
+        requiresApiKey: false,
+        defaultBaseUrl: 'http://127.0.0.1:1234/v1',
+      }),
       'provider-b': cfg(),
     };
     expect(validateProvider('provider-a', configMap, ['provider-b'])).toBe('provider-a');

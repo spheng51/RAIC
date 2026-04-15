@@ -58,6 +58,7 @@ const LLM_ENV_MAP: Record<string, string> = {
   DOUBAO: 'doubao',
   GROK: 'grok',
   OLLAMA: 'ollama',
+  LMSTUDIO: 'lmstudio',
 };
 
 const TTS_ENV_MAP: Record<string, string> = {
@@ -181,7 +182,7 @@ function loadEnvSection(
       continue;
     }
 
-    // Activate on API key, or base URL alone for keyless providers (e.g. Ollama)
+    // Activate on API key, or base URL alone for keyless providers (e.g. Ollama, LM Studio)
     if (
       requiresBaseUrl
         ? !envBaseUrl
@@ -210,7 +211,7 @@ const _configs: Map<string, ServerConfig> = new Map();
 function buildConfig(yamlData: YamlData): ServerConfig {
   return {
     providers: loadEnvSection(LLM_ENV_MAP, yamlData.providers, {
-      keylessProviders: new Set(['ollama']),
+      keylessProviders: new Set(['ollama', 'lmstudio']),
     }),
     tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts),
     asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr),
