@@ -43,7 +43,7 @@ const SECRET_VALUE_INDICATORS = [
 
 const SENSITIVE_ENV_SUFFIX_RE = /(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PASSPHRASE|ENCRYPTION_KEY|CREDENTIAL|ACCESS_KEY|AUTH_TOKEN)$/i;
 const NEXT_PUBLIC_SECRET_RE = /^NEXT_PUBLIC_.*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)/i;
-const PLACEHOLDER_VALUE_RE = /^\s*["']?(?:\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
+const PLACEHOLDER_VALUE_RE = /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
 function normalizeArgv(argv) {
   const args = { mode: null, ci: false, strictRemoteBacklog: false };
