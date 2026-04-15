@@ -216,16 +216,24 @@ This repository is configured for Vercel-first releases.
    - provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.),
    - `RAIC_SECRET_ENCRYPTION_KEY`,
    - database URL and MIROFISH variables,
+   - Google sign-in IDs:
+     - `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
+     - `GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
    - admin/access and auth configuration as needed.
 3. Add `open-raic.com` in Project → Domains.
    - If using Vercel DNS, update registrar nameservers.
    - Otherwise add the registrar/Apex + optional `www` records exactly as prompted by Vercel.
-4. Security preflight before first public cut:
+4. In Google Cloud OAuth client settings, add Authorized JavaScript origins:
+   - `https://open-raic.com`
+   - `https://www.open-raic.com` (if used)
+   - `http://localhost:3000` and `http://localhost:3005` for local dev
+   - For this GIS ID-token flow, do **not** deploy a Google client secret.
+5. Security preflight before first public cut:
    - ensure `.env.local` and `server-providers*.yml` are ignored and **not tracked**;
    - keep keys/server secrets only in Vercel environment variables, never in repo files or `NEXT_PUBLIC_*`.
-5. Run `pnpm run secrets:scan` before any publish, then `pnpm run ops:verify`.
-6. Keep `www.open-raic.com` as optional redirect target (if you want, configure one-way redirect at your DNS/proxy layer).
-7. Deploy and verify:
+6. Run `pnpm run secrets:scan` before any publish, then `pnpm run ops:verify`.
+7. Keep `www.open-raic.com` as optional redirect target (if you want, configure one-way redirect at your DNS/proxy layer).
+8. Deploy and verify:
    - `/api/health`
    - `/api/server-providers` (public projection only; internal credentials remain server-side)
    - sign-in path
