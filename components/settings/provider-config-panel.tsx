@@ -39,7 +39,7 @@ import type { ProvidersConfig } from '@/lib/types/settings';
 import type { ProviderTransportMode } from '@/lib/types/provider';
 import { formatContextWindow } from './utils';
 import { cn } from '@/lib/utils';
-import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
+import { hasHostedLocalProviderTopologyMismatch, isHostedOrigin } from '@/lib/utils/url';
 import { verifyBrowserLocalOpenAIModel } from '@/lib/utils/browser-local-openai';
 import {
   isBrowserLocalTransport,
@@ -160,12 +160,12 @@ export function ProviderConfigPanel({
     !browserLocalMode && serverTopologyMismatch
       ? t('settings.hostedLocalProviderWarning', { provider: provider.name })
       : '';
+  const hostedOrigin = isHostedOrigin(originHostname);
   const browserLocalModeNotice = browserLocalMode
     ? t('settings.browserLocalModeNotice', { provider: provider.name })
     : '';
-  const browserLocalPermissionHint = browserLocalMode
-    ? t('settings.browserLocalPermissionHint')
-    : '';
+  const browserLocalPermissionHint =
+    browserLocalMode && hostedOrigin ? t('settings.browserLocalPermissionHint') : '';
   const browserLocalLmstudioCorsHint =
     browserLocalMode && provider.id === 'lmstudio'
       ? t('settings.browserLocalLmstudioCorsHint', {

@@ -7,6 +7,7 @@ function readLocaleMessages(code: string) {
     readFileSync(new URL(`../../lib/i18n/locales/${code}.json`, import.meta.url), 'utf8'),
   ) as {
     classroom?: Record<string, string | undefined>;
+    settings?: Record<string, string | undefined>;
   };
 }
 
@@ -27,6 +28,22 @@ describe('locale resource parity', () => {
       expect(
         classroom.teacherBackedBadge,
         `${locale.code} missing classroom.teacherBackedBadge`,
+      ).toBeTruthy();
+    }
+  });
+
+  it('includes browser-local prerequisite hints in every supported locale', () => {
+    for (const locale of supportedLocales) {
+      const messages = readLocaleMessages(locale.code);
+      const settings = messages.settings ?? {};
+
+      expect(
+        settings.browserLocalPermissionHint,
+        `${locale.code} missing settings.browserLocalPermissionHint`,
+      ).toBeTruthy();
+      expect(
+        settings.browserLocalLmstudioCorsHint,
+        `${locale.code} missing settings.browserLocalLmstudioCorsHint`,
       ).toBeTruthy();
     }
   });

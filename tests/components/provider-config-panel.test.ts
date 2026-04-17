@@ -398,5 +398,25 @@ describe('ProviderConfigPanel', () => {
 
     expect(testButton).not.toBeNull();
     expect(testButton?.disabled).toBe(false);
+
+    const toggle = mounted.container.querySelector(
+      '#browser-local-mode-lmstudio',
+    ) as HTMLInputElement | null;
+
+    expect(toggle).not.toBeNull();
+
+    await act(async () => {
+      toggle?.click();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      'This device will connect directly to your local LM Studio server.',
+    );
+    expect(mounted.container.textContent).not.toContain(
+      'Your browser may prompt for local-network access before it can reach this device.',
+    );
+    expect(mounted.container.textContent).toContain(
+      'LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with lms server start --cors.',
+    );
   });
 });
