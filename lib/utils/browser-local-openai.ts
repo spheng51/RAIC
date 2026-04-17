@@ -1,4 +1,5 @@
 import type { ProviderId } from '@/lib/ai/providers';
+import { getBrowserLocalTargetAddressSpace } from '@/lib/utils/url';
 
 export interface BrowserLocalOpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -20,7 +21,7 @@ interface BrowserLocalStreamParams extends BrowserLocalOpenAIParams {
 }
 
 type LocalNetworkRequestInit = RequestInit & {
-  targetAddressSpace?: 'local';
+  targetAddressSpace?: 'local' | 'loopback';
 };
 
 function trimTrailingSlash(value: string): string {
@@ -49,10 +50,15 @@ function createBrowserLocalHeaders(apiKey?: string): HeadersInit {
   return headers;
 }
 
-function createBrowserLocalFetchInit(init: RequestInit): LocalNetworkRequestInit {
+function createBrowserLocalFetchInit(baseUrl: string, init: RequestInit): LocalNetworkRequestInit {
+  const targetAddressSpace = getBrowserLocalTargetAddressSpace(baseUrl) ?? undefined;
+  if (!targetAddressSpace) {
+    return init;
+  }
+
   return {
     ...init,
-    targetAddressSpace: 'local',
+    targetAddressSpace,
   };
 }
 
@@ -164,7 +170,55 @@ async function createBrowserLocalApiErrorMessage(
     : `${providerName} request failed with HTTP ${response.status}.`;
 }
 
-export function getBrowserLocalFetchFailureMessage(providerName: string): string {
+type LocalNetworkPermissionState = 'granted' | 'prompt' | 'denied' | null;
+
+async function getLocalNetworkAccessPermissionState(): Promise<LocalNetworkPermissionState> {
+  if (
+    typeof navigator === 'undefined' ||
+    !('permissions' in navigator) ||
+    typeof navigator.permissions?.query !== 'function'
+  ) {
+    return null;
+  }
+
+  try {
+    // `local-network-access` is still experimental in the DOM lib typings.
+    const status = await navigator.permissions.query({
+      // @ts-expect-error Experimental browser permission name.
+      name: 'local-network-access',
+    });
+    if (status.state === 'granted' || status.state === 'prompt' || status.state === 'denied') {
+      return status.state;
+    }
+  } catch {
+    // Ignore unsupported permission queries and fall back to generic guidance.
+  }
+
+  return null;
+}
+
+export function getBrowserLocalFetchFailureMessage(
+  providerName: string,
+  options?: {
+    permissionState?: LocalNetworkPermissionState;
+    targetAddressSpace?: 'local' | 'loopback' | null;
+  },
+): string {
+  const endpointLabel =
+    options?.targetAddressSpace === 'loopback' ? 'localhost' : 'local/private-network';
+
+  if (options?.permissionState === 'prompt') {
+    return `This browser has not granted this site permission to reach your ${endpointLabel} ${providerName} endpoint yet. Allow local-network access for this site in your browser, then retry.`;
+  }
+
+  if (options?.permissionState === 'denied') {
+    return `This browser is blocking this site from reaching your ${endpointLabel} ${providerName} endpoint. Re-enable local-network access for this site in your browser settings, then retry.`;
+  }
+
+  if (options?.permissionState === 'granted') {
+    return `This browser has local-network access permission, but local ${providerName} still rejected the browser request. Check that it is running, the Base URL is correct, and the endpoint allows browser CORS access from this site.`;
+  }
+
   return `This browser could not reach local ${providerName}. Check that it is running, the Base URL is correct, your browser allowed local-network access, and the endpoint allows browser CORS access.`;
 }
 
@@ -177,7 +231,7 @@ export async function verifyBrowserLocalOpenAIModel(
   try {
     response = await fetch(
       chatUrl,
-      createBrowserLocalFetchInit({
+      createBrowserLocalFetchInit(params.baseUrl, {
         method: 'POST',
         headers: createBrowserLocalHeaders(params.apiKey),
         body: JSON.stringify({
@@ -195,7 +249,12 @@ export async function verifyBrowserLocalOpenAIModel(
       throw error;
     }
 
-    throw new Error(getBrowserLocalFetchFailureMessage(params.providerName));
+    throw new Error(
+      getBrowserLocalFetchFailureMessage(params.providerName, {
+        permissionState: await getLocalNetworkAccessPermissionState(),
+        targetAddressSpace: getBrowserLocalTargetAddressSpace(params.baseUrl),
+      }),
+    );
   }
 
   if (!response.ok) {
@@ -247,7 +306,7 @@ export async function streamBrowserLocalOpenAIChat(
   try {
     response = await fetch(
       chatUrl,
-      createBrowserLocalFetchInit({
+      createBrowserLocalFetchInit(params.baseUrl, {
         method: 'POST',
         headers: createBrowserLocalHeaders(params.apiKey),
         body: JSON.stringify({
@@ -264,7 +323,12 @@ export async function streamBrowserLocalOpenAIChat(
       throw error;
     }
 
-    throw new Error(getBrowserLocalFetchFailureMessage(params.providerName));
+    throw new Error(
+      getBrowserLocalFetchFailureMessage(params.providerName, {
+        permissionState: await getLocalNetworkAccessPermissionState(),
+        targetAddressSpace: getBrowserLocalTargetAddressSpace(params.baseUrl),
+      }),
+    );
   }
 
   if (!response.ok) {

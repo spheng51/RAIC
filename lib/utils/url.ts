@@ -63,6 +63,21 @@ function getFirstIPv6Hextet(ip: string): number | null {
   return Number.parseInt(firstHextet, 16);
 }
 
+function isLoopbackIP(ip: string): boolean {
+  const normalized = normalizeAddress(ip);
+  const mappedIPv4 = extractMappedIPv4(normalized);
+  if (mappedIPv4) {
+    return isLoopbackIP(mappedIPv4);
+  }
+
+  const ipv4 = parseIPv4(normalized);
+  if (ipv4) {
+    return ipv4[0] === 127;
+  }
+
+  return normalized === '::1';
+}
+
 function isPrivateIP(ip: string): boolean {
   const normalized = normalizeAddress(ip);
   const mappedIPv4 = extractMappedIPv4(normalized);
@@ -112,6 +127,17 @@ export function getHostnameFromUrl(value?: string | null): string | null {
   }
 }
 
+export function isLoopbackHostname(hostname?: string | null): boolean {
+  if (!hostname?.trim()) {
+    return false;
+  }
+
+  const normalized = normalizeAddress(hostname);
+  return (
+    normalized === 'localhost' || normalized.endsWith('.localhost') || isLoopbackIP(normalized)
+  );
+}
+
 export function isLocalOrPrivateHostname(hostname?: string | null): boolean {
   if (!hostname?.trim()) {
     return false;
@@ -119,10 +145,9 @@ export function isLocalOrPrivateHostname(hostname?: string | null): boolean {
 
   const normalized = normalizeAddress(hostname);
   return (
-    normalized === 'localhost' ||
+    isLoopbackHostname(normalized) ||
     normalized.endsWith('.local') ||
     normalized === '0.0.0.0' ||
-    normalized === '::1' ||
     isPrivateIP(normalized)
   );
 }
@@ -130,6 +155,27 @@ export function isLocalOrPrivateHostname(hostname?: string | null): boolean {
 export function isLocalOrPrivateBaseUrl(baseUrl?: string | null): boolean {
   const hostname = getHostnameFromUrl(baseUrl);
   return isLocalOrPrivateHostname(hostname);
+}
+
+export type BrowserLocalTargetAddressSpace = 'loopback' | 'local';
+
+export function getBrowserLocalTargetAddressSpace(
+  baseUrl?: string | null,
+): BrowserLocalTargetAddressSpace | null {
+  const hostname = getHostnameFromUrl(baseUrl);
+  if (!hostname) {
+    return null;
+  }
+
+  if (isLoopbackHostname(hostname)) {
+    return 'loopback';
+  }
+
+  if (isLocalOrPrivateHostname(hostname)) {
+    return 'local';
+  }
+
+  return null;
 }
 
 export function isHostedOrigin(hostname?: string | null): boolean {

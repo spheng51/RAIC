@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getBrowserLocalTargetAddressSpace,
   hasHostedLocalProviderTopologyMismatch,
   isHostedOrigin,
   isLocalOnlyProvider,
   isLocalOrPrivateBaseUrl,
   isLocalOrPrivateHostname,
+  isLoopbackHostname,
 } from '@/lib/utils/url';
 
 describe('url topology helpers', () => {
   it('classifies local and private hostnames', () => {
     expect(isLocalOrPrivateHostname('localhost')).toBe(true);
     expect(isLocalOrPrivateHostname('127.0.0.1')).toBe(true);
+    expect(isLocalOrPrivateHostname('app.localhost')).toBe(true);
     expect(isLocalOrPrivateHostname('printer.local')).toBe(true);
     expect(isLocalOrPrivateHostname('192.168.1.5')).toBe(true);
     expect(isLocalOrPrivateHostname('10.0.0.8')).toBe(true);
@@ -22,6 +25,15 @@ describe('url topology helpers', () => {
     expect(isLocalOrPrivateHostname('open-raic.com')).toBe(false);
   });
 
+  it('classifies loopback hostnames separately from other local addresses', () => {
+    expect(isLoopbackHostname('localhost')).toBe(true);
+    expect(isLoopbackHostname('127.0.0.1')).toBe(true);
+    expect(isLoopbackHostname('app.localhost')).toBe(true);
+    expect(isLoopbackHostname('::1')).toBe(true);
+    expect(isLoopbackHostname('192.168.1.5')).toBe(false);
+    expect(isLoopbackHostname('printer.local')).toBe(false);
+  });
+
   it('classifies local and private base URLs', () => {
     expect(isLocalOrPrivateBaseUrl('http://localhost:1234/v1')).toBe(true);
     expect(isLocalOrPrivateBaseUrl('http://127.0.0.1:1234/v1')).toBe(true);
@@ -29,6 +41,15 @@ describe('url topology helpers', () => {
     expect(isLocalOrPrivateBaseUrl('http://[::1]:1234/v1')).toBe(true);
     expect(isLocalOrPrivateBaseUrl('https://api.example.com/v1')).toBe(false);
     expect(isLocalOrPrivateBaseUrl('not-a-url')).toBe(false);
+  });
+
+  it('maps browser-local target address spaces from base URLs', () => {
+    expect(getBrowserLocalTargetAddressSpace('http://localhost:1234/v1')).toBe('loopback');
+    expect(getBrowserLocalTargetAddressSpace('http://127.0.0.1:1234/v1')).toBe('loopback');
+    expect(getBrowserLocalTargetAddressSpace('http://[::1]:1234/v1')).toBe('loopback');
+    expect(getBrowserLocalTargetAddressSpace('http://192.168.1.25:8080')).toBe('local');
+    expect(getBrowserLocalTargetAddressSpace('http://printer.local')).toBe('local');
+    expect(getBrowserLocalTargetAddressSpace('https://api.example.com/v1')).toBeNull();
   });
 
   it('distinguishes hosted origins from local origins', () => {
