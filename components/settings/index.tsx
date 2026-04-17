@@ -258,6 +258,14 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     }
   }, [open, initialSection]);
 
+  const [originHostname, setOriginHostname] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOriginHostname(window.location.hostname);
+    }
+  }, []);
+
   // Model editing state
   const [editingModel, setEditingModel] = useState<EditingModel | null>(null);
   const [showModelDialog, setShowModelDialog] = useState(false);
@@ -740,6 +748,12 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         models: providersConfig[selectedProviderId].models,
       }
     : undefined;
+  const selectedProviderConfig = providersConfig[selectedProviderId];
+  const selectedProviderEffectiveBaseUrl =
+    selectedProviderConfig?.baseUrl ||
+    selectedProviderConfig?.serverBaseUrl ||
+    selectedProvider?.defaultBaseUrl ||
+    undefined;
 
   // Handle model editing
   const handleEditModel = (pid: ProviderId, modelIndex: number) => {
@@ -1414,6 +1428,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                   initialRequiresApiKey={
                     providersConfig[selectedProviderId]?.requiresApiKey ?? true
                   }
+                  originHostname={originHostname}
                   providersConfig={providersConfig}
                   onConfigChange={(apiKey, baseUrl, requiresApiKey) =>
                     handleProviderConfigChange(selectedProviderId, apiKey, baseUrl, requiresApiKey)
@@ -1479,6 +1494,8 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         providerId={selectedProviderId}
         apiKey={providersConfig[selectedProviderId]?.apiKey || ''}
         baseUrl={providersConfig[selectedProviderId]?.baseUrl}
+        effectiveBaseUrl={selectedProviderEffectiveBaseUrl}
+        originHostname={originHostname}
         providerType={providersConfig[selectedProviderId]?.type}
         requiresApiKey={providersConfig[selectedProviderId]?.requiresApiKey}
         isServerConfigured={providersConfig[selectedProviderId]?.isServerConfigured}

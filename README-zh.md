@@ -128,8 +128,11 @@ LMSTUDIO_MODELS=qwen3.5-4b
 DEFAULT_MODEL=lmstudio:qwen3.5-4b
 ```
 
-- `LMSTUDIO_API_KEY` 是可选项，仅在你启用了 LM Studio 鉴权时需要配置。
-- 如果你不想使用内置 provider，也可以在设置里把 LM Studio 作为自定义 OpenAI 兼容 provider 添加。
+- `LMSTUDIO_API_KEY` 为可选项，只有在你为 LM Studio 启用了鉴权时才需要配置。
+- 本地开发可直接使用 `http://127.0.0.1:1234/v1`。
+- 私有/self-host 部署应优先在服务端通过 `LMSTUDIO_BASE_URL` 或 `server-providers.yml` 配置；只有在必须允许浏览器提供本地地址时才设置 `ALLOW_LOCAL_NETWORKS=true`。
+- 公共托管部署不要将 LM Studio 指向 `localhost`、`127.0.0.1` 或私有局域网地址，应改用服务端可访问的网络地址。
+- 如果你不想使用内置 provider，也可以在设置中把 LM Studio 作为自定义 OpenAI 兼容 provider 添加。
 
 MiniMax 快速示例：
 

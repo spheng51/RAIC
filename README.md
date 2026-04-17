@@ -143,6 +143,9 @@ DEFAULT_MODEL=lmstudio:qwen3.5-4b
 
 - `LMSTUDIO_API_KEY` is optional and only needed if you enabled LM Studio auth.
 - If you prefer not to use the built-in provider, you can still add LM Studio as a custom OpenAI-compatible provider in Settings.
+- Local development can use `http://127.0.0.1:1234/v1` directly.
+- Private self-hosted production should prefer `LMSTUDIO_BASE_URL` or `server-providers.yml` on the server; set `ALLOW_LOCAL_NETWORKS=true` only when browser-supplied local URLs must be allowed.
+- Public hosted deployments must not point LM Studio at `localhost`, `127.0.0.1`, or private LAN addresses; use a network-reachable endpoint instead.
 
 ### Org-managed AI connectivity
 

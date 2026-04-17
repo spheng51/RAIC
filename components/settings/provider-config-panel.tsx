@@ -37,12 +37,14 @@ import type { ProviderConfig } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
 import { formatContextWindow } from './utils';
 import { cn } from '@/lib/utils';
+import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
 
 interface ProviderConfigPanelProps {
   provider: ProviderConfig;
   initialApiKey: string;
   initialBaseUrl: string;
   initialRequiresApiKey: boolean;
+  originHostname?: string;
   providersConfig: ProvidersConfig;
   onConfigChange: (apiKey: string, baseUrl: string, requiresApiKey: boolean) => void;
   onSave: () => void; // Auto-save on blur
@@ -58,6 +60,7 @@ export function ProviderConfigPanel({
   initialApiKey,
   initialBaseUrl,
   initialRequiresApiKey,
+  originHostname,
   providersConfig,
   onConfigChange,
   onSave,
@@ -111,7 +114,34 @@ export function ProviderConfigPanel({
     onConfigChange(apiKey, baseUrl, requires);
   };
 
+  const governedConfig = providersConfig[provider.id];
+  const models = governedConfig?.models || [];
+  const isServerConfigured = governedConfig?.isServerConfigured;
+  const isGovernedProvider = !!governedConfig?.hasOrganizationConfig;
+  const hasPersonalOverride = !!governedConfig?.hasPersonalOverride;
+  const source = governedConfig?.source;
+  const legacyFallbackAllowed = governedConfig?.legacyFallbackAllowed !== false;
+  const isLegacyFallbackInUse = !!apiKey && !isServerConfigured && legacyFallbackAllowed;
+  const canOverrideBaseUrl = !isGovernedProvider || aiPolicy.allowPersonalCustomBaseUrls;
+  const canUseOptionalApiKey = provider.supportsOptionalApiKey === true;
+  const canEditApiKey = requiresApiKey || isServerConfigured || canUseOptionalApiKey;
+  const effectiveBaseUrl =
+    baseUrl || governedConfig?.serverBaseUrl || provider.defaultBaseUrl || '';
+  const hostedLocalProviderWarning = hasHostedLocalProviderTopologyMismatch({
+    providerId: provider.id,
+    originHostname,
+    baseUrl: effectiveBaseUrl,
+  })
+    ? t('settings.hostedLocalProviderWarning', { provider: provider.name })
+    : '';
+
   const handleTestApi = useCallback(async () => {
+    if (hostedLocalProviderWarning) {
+      setTestStatus('error');
+      setTestMessage(hostedLocalProviderWarning);
+      return;
+    }
+
     setTestStatus('testing');
     setTestMessage('');
 
@@ -163,19 +193,8 @@ export function ProviderConfigPanel({
     requiresApiKey,
     providersConfig,
     t,
+    hostedLocalProviderWarning,
   ]);
-
-  const governedConfig = providersConfig[provider.id];
-  const models = governedConfig?.models || [];
-  const isServerConfigured = governedConfig?.isServerConfigured;
-  const isGovernedProvider = !!governedConfig?.hasOrganizationConfig;
-  const hasPersonalOverride = !!governedConfig?.hasPersonalOverride;
-  const source = governedConfig?.source;
-  const legacyFallbackAllowed = governedConfig?.legacyFallbackAllowed !== false;
-  const isLegacyFallbackInUse = !!apiKey && !isServerConfigured && legacyFallbackAllowed;
-  const canOverrideBaseUrl = !isGovernedProvider || aiPolicy.allowPersonalCustomBaseUrls;
-  const canUseOptionalApiKey = provider.supportsOptionalApiKey === true;
-  const canEditApiKey = requiresApiKey || isServerConfigured || canUseOptionalApiKey;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -236,7 +255,9 @@ export function ProviderConfigPanel({
             size="sm"
             onClick={handleTestApi}
             disabled={
-              testStatus === 'testing' || (requiresApiKey && !apiKey && !isServerConfigured)
+              testStatus === 'testing' ||
+              (requiresApiKey && !apiKey && !isServerConfigured) ||
+              !!hostedLocalProviderWarning
             }
             className="gap-1.5"
           >
@@ -302,7 +323,6 @@ export function ProviderConfigPanel({
           disabled={!canOverrideBaseUrl}
         />
         {(() => {
-          const effectiveBaseUrl = baseUrl || provider.defaultBaseUrl || '';
           if (!effectiveBaseUrl) return null;
 
           // Generate endpoint path based on provider type
@@ -329,6 +349,11 @@ export function ProviderConfigPanel({
             </p>
           );
         })()}
+        {hostedLocalProviderWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
+            {hostedLocalProviderWarning}
+          </div>
+        )}
       </div>
 
       {/* Models - No selection state, just list for management */}

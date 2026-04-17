@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sparkles, Wrench, Zap, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { getProvider, type ProviderId } from '@/lib/ai/providers';
 import type { EditingModel } from '@/lib/types/settings';
-import type { ProviderId } from '@/lib/ai/providers';
 import { cn } from '@/lib/utils';
+import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
 
 interface ModelEditDialogProps {
   open: boolean;
@@ -22,6 +23,8 @@ interface ModelEditDialogProps {
   providerId: ProviderId;
   apiKey: string;
   baseUrl?: string;
+  effectiveBaseUrl?: string;
+  originHostname?: string;
   providerType?: string;
   requiresApiKey?: boolean;
   isServerConfigured?: boolean;
@@ -37,6 +40,8 @@ export function ModelEditDialog({
   providerId,
   apiKey,
   baseUrl,
+  effectiveBaseUrl,
+  originHostname,
   providerType,
   requiresApiKey,
   isServerConfigured,
@@ -44,6 +49,14 @@ export function ModelEditDialog({
   const { t } = useI18n();
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const providerName = getProvider(providerId)?.name || providerId;
+  const hostedLocalProviderWarning = hasHostedLocalProviderTopologyMismatch({
+    providerId,
+    originHostname,
+    baseUrl: effectiveBaseUrl,
+  })
+    ? t('settings.hostedLocalProviderWarning', { provider: providerName })
+    : '';
 
   // Reset test status when dialog closes
   useEffect(() => {
@@ -62,6 +75,12 @@ export function ModelEditDialog({
 
   const handleTestModel = useCallback(async () => {
     if (!editingModel) {
+      return;
+    }
+
+    if (hostedLocalProviderWarning) {
+      setTestStatus('error');
+      setTestMessage(hostedLocalProviderWarning);
       return;
     }
 
@@ -94,7 +113,16 @@ export function ModelEditDialog({
       setTestStatus('error');
       setTestMessage(t('settings.connectionFailed'));
     }
-  }, [editingModel, apiKey, baseUrl, providerId, providerType, requiresApiKey, t]);
+  }, [
+    editingModel,
+    apiKey,
+    baseUrl,
+    providerId,
+    providerType,
+    requiresApiKey,
+    t,
+    hostedLocalProviderWarning,
+  ]);
 
   if (!editingModel) return null;
 
@@ -308,7 +336,8 @@ export function ModelEditDialog({
                 disabled={
                   !editingModel.model.id ||
                   testStatus === 'testing' ||
-                  (requiresApiKey && !apiKey && !isServerConfigured)
+                  (requiresApiKey && !apiKey && !isServerConfigured) ||
+                  !!hostedLocalProviderWarning
                 }
                 className={cn(
                   testStatus === 'success' && 'border-green-600 text-green-600 hover:bg-green-50',
@@ -321,6 +350,11 @@ export function ModelEditDialog({
                 {testStatus === 'testing' ? t('settings.testing') : t('settings.testConnection')}
               </Button>
             </div>
+            {hostedLocalProviderWarning && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
+                {hostedLocalProviderWarning}
+              </div>
+            )}
             {testMessage && (
               <div
                 className={cn(

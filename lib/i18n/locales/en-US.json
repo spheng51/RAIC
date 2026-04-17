@@ -445,7 +445,7 @@
     "apiHost": "Base URL",
     "requestUrl": "Request URL",
     "models": "Models",
-    "addModel": "New",
+    "addModel": "Add",
     "reset": "Reset",
     "fetch": "Fetch",
     "connectionSuccess": "Connection successful",
@@ -479,8 +479,7 @@
     "voiceIdPlaceholder": "Voice ID (e.g. alloy)",
     "voiceNamePlaceholder": "Display Name",
     "addVoice": "Add",
-    "modelNamePlaceholder": "Display Name",
-    "addModel": "Add",
+    "modelNamePlaceholder": "Optional",
     "defaultModelHint": "Model name sent in API requests (e.g. kokoro, tts-1)",
     "noVoicesAdded": "No voices added yet. Add voices below for per-agent selection.",
     "noModelsAdded": "No models added yet. Add models below to enable model selection.",
@@ -506,7 +505,6 @@
     "modelId": "Model ID",
     "modelIdPlaceholder": "e.g., gpt-4o",
     "modelName": "Display Name",
-    "modelNamePlaceholder": "Optional",
     "modelCapabilities": "Capabilities",
     "advancedSettings": "Advanced Settings",
     "contextWindowLabel": "Context Window",
@@ -881,7 +879,8 @@
     "webSearchApiKeyHint": "Get an API key from tavily.com for web search",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "Server-side Tavily API key is configured",
-    "optional": "Optional"
+    "optional": "Optional",
+    "hostedLocalProviderWarning": "Hosted OpenRAIC cannot reach your local {{provider}} server at a localhost/private address. This app sends provider traffic from the server, not your browser. Use local OpenRAIC, private self-hosting on the same machine or network, or a network-reachable endpoint instead."
   },
   "profile": {
     "title": "Profile",

@@ -289,6 +289,53 @@ describe('provider and verification routes', () => {
     expect(body.error).toContain('grok:grok-4.20-reasoning');
   });
 
+  it('remaps LM Studio local/private SSRF failures to a topology message', async () => {
+    resolveModelMock.mockRejectedValue(new Error('Local/private network URLs are not allowed'));
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('https://open-raic.com/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'lmstudio:qwen3.5-4b',
+          baseUrl: 'http://127.0.0.1:1234/v1',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toContain('Hosted OpenRAIC cannot reach your local LM Studio server');
+    expect(body.error).not.toContain('Local/private network URLs are not allowed');
+  });
+
+  it('remaps Ollama localhost connection failures to a private-deployment guidance message', async () => {
+    resolveModelMock.mockResolvedValue({
+      model: 'resolved-model',
+      modelString: 'ollama:llama3.3',
+    });
+    generateTextMock.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:11434'));
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'ollama:llama3.3',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toContain(
+      'OpenRAIC cannot use a browser-supplied localhost/private address for Ollama',
+    );
+    expect(body.error).toContain('ALLOW_LOCAL_NETWORKS=true');
+  });
+
   it('requires a provider id before verifying PDF connectivity', async () => {
     const { POST } = await import('@/app/api/verify-pdf-provider/route');
     const response = await POST(
