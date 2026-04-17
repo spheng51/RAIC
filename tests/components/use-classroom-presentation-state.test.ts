@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act, createElement, createRef, forwardRef, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClassroomPresentationStatePayload } from '@/lib/types/classroom-presentation';
@@ -54,6 +54,10 @@ interface MountedHook {
   readonly refresh: (silent?: boolean) => Promise<void>;
 }
 
+interface MountedHookHandle {
+  refresh: (silent?: boolean) => Promise<void>;
+}
+
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 const fetchMock = vi.fn();
 
@@ -96,32 +100,37 @@ async function mountHook(
 
   let classroomId = initialClassroomId;
   let enabled = initialEnabled;
-  const hookState: {
-    current?: ReturnType<typeof useClassroomPresentationState>['refreshPresentationState'];
-  } = {};
+  const hookHandleRef = createRef<MountedHookHandle>();
 
-  function Harness({
-    nextClassroomId,
-    nextEnabled,
-  }: {
-    nextClassroomId?: string;
-    nextEnabled?: boolean;
-  }) {
+  const Harness = forwardRef<
+    MountedHookHandle,
+    {
+      nextClassroomId?: string;
+      nextEnabled?: boolean;
+    }
+  >(function Harness({ nextClassroomId, nextEnabled }, ref) {
     const hook = useClassroomPresentationState({
       classroomId: nextClassroomId,
       enabled: nextEnabled,
       onStateChange,
     });
 
-    hookState.current = hook.refreshPresentationState;
+    useImperativeHandle(
+      ref,
+      () => ({
+        refresh: hook.refreshPresentationState,
+      }),
+      [hook.refreshPresentationState],
+    );
 
     return createElement('div');
-  }
+  });
 
   const render = async () => {
     await act(async () => {
       root.render(
         createElement(Harness, {
+          ref: hookHandleRef,
           nextClassroomId: classroomId,
           nextEnabled: enabled,
         }),
@@ -139,7 +148,7 @@ async function mountHook(
     },
     refresh: async (silent = false) => {
       await act(async () => {
-        await hookState.current?.(silent);
+        await hookHandleRef.current?.refresh(silent);
       });
     },
   };

@@ -259,13 +259,9 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     }
   }, [open, initialSection]);
 
-  const [originHostname, setOriginHostname] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setOriginHostname(window.location.hostname);
-    }
-  }, []);
+  const [originHostname] = useState(() =>
+    typeof window !== 'undefined' ? window.location.hostname : '',
+  );
 
   // Model editing state
   const [editingModel, setEditingModel] = useState<EditingModel | null>(null);

@@ -248,6 +248,7 @@ export function LiveClassroomCockpit({
   onSendTeacherPrompt,
 }: LiveClassroomCockpitProps) {
   const [interventionDraft, setInterventionDraft] = useState('');
+  const [presenceNowMs] = useState(() => Date.now());
 
   const studentParticipants = useMemo(
     () => participants.filter((participant) => participant.role === 'student'),
@@ -257,9 +258,9 @@ export function LiveClassroomCockpit({
   const sortedStudentParticipants = useMemo(
     () =>
       sortParticipantsByPresence(studentParticipants, {
-        nowMs: Date.now(),
+        nowMs: presenceNowMs,
       }),
-    [studentParticipants],
+    [studentParticipants, presenceNowMs],
   );
 
   return (

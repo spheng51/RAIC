@@ -756,17 +756,6 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
   // When entering grading phase, grade choice questions locally + call API for short-answer
   useEffect(() => {
     if (phase !== 'grading') return;
-    if (questions.some(isShortAnswer)) {
-      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
-        getCurrentModelConfig(),
-        'quiz-grading',
-      );
-      if (browserLocalGuardMessage) {
-        toast.error(browserLocalGuardMessage);
-        setPhase('answering');
-        return;
-      }
-    }
 
     let cancelled = false;
 

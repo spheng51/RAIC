@@ -124,7 +124,6 @@ export function MiroFishManagerDialog({
   const sortedSingleControllerParticipants = useMemo(
     () =>
       sortParticipantsByPresence(participants, {
-        nowMs: Date.now(),
         getIsController: (participant) => Boolean(participant.isController),
       }),
     [participants],
@@ -136,7 +135,6 @@ export function MiroFishManagerDialog({
     }
 
     return sortParticipantsByPresence(collaboration.participants, {
-      nowMs: Date.now(),
       getIsController: () => false,
     });
   }, [collaboration?.participants]);
