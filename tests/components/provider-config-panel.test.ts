@@ -125,6 +125,12 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
       if (key === 'settings.browserLocalModeNotice') {
         return `This device will connect directly to your local ${vars?.provider ?? 'provider'} server.`;
       }
+      if (key === 'settings.browserLocalPermissionHint') {
+        return 'Your browser may prompt for local-network access before it can reach this device.';
+      }
+      if (key === 'settings.browserLocalLmstudioCorsHint') {
+        return `LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with ${vars?.command ?? 'command'}.`;
+      }
       if (key === 'settings.noModelsAvailable') {
         return 'No models available for testing';
       }
@@ -340,7 +346,40 @@ describe('ProviderConfigPanel', () => {
     expect(mounted.container.textContent).toContain(
       'This device will connect directly to your local LM Studio server.',
     );
+    expect(mounted.container.textContent).toContain(
+      'Your browser may prompt for local-network access before it can reach this device.',
+    );
+    expect(mounted.container.textContent).toContain(
+      'LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with lms server start --cors.',
+    );
     expect(testButton?.disabled).toBe(false);
+  });
+
+  it('shows the permission hint without the LM Studio CORS note for Ollama browser-local mode', async () => {
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'ollama',
+      originHostname: 'open-raic.com',
+    });
+
+    const toggle = mounted.container.querySelector(
+      '#browser-local-mode-ollama',
+    ) as HTMLInputElement | null;
+
+    expect(toggle).not.toBeNull();
+
+    await act(async () => {
+      toggle?.click();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      'This device will connect directly to your local Ollama server.',
+    );
+    expect(mounted.container.textContent).toContain(
+      'Your browser may prompt for local-network access before it can reach this device.',
+    );
+    expect(mounted.container.textContent).not.toContain(
+      'LM Studio must allow browser CORS for browser-local mode.',
+    );
   });
 
   it('keeps testing enabled for local OpenRAIC origins', async () => {

@@ -453,6 +453,8 @@
     "browserLocalModeLabel": "Browser-local mode",
     "browserLocalModeDescription": "Send LM Studio/Ollama requests directly from this browser to a local or private endpoint on this device.",
     "browserLocalModeNotice": "{{provider}} browser-local mode is device-only and supports Q&A and Discussion only. Classroom generation, scene generation/regeneration, PBL, tools, and other server-orchestrated workflows still require server mode with a network-reachable endpoint.",
+    "browserLocalPermissionHint": "Hosted OpenRAIC uses your browser directly in this mode, so your browser may prompt for local-network access before it can reach this device.",
+    "browserLocalLmstudioCorsHint": "LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with {{command}}.",
     "hostedLocalProviderWarning": "Hosted/public OpenRAIC cannot use server mode to reach your local {{provider}} endpoint. Provider traffic runs from the server, not from your browser. Use Browser-local mode, run OpenRAIC locally/private on the same machine or network, or use a network-reachable endpoint instead.",
     "browserLocalUnsupportedWorkflow": "Browser-local mode supports Q&A and Discussion only.",
     "browserLocalUnsupportedWorkflowDetail": "Generation, regeneration, classroom/PBL workflows, tools, and other server-orchestrated flows still require server mode with a network-reachable endpoint.",

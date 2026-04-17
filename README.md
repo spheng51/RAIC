@@ -152,6 +152,8 @@ DEFAULT_MODEL=lmstudio:qwen3.5-4b
 - Built-in `lmstudio` and `ollama` support an explicit opt-in **Browser-local mode** for the hosted/public topology where OpenRAIC runs on a public domain but the model server is on the user's device.
 - In that topology, **server mode cannot reach the user's `localhost`**. Provider traffic goes through OpenRAIC server routes such as `/api/verify-model` and `/api/chat`, so `127.0.0.1` would resolve on the server, not on the user's machine.
 - Browser-local mode sends traffic directly from the browser to the configured local/private LM Studio or Ollama endpoint instead of through the OpenRAIC server.
+- Because Browser-local mode uses the browser directly, hosted/public OpenRAIC may need the browser to grant `local-network-access` permission before it can reach your device.
+- LM Studio must also allow browser CORS for Browser-local mode. If needed, start the local server with `lms server start --cors`.
 - Browser-local mode is **device-only**. Its transport choice and local endpoint details are not synced to account/workspace settings and are not stored in server-managed provider config.
 - Browser-local mode in v1 supports **Q&A** and **Discussion** only.
 - Classroom generation, scene generation/regeneration, PBL, tools, and any other server-orchestrated workflow still require **server mode** plus a network-reachable endpoint.

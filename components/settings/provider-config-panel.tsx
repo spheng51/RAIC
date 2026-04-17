@@ -163,6 +163,15 @@ export function ProviderConfigPanel({
   const browserLocalModeNotice = browserLocalMode
     ? t('settings.browserLocalModeNotice', { provider: provider.name })
     : '';
+  const browserLocalPermissionHint = browserLocalMode
+    ? t('settings.browserLocalPermissionHint')
+    : '';
+  const browserLocalLmstudioCorsHint =
+    browserLocalMode && provider.id === 'lmstudio'
+      ? t('settings.browserLocalLmstudioCorsHint', {
+          command: 'lms server start --cors',
+        })
+      : '';
 
   const handleTestApi = useCallback(async () => {
     if (hostedLocalProviderWarning) {
@@ -287,7 +296,11 @@ export function ProviderConfigPanel({
           </div>
           {browserLocalModeNotice && (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
-              {browserLocalModeNotice}
+              <div className="space-y-2">
+                <p>{browserLocalModeNotice}</p>
+                {browserLocalPermissionHint && <p>{browserLocalPermissionHint}</p>}
+                {browserLocalLmstudioCorsHint && <p>{browserLocalLmstudioCorsHint}</p>}
+              </div>
             </div>
           )}
         </div>
