@@ -18,11 +18,17 @@ import { useUserProfileStore } from '@/lib/store/user-profile';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
+import { isBrowserLocalTransport } from '@/lib/utils/provider-transport';
+import { streamBrowserLocalOpenAIChat } from '@/lib/utils/browser-local-openai';
 import { USER_AVATAR } from '@/lib/types/roundtable';
 import { processSSEStream } from './process-sse-stream';
 import { StreamBuffer } from '@/lib/buffer/stream-buffer';
 import type { AgentStartItem, ActionItem } from '@/lib/buffer/stream-buffer';
 import { ActionEngine } from '@/lib/action/engine';
+import {
+  buildBrowserLocalChatMessages,
+  getBrowserLocalAgentId,
+} from '@/lib/chat/browser-local-session';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
 
@@ -45,6 +51,29 @@ interface UseChatSessionsOptions {
   ) => void;
   /** When provided and returns true, StreamBuffer holds on the current text item after reveal. */
   shouldHoldAfterReveal?: () => { holding: boolean; segmentDone: number } | boolean;
+}
+
+interface AgentLoopRequestTemplate {
+  messages: UIMessage<ChatMessageMetadata>[];
+  storeState: Record<string, unknown>;
+  config: {
+    agentIds: string[];
+    sessionType?: string;
+    agentConfigs?: Record<string, unknown>[];
+    [key: string]: unknown;
+  };
+  userProfile?: { nickname?: string; bio?: string };
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+  providerType?: string;
+}
+
+interface BrowserLocalRequestTemplate extends AgentLoopRequestTemplate {
+  effectiveBaseUrl: string;
+  providerId: ReturnType<typeof getCurrentModelConfig>['providerId'];
+  providerName: string;
+  modelId: string;
 }
 
 export function useChatSessions(options: UseChatSessionsOptions = {}) {
@@ -439,21 +468,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
   const runAgentLoop = useCallback(
     async (
       sessionId: string,
-      requestTemplate: {
-        messages: UIMessage<ChatMessageMetadata>[];
-        storeState: Record<string, unknown>;
-        config: {
-          agentIds: string[];
-          sessionType?: string;
-          agentConfigs?: Record<string, unknown>[];
-          [key: string]: unknown;
-        };
-        userProfile?: { nickname?: string; bio?: string };
-        apiKey: string;
-        baseUrl?: string;
-        model?: string;
-        providerType?: string;
-      },
+      requestTemplate: AgentLoopRequestTemplate,
       controller: AbortController,
       sessionType: SessionType,
     ): Promise<void> => {
@@ -596,6 +611,128 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         if (turnCount >= maxTurns && doneData && doneData.totalAgents > 0) {
           log.info(`[AgentLoop] Max turns (${maxTurns}) reached for session ${sessionId}`);
         }
+      }
+    },
+    [createBufferForSession],
+  );
+
+  const runBrowserLocalTurn = useCallback(
+    async (
+      sessionId: string,
+      requestTemplate: BrowserLocalRequestTemplate,
+      controller: AbortController,
+      sessionType: SessionType,
+    ): Promise<void> => {
+      const agentId =
+        getBrowserLocalAgentId(sessionType, {
+          agentIds: requestTemplate.config.agentIds,
+          defaultAgentId:
+            typeof requestTemplate.config.defaultAgentId === 'string'
+              ? requestTemplate.config.defaultAgentId
+              : undefined,
+          triggerAgentId:
+            typeof requestTemplate.config.triggerAgentId === 'string'
+              ? requestTemplate.config.triggerAgentId
+              : undefined,
+        }) || 'default-1';
+      const agent = useAgentRegistry.getState().getAgent(agentId) ?? null;
+      const buffer = createBufferForSession(sessionId, sessionType);
+      const messageId = `browser-local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      let didStartAgent = false;
+
+      buffer.pushThinking({ stage: 'agent_loading', agentId });
+
+      try {
+        const freshState = useStageStore.getState();
+        const messages = buildBrowserLocalChatMessages({
+          sessionType,
+          sessionConfig: {
+            agentIds: requestTemplate.config.agentIds,
+            defaultAgentId:
+              typeof requestTemplate.config.defaultAgentId === 'string'
+                ? requestTemplate.config.defaultAgentId
+                : undefined,
+            triggerAgentId:
+              typeof requestTemplate.config.triggerAgentId === 'string'
+                ? requestTemplate.config.triggerAgentId
+                : undefined,
+          },
+          messages: requestTemplate.messages,
+          agent,
+          stage: freshState.stage,
+          scenes: freshState.scenes,
+          currentSceneId: freshState.currentSceneId,
+          userProfile: requestTemplate.userProfile,
+          discussionTopic:
+            typeof requestTemplate.config.discussionTopic === 'string'
+              ? requestTemplate.config.discussionTopic
+              : undefined,
+          discussionPrompt:
+            typeof requestTemplate.config.discussionPrompt === 'string'
+              ? requestTemplate.config.discussionPrompt
+              : undefined,
+        });
+
+        const { hadContent } = await streamBrowserLocalOpenAIChat({
+          providerId: requestTemplate.providerId,
+          providerName: requestTemplate.providerName,
+          modelId: requestTemplate.modelId,
+          baseUrl: requestTemplate.effectiveBaseUrl,
+          apiKey: requestTemplate.apiKey,
+          messages,
+          signal: controller.signal,
+          onTextDelta(delta) {
+            if (!didStartAgent) {
+              buffer.pushAgentStart({
+                messageId,
+                agentId,
+                agentName: agent?.name || agentId,
+                avatar: agent?.avatar,
+                color: agent?.color,
+              });
+              didStartAgent = true;
+            }
+            buffer.pushText(messageId, delta, agentId);
+          },
+        });
+
+        if (didStartAgent) {
+          buffer.pushAgentEnd({ messageId, agentId });
+        }
+        buffer.pushDone({
+          totalActions: 0,
+          totalAgents: didStartAgent ? 1 : 0,
+          agentHadContent: hadContent,
+        });
+
+        try {
+          await buffer.waitUntilDrained();
+        } catch {
+          return;
+        }
+
+        if (!controller.signal.aborted) {
+          setSessions((prev) =>
+            prev.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    status: 'active' as SessionStatus,
+                    updatedAt: Date.now(),
+                  }
+                : session,
+            ),
+          );
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          buffer.shutdown();
+          throw error;
+        }
+
+        buffer.pushError(error instanceof Error ? error.message : String(error));
+        buffer.shutdown();
+        throw error;
       }
     },
     [createBufferForSession],
@@ -845,39 +982,58 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
         const userProfileState = useUserProfileStore.getState();
         const mc = getCurrentModelConfig();
+        const browserLocalMode = isBrowserLocalTransport(mc.providerId, mc.transportMode);
+
+        if (browserLocalMode && !mc.effectiveBaseUrl) {
+          throw new Error('Browser-local mode requires a Base URL.');
+        }
 
         const agentIds =
           useSettingsStore.getState().selectedAgentIds?.length > 0
             ? useSettingsStore.getState().selectedAgentIds
             : session.config.agentIds;
 
-        await runAgentLoop(
-          sessionId,
-          {
-            messages: session.messages,
-            storeState: {
-              stage: currentState.stage,
-              scenes: currentState.scenes,
-              currentSceneId: currentState.currentSceneId,
-              mode: currentState.mode,
-              whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
-            },
-            config: {
-              agentIds,
-              sessionType: session.type,
-            },
-            userProfile: {
-              nickname: userProfileState.nickname || undefined,
-              bio: userProfileState.bio || undefined,
-            },
-            apiKey: mc.apiKey,
-            baseUrl: mc.baseUrl,
-            model: mc.modelString,
-            providerType: mc.providerType,
+        const requestTemplate = {
+          messages: session.messages,
+          storeState: {
+            stage: currentState.stage,
+            scenes: currentState.scenes,
+            currentSceneId: currentState.currentSceneId,
+            mode: currentState.mode,
+            whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
           },
-          controller,
-          session.type,
-        );
+          config: {
+            agentIds,
+            sessionType: session.type,
+            defaultAgentId: session.config.defaultAgentId,
+            triggerAgentId: session.config.triggerAgentId,
+          },
+          userProfile: {
+            nickname: userProfileState.nickname || undefined,
+            bio: userProfileState.bio || undefined,
+          },
+          apiKey: mc.apiKey,
+          baseUrl: mc.baseUrl,
+          model: mc.modelString,
+          providerType: mc.providerType,
+        } satisfies AgentLoopRequestTemplate;
+
+        if (browserLocalMode) {
+          await runBrowserLocalTurn(
+            sessionId,
+            {
+              ...requestTemplate,
+              effectiveBaseUrl: mc.effectiveBaseUrl,
+              providerId: mc.providerId,
+              providerName: mc.providerName,
+              modelId: mc.modelId,
+            },
+            controller,
+            session.type,
+          );
+        } else {
+          await runAgentLoop(sessionId, requestTemplate, controller, session.type);
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
           log.info('[ChatArea] Resume aborted');
@@ -896,7 +1052,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         }
       }
     },
-    [clearLiveSessionAfterError, runAgentLoop],
+    [clearLiveSessionAfterError, runAgentLoop, runBrowserLocalTurn],
   );
 
   /**
@@ -1061,34 +1217,53 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
         const userProfileState = useUserProfileStore.getState();
         const mc = getCurrentModelConfig();
+        const browserLocalMode = isBrowserLocalTransport(mc.providerId, mc.transportMode);
 
-        await runAgentLoop(
-          sessionId!,
-          {
-            messages: sessionMessages,
-            storeState: {
-              stage: currentState.stage,
-              scenes: currentState.scenes,
-              currentSceneId: currentState.currentSceneId,
-              mode: currentState.mode,
-              whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
-            },
-            config: {
-              agentIds,
-              sessionType,
-            },
-            userProfile: {
-              nickname: userProfileState.nickname || undefined,
-              bio: userProfileState.bio || undefined,
-            },
-            apiKey: mc.apiKey,
-            baseUrl: mc.baseUrl,
-            model: mc.modelString,
-            providerType: mc.providerType,
+        if (browserLocalMode && !mc.effectiveBaseUrl) {
+          throw new Error('Browser-local mode requires a Base URL.');
+        }
+
+        const requestTemplate = {
+          messages: sessionMessages,
+          storeState: {
+            stage: currentState.stage,
+            scenes: currentState.scenes,
+            currentSceneId: currentState.currentSceneId,
+            mode: currentState.mode,
+            whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
           },
-          controller,
-          sessionType,
-        );
+          config: {
+            agentIds,
+            sessionType,
+            defaultAgentId: existingSession?.config.defaultAgentId ?? agentIds[0],
+            triggerAgentId: existingSession?.config.triggerAgentId,
+          },
+          userProfile: {
+            nickname: userProfileState.nickname || undefined,
+            bio: userProfileState.bio || undefined,
+          },
+          apiKey: mc.apiKey,
+          baseUrl: mc.baseUrl,
+          model: mc.modelString,
+          providerType: mc.providerType,
+        } satisfies AgentLoopRequestTemplate;
+
+        if (browserLocalMode) {
+          await runBrowserLocalTurn(
+            sessionId!,
+            {
+              ...requestTemplate,
+              effectiveBaseUrl: mc.effectiveBaseUrl,
+              providerId: mc.providerId,
+              providerName: mc.providerName,
+              modelId: mc.modelId,
+            },
+            controller,
+            sessionType,
+          );
+        } else {
+          await runAgentLoop(sessionId!, requestTemplate, controller, sessionType);
+        }
       } catch (error) {
         // Ignore AbortError — it's intentional (user interrupted)
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -1117,6 +1292,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       createSession,
       endSession,
       runAgentLoop,
+      runBrowserLocalTurn,
       t,
     ],
   );
@@ -1200,37 +1376,54 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       try {
         const userProfileState = useUserProfileStore.getState();
         const mc = getCurrentModelConfig();
+        const browserLocalMode = isBrowserLocalTransport(mc.providerId, mc.transportMode);
 
-        await runAgentLoop(
-          sessionId,
-          {
-            messages: [],
-            storeState: {
-              stage: currentState.stage,
-              scenes: currentState.scenes,
-              currentSceneId: currentState.currentSceneId,
-              mode: currentState.mode,
-              whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
-            },
-            config: {
-              agentIds,
-              sessionType: 'discussion',
-              discussionTopic: request.topic,
-              discussionPrompt: request.prompt,
-              triggerAgentId: agentId,
-            },
-            userProfile: {
-              nickname: userProfileState.nickname || undefined,
-              bio: userProfileState.bio || undefined,
-            },
-            apiKey: mc.apiKey,
-            baseUrl: mc.baseUrl,
-            model: mc.modelString,
-            providerType: mc.providerType,
+        if (browserLocalMode && !mc.effectiveBaseUrl) {
+          throw new Error('Browser-local mode requires a Base URL.');
+        }
+
+        const requestTemplate = {
+          messages: [],
+          storeState: {
+            stage: currentState.stage,
+            scenes: currentState.scenes,
+            currentSceneId: currentState.currentSceneId,
+            mode: currentState.mode,
+            whiteboardOpen: useCanvasStore.getState().whiteboardOpen,
           },
-          controller,
-          'discussion',
-        );
+          config: {
+            agentIds,
+            sessionType: 'discussion',
+            discussionTopic: request.topic,
+            discussionPrompt: request.prompt,
+            triggerAgentId: agentId,
+          },
+          userProfile: {
+            nickname: userProfileState.nickname || undefined,
+            bio: userProfileState.bio || undefined,
+          },
+          apiKey: mc.apiKey,
+          baseUrl: mc.baseUrl,
+          model: mc.modelString,
+          providerType: mc.providerType,
+        } satisfies AgentLoopRequestTemplate;
+
+        if (browserLocalMode) {
+          await runBrowserLocalTurn(
+            sessionId,
+            {
+              ...requestTemplate,
+              effectiveBaseUrl: mc.effectiveBaseUrl,
+              providerId: mc.providerId,
+              providerName: mc.providerName,
+              modelId: mc.modelId,
+            },
+            controller,
+            'discussion',
+          );
+        } else {
+          await runAgentLoop(sessionId, requestTemplate, controller, 'discussion');
+        }
       } catch (error) {
         // Ignore AbortError — it's intentional (user interrupted)
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -1253,7 +1446,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable from i18n context
-    [clearLiveSessionAfterError, endSession, runAgentLoop],
+    [clearLiveSessionAfterError, endSession, runAgentLoop, runBrowserLocalTurn],
   );
 
   /**

@@ -35,6 +35,7 @@ import {
   getHomePathForLaunchMode,
   writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
+import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 
 const log = createLogger('GenerationPreview');
 
@@ -333,6 +334,15 @@ function GenerationPreviewContent() {
   // Main generation flow
   const startGeneration = async () => {
     if (!session) return;
+
+    const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+      getCurrentModelConfig(),
+      'classroom-generation',
+    );
+    if (browserLocalGuardMessage) {
+      setError(browserLocalGuardMessage);
+      return;
+    }
 
     // Create AbortController for this generation run
     abortControllerRef.current?.abort();

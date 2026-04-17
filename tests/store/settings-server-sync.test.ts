@@ -551,6 +551,45 @@ describe('fetchServerProviders — provider availability sync', () => {
     expect(store.getState().modelId).toBe('local-model');
   });
 
+  it('preserves a local browser-local LM Studio transport mode through server sync', async () => {
+    const store = await getStore();
+    store.getState().setProviderConfig('lmstudio', {
+      baseUrl: 'http://127.0.0.1:1234/v1',
+      transportMode: 'browser-local',
+      models: [{ id: 'local-model', name: 'Local Model' }],
+    });
+    store.getState().setModel('lmstudio', 'local-model');
+
+    expect(store.getState().providersConfig.lmstudio.transportMode).toBe('browser-local');
+
+    mockServerResponse({
+      providers: {
+        lmstudio: { models: ['local-model'] },
+      },
+    });
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providersConfig.lmstudio.transportMode).toBe('browser-local');
+    expect(store.getState().providersConfig.lmstudio.isServerConfigured).toBe(true);
+    expect(store.getState().providerId).toBe('lmstudio');
+    expect(store.getState().modelId).toBe('local-model');
+  });
+
+  it('keeps LM Studio transport mode in server mode when no local browser-local override exists', async () => {
+    const store = await getStore();
+
+    mockServerResponse({
+      providers: {
+        lmstudio: { models: ['qwen3.5-4b'] },
+      },
+    });
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().providersConfig.lmstudio.transportMode).toBe('server');
+    expect(store.getState().providerId).toBe('lmstudio');
+    expect(store.getState().modelId).toBe('qwen3.5-4b');
+  });
+
   it('creates selectable synthetic models for unknown LM Studio server model ids', async () => {
     const store = await getStore();
     store.setState({

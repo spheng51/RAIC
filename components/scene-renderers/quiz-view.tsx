@@ -22,6 +22,8 @@ const log = createLogger('QuizView');
 import type { QuizQuestion } from '@/lib/types/stage';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { toast } from 'sonner';
+import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -735,13 +737,37 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
   );
 
   const handleSubmit = useCallback(() => {
+    const hasShortAnswerQuestions = questions.some(isShortAnswer);
+    if (hasShortAnswerQuestions) {
+      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+        getCurrentModelConfig(),
+        'quiz-grading',
+      );
+      if (browserLocalGuardMessage) {
+        toast.error(browserLocalGuardMessage);
+        return;
+      }
+    }
+
     setPhase('grading');
     clearAnswersCache();
-  }, [clearAnswersCache]);
+  }, [clearAnswersCache, questions]);
 
   // When entering grading phase, grade choice questions locally + call API for short-answer
   useEffect(() => {
     if (phase !== 'grading') return;
+    if (questions.some(isShortAnswer)) {
+      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+        getCurrentModelConfig(),
+        'quiz-grading',
+      );
+      if (browserLocalGuardMessage) {
+        toast.error(browserLocalGuardMessage);
+        setPhase('answering');
+        return;
+      }
+    }
+
     let cancelled = false;
 
     (async () => {

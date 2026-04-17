@@ -147,6 +147,17 @@ DEFAULT_MODEL=lmstudio:qwen3.5-4b
 - Private self-hosted production should prefer `LMSTUDIO_BASE_URL` or `server-providers.yml` on the server; set `ALLOW_LOCAL_NETWORKS=true` only when browser-supplied local URLs must be allowed.
 - Public hosted deployments must not point LM Studio at `localhost`, `127.0.0.1`, or private LAN addresses; use a network-reachable endpoint instead.
 
+#### Browser-local mode for LM Studio / Ollama
+
+- Built-in `lmstudio` and `ollama` support an explicit opt-in **Browser-local mode** for the hosted/public topology where OpenRAIC runs on a public domain but the model server is on the user's device.
+- In that topology, **server mode cannot reach the user's `localhost`**. Provider traffic goes through OpenRAIC server routes such as `/api/verify-model` and `/api/chat`, so `127.0.0.1` would resolve on the server, not on the user's machine.
+- Browser-local mode sends traffic directly from the browser to the configured local/private LM Studio or Ollama endpoint instead of through the OpenRAIC server.
+- Browser-local mode is **device-only**. Its transport choice and local endpoint details are not synced to account/workspace settings and are not stored in server-managed provider config.
+- Browser-local mode in v1 supports **Q&A** and **Discussion** only.
+- Classroom generation, scene generation/regeneration, PBL, tools, and any other server-orchestrated workflow still require **server mode** plus a network-reachable endpoint.
+- For local OpenRAIC development or private self-hosting on the same machine/network, server mode remains the preferred path.
+- The same hosted/local topology rules apply to the built-in Ollama provider.
+
 ### Org-managed AI connectivity
 
 Authenticated `teacher` and `org_admin` flows can run on managed server-side provider config instead of browser-only secrets.

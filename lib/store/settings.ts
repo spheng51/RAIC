@@ -299,6 +299,7 @@ const getDefaultProvidersConfig = (): ProvidersConfig => {
       icon: provider.icon,
       requiresApiKey: provider.requiresApiKey,
       supportsOptionalApiKey: provider.supportsOptionalApiKey,
+      transportMode: 'server',
       isBuiltIn: true,
     };
   });
@@ -523,6 +524,7 @@ function ensureBuiltInProviders(state: Partial<SettingsState>): void {
         icon: provider.icon || existing.icon,
         requiresApiKey: existing.requiresApiKey ?? provider.requiresApiKey,
         supportsOptionalApiKey: existing.supportsOptionalApiKey ?? provider.supportsOptionalApiKey,
+        transportMode: existing.transportMode ?? 'server',
         isBuiltIn: existing.isBuiltIn ?? true,
       };
     }
@@ -993,6 +995,7 @@ export const useSettingsStore = create<SettingsState>()(
                     defaultBaseUrl: option.baseUrl,
                     icon: option.icon,
                     requiresApiKey: option.requiresApiKey ?? true,
+                    transportMode: 'server',
                     isBuiltIn: false,
                   };
                 }

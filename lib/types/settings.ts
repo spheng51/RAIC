@@ -1,4 +1,9 @@
-import type { ProviderId, ModelInfo, ProviderType } from '@/lib/types/provider';
+import type {
+  ProviderId,
+  ModelInfo,
+  ProviderType,
+  ProviderTransportMode,
+} from '@/lib/types/provider';
 import type { AIProviderSource } from '@/lib/types/ai-governance';
 
 export type SettingsSection =
@@ -22,6 +27,7 @@ export interface ProviderSettings {
   apiKey: string;
   baseUrl: string;
   models: ModelInfo[]; // All models (user can edit/delete any)
+  transportMode?: ProviderTransportMode;
 
   // Metadata (same for built-in and custom providers)
   name: string;

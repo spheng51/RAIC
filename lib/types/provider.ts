@@ -30,6 +30,7 @@ export type ProviderId = BuiltInProviderId | `custom-${string}`;
  * Provider API types
  */
 export type ProviderType = 'openai' | 'anthropic' | 'google';
+export type ProviderTransportMode = 'server' | 'browser-local';
 
 export type LibraryReviewSeverity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -150,6 +151,9 @@ export interface ModelConfig {
   modelId: string;
   apiKey: string;
   baseUrl?: string;
+  effectiveBaseUrl?: string;
   proxy?: string; // Optional: HTTP proxy URL for this provider
   providerType?: ProviderType; // Optional: for custom providers on server-side
+  providerName?: string;
+  transportMode?: ProviderTransportMode;
 }

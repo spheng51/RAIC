@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,18 +36,30 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import type { ProviderConfig } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
+import type { ProviderTransportMode } from '@/lib/types/provider';
 import { formatContextWindow } from './utils';
 import { cn } from '@/lib/utils';
 import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
+import { verifyBrowserLocalOpenAIModel } from '@/lib/utils/browser-local-openai';
+import {
+  isBrowserLocalTransport,
+  supportsBrowserLocalTransport,
+} from '@/lib/utils/provider-transport';
 
 interface ProviderConfigPanelProps {
   provider: ProviderConfig;
   initialApiKey: string;
   initialBaseUrl: string;
   initialRequiresApiKey: boolean;
+  initialTransportMode: ProviderTransportMode;
   originHostname?: string;
   providersConfig: ProvidersConfig;
-  onConfigChange: (apiKey: string, baseUrl: string, requiresApiKey: boolean) => void;
+  onConfigChange: (
+    apiKey: string,
+    baseUrl: string,
+    requiresApiKey: boolean,
+    transportMode: ProviderTransportMode,
+  ) => void;
   onSave: () => void; // Auto-save on blur
   onEditModel: (index: number) => void;
   onDeleteModel: (index: number) => void;
@@ -60,6 +73,7 @@ export function ProviderConfigPanel({
   initialApiKey,
   initialBaseUrl,
   initialRequiresApiKey,
+  initialTransportMode,
   originHostname,
   providersConfig,
   onConfigChange,
@@ -79,6 +93,7 @@ export function ProviderConfigPanel({
   const [apiKey, setApiKey] = useState(initialApiKey);
   const [baseUrl, setBaseUrl] = useState(initialBaseUrl);
   const [requiresApiKey, setRequiresApiKey] = useState(initialRequiresApiKey);
+  const [transportMode, setTransportMode] = useState<ProviderTransportMode>(initialTransportMode);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
@@ -93,25 +108,32 @@ export function ProviderConfigPanel({
 
     setRequiresApiKey(initialRequiresApiKey);
 
+    setTransportMode(initialTransportMode);
+
     setTestStatus('idle');
 
     setTestMessage('');
-  }, [provider.id, initialApiKey, initialBaseUrl, initialRequiresApiKey]);
+  }, [provider.id, initialApiKey, initialBaseUrl, initialRequiresApiKey, initialTransportMode]);
 
   // Notify parent of changes
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
-    onConfigChange(key, baseUrl, requiresApiKey);
+    onConfigChange(key, baseUrl, requiresApiKey, transportMode);
   };
 
   const handleBaseUrlChange = (url: string) => {
     setBaseUrl(url);
-    onConfigChange(apiKey, url, requiresApiKey);
+    onConfigChange(apiKey, url, requiresApiKey, transportMode);
   };
 
   const handleRequiresApiKeyChange = (requires: boolean) => {
     setRequiresApiKey(requires);
-    onConfigChange(apiKey, baseUrl, requires);
+    onConfigChange(apiKey, baseUrl, requires, transportMode);
+  };
+
+  const handleTransportModeChange = (nextMode: ProviderTransportMode) => {
+    setTransportMode(nextMode);
+    onConfigChange(apiKey, baseUrl, requiresApiKey, nextMode);
   };
 
   const governedConfig = providersConfig[provider.id];
@@ -125,14 +147,21 @@ export function ProviderConfigPanel({
   const canOverrideBaseUrl = !isGovernedProvider || aiPolicy.allowPersonalCustomBaseUrls;
   const canUseOptionalApiKey = provider.supportsOptionalApiKey === true;
   const canEditApiKey = requiresApiKey || isServerConfigured || canUseOptionalApiKey;
+  const supportsBrowserLocalMode = supportsBrowserLocalTransport(provider.id);
   const effectiveBaseUrl =
     baseUrl || governedConfig?.serverBaseUrl || provider.defaultBaseUrl || '';
-  const hostedLocalProviderWarning = hasHostedLocalProviderTopologyMismatch({
+  const serverTopologyMismatch = hasHostedLocalProviderTopologyMismatch({
     providerId: provider.id,
     originHostname,
     baseUrl: effectiveBaseUrl,
-  })
-    ? t('settings.hostedLocalProviderWarning', { provider: provider.name })
+  });
+  const browserLocalMode = isBrowserLocalTransport(provider.id, transportMode);
+  const hostedLocalProviderWarning =
+    !browserLocalMode && serverTopologyMismatch
+      ? t('settings.hostedLocalProviderWarning', { provider: provider.name })
+      : '';
+  const browserLocalModeNotice = browserLocalMode
+    ? t('settings.browserLocalModeNotice', { provider: provider.name })
     : '';
 
   const handleTestApi = useCallback(async () => {
@@ -158,6 +187,20 @@ export function ProviderConfigPanel({
     }
 
     try {
+      if (browserLocalMode) {
+        await verifyBrowserLocalOpenAIModel({
+          providerId: provider.id,
+          providerName: provider.name,
+          modelId: testModelId,
+          baseUrl: effectiveBaseUrl,
+          apiKey,
+        });
+
+        setTestStatus('success');
+        setTestMessage(t('settings.connectionSuccess'));
+        return;
+      }
+
       const response = await fetch('/api/verify-model', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -179,16 +222,19 @@ export function ProviderConfigPanel({
         setTestStatus('error');
         setTestMessage(data.error || t('settings.connectionFailed'));
       }
-    } catch (_error) {
+    } catch (error) {
       setTestStatus('error');
-      setTestMessage(t('settings.connectionFailed'));
+      setTestMessage(error instanceof Error ? error.message : t('settings.connectionFailed'));
     }
   }, [
     apiKey,
     baseUrl,
+    browserLocalMode,
     currentModelId,
     currentProviderId,
+    effectiveBaseUrl,
     provider.id,
+    provider.name,
     provider.type,
     requiresApiKey,
     providersConfig,
@@ -217,6 +263,33 @@ export function ProviderConfigPanel({
           className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300"
         >
           {t('settings.legacyBrowserOnlyNotice')}
+        </div>
+      )}
+
+      {supportsBrowserLocalMode && (
+        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <Label htmlFor={`browser-local-mode-${provider.id}`}>
+                {t('settings.browserLocalModeLabel')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.browserLocalModeDescription')}
+              </p>
+            </div>
+            <Switch
+              id={`browser-local-mode-${provider.id}`}
+              checked={browserLocalMode}
+              onCheckedChange={(checked) =>
+                handleTransportModeChange(checked ? 'browser-local' : 'server')
+              }
+            />
+          </div>
+          {browserLocalModeNotice && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
+              {browserLocalModeNotice}
+            </div>
+          )}
         </div>
       )}
 

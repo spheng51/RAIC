@@ -54,6 +54,8 @@ import {
   type ClassroomLaunchMode,
   writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
+import { getCurrentModelConfig } from '@/lib/utils/model-config';
+import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 
 const log = createLogger('Home');
 
@@ -263,6 +265,15 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
     if (!form.requirement.trim()) {
       setError(t('upload.requirementRequired'));
+      return;
+    }
+
+    const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+      getCurrentModelConfig(),
+      'classroom-generation',
+    );
+    if (browserLocalGuardMessage) {
+      setError(browserLocalGuardMessage);
       return;
     }
 

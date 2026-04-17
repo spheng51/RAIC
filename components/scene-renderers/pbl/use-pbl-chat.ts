@@ -10,6 +10,7 @@ import type { PBLProjectConfig, PBLChatMessage, PBLAgent, PBLIssue } from '@/lib
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { createLogger } from '@/lib/logger';
+import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 
 const log = createLogger('PBLChat');
 
@@ -32,6 +33,36 @@ export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLCh
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isLoading) return;
+
+      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+        getCurrentModelConfig(),
+        'pbl-chat',
+      );
+      if (browserLocalGuardMessage) {
+        const lastMessage = projectConfig.chat.messages[projectConfig.chat.messages.length - 1];
+        if (
+          lastMessage?.agent_name !== 'System' ||
+          lastMessage.message !== browserLocalGuardMessage
+        ) {
+          onConfigUpdate({
+            ...projectConfig,
+            chat: {
+              ...projectConfig.chat,
+              messages: [
+                ...projectConfig.chat.messages,
+                {
+                  id: `msg_${Date.now()}_system`,
+                  agent_name: 'System',
+                  message: browserLocalGuardMessage,
+                  timestamp: Date.now(),
+                  read_by: [],
+                },
+              ],
+            },
+          });
+        }
+        return;
+      }
 
       const updatedConfig = {
         ...projectConfig,

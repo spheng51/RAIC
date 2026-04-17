@@ -88,6 +88,19 @@ describe('validateProvider', () => {
     expect(validateProvider('provider-a', configMap, ['provider-b'])).toBe('provider-a');
   });
 
+  it('keeps LM Studio selected when it only has a local base URL and optional token semantics', () => {
+    const configMap = {
+      lmstudio: cfg({
+        requiresApiKey: false,
+        supportsOptionalApiKey: true,
+        baseUrl: 'http://127.0.0.1:1234/v1',
+      }),
+      openai: cfg(),
+    };
+
+    expect(validateProvider('lmstudio', configMap, ['openai'])).toBe('lmstudio');
+  });
+
   it('falls back to first usable provider when current is unusable', () => {
     const configMap = {
       'provider-a': cfg(),
@@ -122,6 +135,19 @@ describe('validateProvider', () => {
     expect(validateProvider('provider-a', configMap, ['provider-b'], 'browser-native')).toBe(
       'provider-b',
     );
+  });
+
+  it('falls back to LM Studio when it is the only baseUrl-usable provider', () => {
+    const configMap = {
+      openai: cfg(),
+      lmstudio: cfg({
+        requiresApiKey: false,
+        supportsOptionalApiKey: true,
+        baseUrl: 'http://127.0.0.1:1234/v1',
+      }),
+    };
+
+    expect(validateProvider('openai', configMap, ['lmstudio'])).toBe('lmstudio');
   });
 
   it('returns current id unchanged when it is empty', () => {

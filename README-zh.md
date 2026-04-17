@@ -134,6 +134,17 @@ DEFAULT_MODEL=lmstudio:qwen3.5-4b
 - 公共托管部署不要将 LM Studio 指向 `localhost`、`127.0.0.1` 或私有局域网地址，应改用服务端可访问的网络地址。
 - 如果你不想使用内置 provider，也可以在设置中把 LM Studio 作为自定义 OpenAI 兼容 provider 添加。
 
+#### LM Studio / Ollama 的浏览器本地模式
+
+- 内置 `lmstudio` 和 `ollama` 提供显式可选的 **浏览器本地模式**，用于这样一种拓扑：OpenRAIC 运行在公共域名上，而模型服务运行在用户自己的设备上。
+- 在这种拓扑下，**server 模式无法访问用户的 `localhost`**。模型请求会先经过 OpenRAIC 的 `/api/verify-model`、`/api/chat` 等服务端路由，因此 `127.0.0.1` 实际上会解析到 OpenRAIC 服务器，而不是用户本机。
+- 浏览器本地模式会让请求直接从浏览器发送到当前配置的本地/私有网络 LM Studio 或 Ollama 端点，而不是经过 OpenRAIC 服务器。
+- 浏览器本地模式是**设备级**配置。它的传输方式和本地端点信息不会同步到账号/工作区设置，也不会写入服务端托管的 provider 配置。
+- v1 的浏览器本地模式目前只支持 **问答** 和 **讨论**。
+- 课堂生成、场景生成/重生成、PBL、工具调用以及其他依赖服务端编排的工作流，仍然需要使用 **server 模式** 并提供服务端可访问的网络地址。
+- 如果你是在本地运行 OpenRAIC，或在同一台机器/同一私有网络中 self-host，仍然优先建议使用 server 模式。
+- 上述公共托管 / 本地端点的拓扑规则同样适用于内置 Ollama provider。
+
 MiniMax 快速示例：
 
 ```env

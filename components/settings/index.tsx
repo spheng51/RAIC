@@ -61,6 +61,7 @@ import { AddProviderDialog, type NewProviderData } from './add-provider-dialog';
 import { AddAudioProviderDialog, type NewAudioProviderData } from './add-audio-provider-dialog';
 import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
 import type { SettingsSection, EditingModel } from '@/lib/types/settings';
+import { isBrowserLocalTransport } from '@/lib/utils/provider-transport';
 
 // ─── Provider List Column (reusable) ───
 function ProviderListColumn<T extends string>({
@@ -352,13 +353,21 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     hasPersonalOverride,
     apiKey,
     baseUrl,
+    transportMode,
+    providerId,
   }: {
     isBuiltIn: boolean;
     hasOrganizationConfig?: boolean;
     hasPersonalOverride?: boolean;
     apiKey: string;
     baseUrl: string;
+    transportMode?: import('@/lib/types/provider').ProviderTransportMode;
+    providerId?: string;
   }) => {
+    if (providerId && isBrowserLocalTransport(providerId as ProviderId, transportMode)) {
+      return !!hasPersonalOverride;
+    }
+
     const hasServerBackedOverride = !!hasOrganizationConfig || !!hasPersonalOverride;
     const hasSelfServiceCredentials = !!apiKey.trim() || !!baseUrl.trim();
     return hasServerBackedOverride || (isBuiltIn && hasSelfServiceCredentials);
@@ -393,6 +402,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
       providerId: string;
       enabled: boolean;
       secret?: string;
+      clearSecret?: boolean;
       baseUrl?: string | null;
       preferredModel?: string | null;
     }> = [];
@@ -413,8 +423,29 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           hasPersonalOverride: config.hasPersonalOverride,
           apiKey: config.apiKey,
           baseUrl: config.baseUrl,
+          transportMode: config.transportMode,
+          providerId: pid,
         })
       ) {
+        continue;
+      }
+
+      const browserLocalTransport = isBrowserLocalTransport(
+        pid as ProviderId,
+        config.transportMode,
+      );
+
+      if (browserLocalTransport) {
+        if (config.hasPersonalOverride) {
+          overrides.push({
+            family: 'llm',
+            providerId: pid,
+            enabled: config.serverEnabled !== false,
+            clearSecret: true,
+            baseUrl: null,
+            preferredModel: providerId === pid ? modelId || null : null,
+          });
+        }
         continue;
       }
 
@@ -723,11 +754,13 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
     apiKey: string,
     baseUrl: string,
     requiresApiKey: boolean,
+    transportMode: import('@/lib/types/provider').ProviderTransportMode,
   ) => {
     setProviderConfig(pid, {
       apiKey,
       baseUrl,
       requiresApiKey,
+      transportMode,
     });
   };
 
@@ -849,6 +882,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         apiKey: '',
         baseUrl: '',
         models: [],
+        transportMode: 'server' as const,
         name: providerData.name,
         type: providerData.type,
         defaultBaseUrl: providerData.baseUrl || undefined,
@@ -1428,10 +1462,19 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                   initialRequiresApiKey={
                     providersConfig[selectedProviderId]?.requiresApiKey ?? true
                   }
+                  initialTransportMode={
+                    providersConfig[selectedProviderId]?.transportMode ?? 'server'
+                  }
                   originHostname={originHostname}
                   providersConfig={providersConfig}
-                  onConfigChange={(apiKey, baseUrl, requiresApiKey) =>
-                    handleProviderConfigChange(selectedProviderId, apiKey, baseUrl, requiresApiKey)
+                  onConfigChange={(apiKey, baseUrl, requiresApiKey, transportMode) =>
+                    handleProviderConfigChange(
+                      selectedProviderId,
+                      apiKey,
+                      baseUrl,
+                      requiresApiKey,
+                      transportMode,
+                    )
                   }
                   onSave={handleProviderConfigSave}
                   onEditModel={(index) => handleEditModel(selectedProviderId, index)}
@@ -1496,6 +1539,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         baseUrl={providersConfig[selectedProviderId]?.baseUrl}
         effectiveBaseUrl={selectedProviderEffectiveBaseUrl}
         originHostname={originHostname}
+        transportMode={providersConfig[selectedProviderId]?.transportMode ?? 'server'}
         providerType={providersConfig[selectedProviderId]?.type}
         requiresApiKey={providersConfig[selectedProviderId]?.requiresApiKey}
         isServerConfigured={providersConfig[selectedProviderId]?.isServerConfigured}

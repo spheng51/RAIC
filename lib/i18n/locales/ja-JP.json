@@ -450,6 +450,12 @@
     "fetch": "取得",
     "connectionSuccess": "接続に成功しました",
     "connectionFailed": "接続に失敗しました",
+    "browserLocalModeLabel": "ブラウザーローカルモード",
+    "browserLocalModeDescription": "このブラウザーから、この端末上のローカルまたはプライベートな LM Studio/Ollama エンドポイントへ直接リクエストを送信します。",
+    "browserLocalModeNotice": "{{provider}} のブラウザーローカルモードはこの端末でのみ有効で、現在は Q&A とディスカッションのみをサポートします。教室生成、シーン生成/再生成、PBL、ツール呼び出し、そのほかサーバー編成のワークフローでは、ネットワーク到達可能なエンドポイントを使う server モードが引き続き必要です。",
+    "hostedLocalProviderWarning": "公開/ホスト型 OpenRAIC は、server モードでローカルの {{provider}} エンドポイントに到達できません。プロバイダー通信はブラウザーではなく OpenRAIC サーバーから送信されます。ブラウザーローカルモードを使うか、同じ端末/プライベートネットワークで OpenRAIC を動かすか、ネットワーク到達可能なエンドポイントを使用してください。",
+    "browserLocalUnsupportedWorkflow": "ブラウザーローカルモードは現在、Q&A とディスカッションのみをサポートします。",
+    "browserLocalUnsupportedWorkflowDetail": "生成、再生成、教室/PBL ワークフロー、ツール呼び出し、そのほかサーバー編成のフローでは、ネットワーク到達可能なエンドポイントを使う server モードが必要です。",
     "capabilities": {
       "vision": "画像認識",
       "tools": "ツール",

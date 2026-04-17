@@ -12,6 +12,8 @@ import type { SpeechAction } from '@/lib/types/action';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { createLogger } from '@/lib/logger';
+import { toast } from 'sonner';
+import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 
 const log = createLogger('SceneGenerator');
 
@@ -242,6 +244,16 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
   const generateRemaining = useCallback(
     async (params: GenerationParams) => {
       lastParamsRef.current = params;
+      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+        getCurrentModelConfig(),
+        'scene-generation',
+      );
+      if (browserLocalGuardMessage) {
+        toast.error(browserLocalGuardMessage);
+        store.getState().setGenerationStatus('paused');
+        return;
+      }
+
       if (generatingRef.current) return;
       generatingRef.current = true;
       abortRef.current = false;
@@ -436,6 +448,15 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
   /** Retry a single failed outline from scratch (content → actions → TTS). */
   const retrySingleOutline = useCallback(
     async (outlineId: string) => {
+      const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+        getCurrentModelConfig(),
+        'scene-generation',
+      );
+      if (browserLocalGuardMessage) {
+        toast.error(browserLocalGuardMessage);
+        return;
+      }
+
       const state = store.getState();
       const outline = state.failedOutlines.find((o) => o.id === outlineId);
       const params = lastParamsRef.current;

@@ -57,6 +57,28 @@ vi.mock('@/components/ui/checkbox', async () => {
   };
 });
 
+vi.mock('@/components/ui/switch', async () => {
+  const React = await import('react');
+  return {
+    Switch: ({
+      checked,
+      onCheckedChange,
+      ...props
+    }: {
+      checked?: boolean;
+      onCheckedChange?: (checked: boolean) => void;
+    } & React.InputHTMLAttributes<HTMLInputElement>) =>
+      React.createElement('input', {
+        ...props,
+        type: 'checkbox',
+        role: 'switch',
+        checked,
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+          onCheckedChange?.(event.target.checked),
+      }),
+  };
+});
+
 vi.mock('@/components/ui/alert-dialog', async () => {
   const React = await import('react');
   return {
@@ -94,6 +116,15 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
       if (key === 'settings.hostedLocalProviderWarning') {
         return `Hosted OpenRAIC cannot reach your local ${vars?.provider ?? 'provider'} server at a localhost/private address.`;
       }
+      if (key === 'settings.browserLocalModeLabel') {
+        return 'Browser-local mode';
+      }
+      if (key === 'settings.browserLocalModeDescription') {
+        return 'Send requests directly from this browser to your local model server.';
+      }
+      if (key === 'settings.browserLocalModeNotice') {
+        return `This device will connect directly to your local ${vars?.provider ?? 'provider'} server.`;
+      }
       if (key === 'settings.noModelsAvailable') {
         return 'No models available for testing';
       }
@@ -121,59 +152,98 @@ vi.mock('@/lib/store/settings', () => ({
 
 interface MountedPanel {
   readonly container: HTMLDivElement;
+  readonly onConfigChange: ReturnType<typeof vi.fn>;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 
-const provider: ProviderConfig = {
-  id: 'lmstudio',
-  name: 'LM Studio',
-  type: 'openai',
-  defaultBaseUrl: 'http://127.0.0.1:1234/v1',
-  requiresApiKey: false,
-  supportsOptionalApiKey: true,
-  models: [],
-};
+function buildProvider(providerId: 'lmstudio' | 'ollama' | 'openai'): ProviderConfig {
+  if (providerId === 'openai') {
+    return {
+      id: 'openai',
+      name: 'OpenAI',
+      type: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      requiresApiKey: true,
+      models: [],
+    };
+  }
 
-const providersConfig = {
-  lmstudio: {
-    name: 'LM Studio',
+  return {
+    id: providerId,
+    name: providerId === 'lmstudio' ? 'LM Studio' : 'Ollama',
     type: 'openai',
-    isBuiltIn: true,
-    apiKey: '',
-    baseUrl: 'http://127.0.0.1:1234/v1',
+    defaultBaseUrl:
+      providerId === 'lmstudio' ? 'http://127.0.0.1:1234/v1' : 'http://127.0.0.1:11434/v1',
     requiresApiKey: false,
-    models: [
-      {
-        id: 'qwen/qwen3.5-35b-a3b',
-        name: 'qwen/qwen3.5-35b-a3b',
-        capabilities: {
-          vision: true,
-          tools: true,
-          streaming: true,
-        },
-      },
-    ],
-  },
-} as ProvidersConfig;
+    supportsOptionalApiKey: true,
+    models: [],
+  };
+}
 
-async function mountProviderConfigPanel(originHostname: string): Promise<MountedPanel> {
+function buildProvidersConfig(
+  provider: ProviderConfig,
+  baseUrl: string,
+  transportMode: 'server' | 'browser-local',
+): ProvidersConfig {
+  const modelId = provider.id === 'openai' ? 'gpt-4o' : 'qwen/qwen3.5-35b-a3b';
+  return {
+    [provider.id]: {
+      name: provider.name,
+      type: provider.type,
+      isBuiltIn: true,
+      apiKey: '',
+      baseUrl,
+      requiresApiKey: provider.requiresApiKey,
+      supportsOptionalApiKey: provider.supportsOptionalApiKey,
+      transportMode,
+      models: [
+        {
+          id: modelId,
+          name: modelId,
+          capabilities: {
+            vision: true,
+            tools: true,
+            streaming: true,
+          },
+        },
+      ],
+    },
+  } as ProvidersConfig;
+}
+
+async function mountProviderConfigPanel({
+  providerId = 'lmstudio',
+  originHostname,
+  transportMode = 'server',
+  baseUrl,
+}: {
+  providerId?: 'lmstudio' | 'ollama' | 'openai';
+  originHostname: string;
+  transportMode?: 'server' | 'browser-local';
+  baseUrl?: string;
+}): Promise<MountedPanel> {
   const { ProviderConfigPanel } = await import('@/components/settings/provider-config-panel');
+  const provider = buildProvider(providerId);
+  const resolvedBaseUrl = baseUrl ?? provider.defaultBaseUrl ?? '';
+  const providersConfig = buildProvidersConfig(provider, resolvedBaseUrl, transportMode);
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mountedRoots.push({ root, container });
+  const onConfigChange = vi.fn();
 
   await act(async () => {
     root.render(
       createElement(ProviderConfigPanel, {
         provider,
         initialApiKey: '',
-        initialBaseUrl: 'http://127.0.0.1:1234/v1',
-        initialRequiresApiKey: false,
+        initialBaseUrl: resolvedBaseUrl,
+        initialRequiresApiKey: provider.requiresApiKey,
+        initialTransportMode: transportMode,
         originHostname,
         providersConfig,
-        onConfigChange: vi.fn(),
+        onConfigChange,
         onSave: vi.fn(),
         onEditModel: vi.fn(),
         onDeleteModel: vi.fn(),
@@ -183,7 +253,7 @@ async function mountProviderConfigPanel(originHostname: string): Promise<Mounted
     );
   });
 
-  return { container };
+  return { container, onConfigChange };
 }
 
 describe('ProviderConfigPanel', () => {
@@ -207,11 +277,38 @@ describe('ProviderConfigPanel', () => {
     }
   });
 
-  it('shows a hosted-topology warning and disables testing for hosted LM Studio localhost URLs', async () => {
-    const mounted = await mountProviderConfigPanel('open-raic.com');
+  it('shows the browser-local toggle for LM Studio and Ollama only', async () => {
+    const lmstudio = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'open-raic.com',
+    });
+    expect(lmstudio.container.querySelector('#browser-local-mode-lmstudio')).not.toBeNull();
+
+    const ollama = await mountProviderConfigPanel({
+      providerId: 'ollama',
+      originHostname: 'open-raic.com',
+    });
+    expect(ollama.container.querySelector('#browser-local-mode-ollama')).not.toBeNull();
+
+    const openai = await mountProviderConfigPanel({
+      providerId: 'openai',
+      originHostname: 'open-raic.com',
+    });
+    expect(openai.container.querySelector('#browser-local-mode-openai')).toBeNull();
+    expect(openai.container.textContent).not.toContain('Browser-local mode');
+  });
+
+  it('shows the hosted warning in server mode and swaps to device-local guidance in browser-local mode', async () => {
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'open-raic.com',
+    });
 
     expect(mounted.container.textContent).toContain(
       'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',
+    );
+    expect(mounted.container.textContent).not.toContain(
+      'This device will connect directly to your local LM Studio server.',
     );
 
     const testButton = mounted.container.querySelector(
@@ -220,10 +317,37 @@ describe('ProviderConfigPanel', () => {
 
     expect(testButton).not.toBeNull();
     expect(testButton?.disabled).toBe(true);
+
+    const toggle = mounted.container.querySelector(
+      '#browser-local-mode-lmstudio',
+    ) as HTMLInputElement | null;
+
+    expect(toggle).not.toBeNull();
+
+    await act(async () => {
+      toggle?.click();
+    });
+
+    expect(mounted.onConfigChange).toHaveBeenLastCalledWith(
+      '',
+      'http://127.0.0.1:1234/v1',
+      false,
+      'browser-local',
+    );
+    expect(mounted.container.textContent).not.toContain(
+      'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',
+    );
+    expect(mounted.container.textContent).toContain(
+      'This device will connect directly to your local LM Studio server.',
+    );
+    expect(testButton?.disabled).toBe(false);
   });
 
   it('keeps testing enabled for local OpenRAIC origins', async () => {
-    const mounted = await mountProviderConfigPanel('localhost');
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'localhost',
+    });
 
     expect(mounted.container.textContent).not.toContain(
       'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',

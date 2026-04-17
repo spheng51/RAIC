@@ -9,9 +9,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Sparkles, Wrench, Zap, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { getProvider, type ProviderId } from '@/lib/ai/providers';
+import type { ProviderTransportMode } from '@/lib/types/provider';
 import type { EditingModel } from '@/lib/types/settings';
 import { cn } from '@/lib/utils';
 import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
+import { verifyBrowserLocalOpenAIModel } from '@/lib/utils/browser-local-openai';
+import { isBrowserLocalTransport } from '@/lib/utils/provider-transport';
 
 interface ModelEditDialogProps {
   open: boolean;
@@ -25,6 +28,7 @@ interface ModelEditDialogProps {
   baseUrl?: string;
   effectiveBaseUrl?: string;
   originHostname?: string;
+  transportMode: ProviderTransportMode;
   providerType?: string;
   requiresApiKey?: boolean;
   isServerConfigured?: boolean;
@@ -42,6 +46,7 @@ export function ModelEditDialog({
   baseUrl,
   effectiveBaseUrl,
   originHostname,
+  transportMode,
   providerType,
   requiresApiKey,
   isServerConfigured,
@@ -50,12 +55,18 @@ export function ModelEditDialog({
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const providerName = getProvider(providerId)?.name || providerId;
-  const hostedLocalProviderWarning = hasHostedLocalProviderTopologyMismatch({
-    providerId,
-    originHostname,
-    baseUrl: effectiveBaseUrl,
-  })
-    ? t('settings.hostedLocalProviderWarning', { provider: providerName })
+  const browserLocalMode = isBrowserLocalTransport(providerId, transportMode);
+  const hostedLocalProviderWarning =
+    !browserLocalMode &&
+    hasHostedLocalProviderTopologyMismatch({
+      providerId,
+      originHostname,
+      baseUrl: effectiveBaseUrl,
+    })
+      ? t('settings.hostedLocalProviderWarning', { provider: providerName })
+      : '';
+  const browserLocalModeNotice = browserLocalMode
+    ? t('settings.browserLocalModeNotice', { provider: providerName })
     : '';
 
   // Reset test status when dialog closes
@@ -88,6 +99,20 @@ export function ModelEditDialog({
     setTestMessage('');
 
     try {
+      if (browserLocalMode) {
+        await verifyBrowserLocalOpenAIModel({
+          providerId,
+          providerName,
+          modelId: editingModel.model.id,
+          baseUrl: effectiveBaseUrl || baseUrl || '',
+          apiKey,
+        });
+
+        setTestStatus('success');
+        setTestMessage(t('settings.connectionSuccess'));
+        return;
+      }
+
       const response = await fetch('/api/verify-model', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,15 +134,18 @@ export function ModelEditDialog({
         setTestStatus('error');
         setTestMessage(data.error || t('settings.connectionFailed'));
       }
-    } catch (_error) {
+    } catch (error) {
       setTestStatus('error');
-      setTestMessage(t('settings.connectionFailed'));
+      setTestMessage(error instanceof Error ? error.message : t('settings.connectionFailed'));
     }
   }, [
     editingModel,
     apiKey,
     baseUrl,
+    browserLocalMode,
+    effectiveBaseUrl,
     providerId,
+    providerName,
     providerType,
     requiresApiKey,
     t,
@@ -353,6 +381,11 @@ export function ModelEditDialog({
             {hostedLocalProviderWarning && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
                 {hostedLocalProviderWarning}
+              </div>
+            )}
+            {browserLocalModeNotice && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
+                {browserLocalModeNotice}
               </div>
             )}
             {testMessage && (
