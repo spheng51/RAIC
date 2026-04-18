@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/api-response';
 import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
 import { remapModelVerificationError } from '@/lib/server/model-verification-errors';
+import { resolveVerificationModelScenario } from '@/lib/server/provider-scenario-routing';
 import { resolveModel } from '@/lib/server/resolve-model';
 const log = createLogger('Verify Model');
 
@@ -36,13 +37,23 @@ export async function POST(req: NextRequest) {
     // Parse model string and resolve server-side fallback
     let languageModel;
     try {
-      const result = await resolveModel({
-        modelString: model,
-        apiKey: apiKey || '',
-        baseUrl: baseUrl || undefined,
-        providerType,
-        auth,
-      });
+      const result =
+        (await resolveVerificationModelScenario({
+          auth,
+          routeId: 'verify-model',
+          taskBucket: 'scene',
+          requestedModelString: model,
+          apiKey: apiKey || '',
+          baseUrl: baseUrl || undefined,
+          providerType,
+        })) ||
+        (await resolveModel({
+          modelString: model,
+          apiKey: apiKey || '',
+          baseUrl: baseUrl || undefined,
+          providerType,
+          auth,
+        }));
       languageModel = result.model;
       testedModel = result.modelString;
     } catch (error) {

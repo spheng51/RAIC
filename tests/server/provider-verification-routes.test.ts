@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const buildSearchQueryMock = vi.fn();
+const appendAuditLogMock = vi.fn();
 const formatSearchResultsAsContextMock = vi.fn();
 const generateTextMock = vi.fn();
+const getProviderScenarioProfileMock = vi.fn();
 const getRequestAuthMock = vi.fn();
 const getServerASRProvidersMock = vi.fn();
 const getServerImageProvidersMock = vi.fn();
@@ -22,6 +24,27 @@ const toGovernedProviderApiErrorResponseMock = vi.fn();
 const validateUrlForSSRFMock = vi.fn();
 const fetchMock = vi.fn();
 
+class MockGovernedProviderResolutionError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly apiErrorCode: string;
+
+  constructor(
+    code: string,
+    message: string,
+    options: {
+      status: number;
+      apiErrorCode: string;
+    },
+  ) {
+    super(message);
+    this.name = 'GovernedProviderResolutionError';
+    this.code = code;
+    this.status = options.status;
+    this.apiErrorCode = options.apiErrorCode;
+  }
+}
+
 vi.mock('ai', () => ({
   generateText: generateTextMock,
 }));
@@ -30,15 +53,46 @@ vi.mock('@/lib/auth/current-user', () => ({
   getRequestAuth: getRequestAuthMock,
 }));
 
+vi.mock('@/lib/db/repositories/audit-logs', () => ({
+  appendAuditLog: appendAuditLogMock,
+}));
+
 vi.mock('@/lib/media/image-providers', () => ({
+  IMAGE_PROVIDERS: {
+    seedream: {
+      id: 'seedream',
+      name: 'Seedream',
+      requiresApiKey: true,
+      models: [
+        { id: 'doubao-seedream-5-0-260128', name: 'Seedream 5.0 Lite' },
+        { id: 'doubao-seedream-4-5-251128', name: 'Seedream 4.5' },
+      ],
+      supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+    },
+  },
   testImageConnectivity: testImageConnectivityMock,
 }));
 
 vi.mock('@/lib/media/video-providers', () => ({
+  VIDEO_PROVIDERS: {
+    seedance: {
+      id: 'seedance',
+      name: 'Seedance',
+      requiresApiKey: true,
+      models: [
+        { id: 'doubao-seedance-1-5-pro-251215', name: 'Seedance 1.5 Pro' },
+        { id: 'doubao-seedance-1-0-pro-250528', name: 'Seedance 1.0 Pro' },
+      ],
+      supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+    },
+  },
   testVideoConnectivity: testVideoConnectivityMock,
 }));
 
 vi.mock('@/lib/server/ai-governance', () => ({
+  GovernedProviderResolutionError: MockGovernedProviderResolutionError,
+  isGovernedProviderResolutionError: (error: unknown) =>
+    error instanceof MockGovernedProviderResolutionError,
   resolveGovernedProviderConfig: resolveGovernedProviderConfigMock,
   toGovernedProviderApiErrorResponse: toGovernedProviderApiErrorResponseMock,
 }));
@@ -81,6 +135,10 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
+vi.mock('@/lib/server/provider-scenarios', () => ({
+  getProviderScenarioProfile: getProviderScenarioProfileMock,
+}));
+
 const authContext = {
   organization: { id: 'org-1' },
   session: { role: 'teacher' },
@@ -90,9 +148,11 @@ const authContext = {
 describe('provider and verification routes', () => {
   beforeEach(() => {
     vi.resetModules();
+    appendAuditLogMock.mockReset();
     buildSearchQueryMock.mockReset();
     formatSearchResultsAsContextMock.mockReset();
     generateTextMock.mockReset();
+    getProviderScenarioProfileMock.mockReset();
     getRequestAuthMock.mockReset();
     getServerASRProvidersMock.mockReset();
     getServerImageProvidersMock.mockReset();
@@ -119,13 +179,36 @@ describe('provider and verification routes', () => {
     getServerTTSProvidersMock.mockReturnValue({});
     getServerVideoProvidersMock.mockReturnValue({});
     getServerWebSearchProvidersMock.mockReturnValue({});
-    resolveGovernedProviderConfigMock.mockResolvedValue({
-      apiKey: 'server-key',
-      baseUrl: 'https://provider.example.com',
-      modelId: 'provider-model',
+    appendAuditLogMock.mockResolvedValue({
+      id: 'audit-1',
+      action: 'provider_scenario.route_selected',
+      createdAt: new Date().toISOString(),
+      metadata: {},
     });
+    getProviderScenarioProfileMock.mockReturnValue(null);
+    resolveGovernedProviderConfigMock.mockImplementation(
+      async ({ providerId, requestedModel }: { providerId: string; requestedModel?: string }) => ({
+        providerId,
+        apiKey: 'server-key',
+        baseUrl: 'https://provider.example.com',
+        modelId: requestedModel || 'provider-model',
+      }),
+    );
     resolveModelFromHeadersMock.mockResolvedValue({ model: 'resolved-model' });
-    resolveModelMock.mockResolvedValue({ model: 'resolved-model' });
+    resolveModelMock.mockResolvedValue({
+      model: 'resolved-model',
+      modelInfo: {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        capabilities: {
+          streaming: true,
+          tools: true,
+        },
+      },
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'server-key',
+    });
     toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
     validateUrlForSSRFMock.mockResolvedValue(null);
     vi.stubGlobal('fetch', fetchMock);
@@ -236,8 +319,71 @@ describe('provider and verification routes', () => {
     });
   });
 
+  it('uses scenario-managed verification for matching model candidates and emits audit telemetry', async () => {
+    generateTextMock.mockResolvedValue({ text: 'OK' });
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        scene: [
+          { providerId: 'openai', modelId: 'gpt-4o' },
+          { providerId: 'openai', modelId: 'gpt-4o-mini' },
+        ],
+      },
+    });
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'openai:gpt-4o',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveModelMock).toHaveBeenCalledWith({
+      modelString: 'openai:gpt-4o',
+      apiKey: '',
+      baseUrl: undefined,
+      providerType: undefined,
+      auth: authContext,
+    });
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'verify-model',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'scene',
+          routeId: 'verify-model',
+          selectedProviderId: 'openai',
+          selectedModelId: 'gpt-4o',
+          fallbackProviderId: null,
+          fallbackModelId: null,
+          validationStatus: 'selected',
+        }),
+      }),
+    );
+    expect(body).toEqual({
+      success: true,
+      message: 'Connection successful',
+      response: 'OK',
+    });
+  });
+
   it('verifies LM Studio models without requiring an API key', async () => {
     generateTextMock.mockResolvedValue({ text: 'OK' });
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        scene: [{ providerId: 'openai', modelId: 'gpt-4o' }],
+      },
+    });
 
     const { POST } = await import('@/app/api/verify-model/route');
     const response = await POST(
@@ -264,6 +410,7 @@ describe('provider and verification routes', () => {
       message: 'Connection successful',
       response: 'OK',
     });
+    expect(appendAuditLogMock).not.toHaveBeenCalled();
   });
 
   it('includes the tested model id in verification failures', async () => {
@@ -413,6 +560,164 @@ describe('provider and verification routes', () => {
       success: true,
       message: 'Connection successful',
     });
+  });
+
+  it('falls back to the next scenario-managed image candidate and records fallback telemetry', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        image: [
+          { providerId: 'seedream', modelId: 'doubao-seedream-5-0-260128' },
+          { providerId: 'seedream', modelId: 'doubao-seedream-4-5-251128' },
+        ],
+      },
+    });
+    resolveGovernedProviderConfigMock
+      .mockRejectedValueOnce(
+        new MockGovernedProviderResolutionError(
+          'MISSING_PROVIDER_CREDENTIALS',
+          'No API key configured for provider "seedream".',
+          {
+            status: 400,
+            apiErrorCode: 'MISSING_API_KEY',
+          },
+        ),
+      )
+      .mockResolvedValueOnce({
+        providerId: 'seedream',
+        apiKey: 'fallback-key',
+        baseUrl: 'https://images.example.com',
+        modelId: 'doubao-seedream-4-5-251128',
+      });
+    testImageConnectivityMock.mockResolvedValue({
+      success: true,
+      message: 'Connection successful',
+    });
+
+    const { POST } = await import('@/app/api/verify-image-provider/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-image-provider', {
+        method: 'POST',
+        headers: {
+          'x-image-provider': 'seedream',
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        family: 'image',
+        providerId: 'seedream',
+        requestedModel: 'doubao-seedream-5-0-260128',
+      }),
+    );
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        family: 'image',
+        providerId: 'seedream',
+        requestedModel: 'doubao-seedream-4-5-251128',
+      }),
+    );
+    expect(testImageConnectivityMock).toHaveBeenCalledWith({
+      providerId: 'seedream',
+      apiKey: 'fallback-key',
+      baseUrl: 'https://images.example.com',
+      model: 'doubao-seedream-4-5-251128',
+    });
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'verify-image-provider',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'image',
+          routeId: 'verify-image-provider',
+          selectedProviderId: 'seedream',
+          selectedModelId: 'doubao-seedream-4-5-251128',
+          fallbackProviderId: 'seedream',
+          fallbackModelId: 'doubao-seedream-4-5-251128',
+          validationStatus: 'fallback_selected',
+          fallbackReason: expect.stringContaining('doubao-seedream-5-0-260128'),
+        }),
+      }),
+    );
+    expect(body).toEqual({
+      success: true,
+      message: 'Connection successful',
+    });
+  });
+
+  it('fails closed for scenario-managed video verification when no validated candidate remains', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        video: [{ providerId: 'seedance', modelId: 'doubao-seedance-1-5-pro-251215' }],
+      },
+    });
+    const missingCredentialsError = new MockGovernedProviderResolutionError(
+      'MISSING_PROVIDER_CREDENTIALS',
+      'No API key configured for provider "seedance".',
+      {
+        status: 400,
+        apiErrorCode: 'MISSING_API_KEY',
+      },
+    );
+    resolveGovernedProviderConfigMock.mockRejectedValue(missingCredentialsError);
+    toGovernedProviderApiErrorResponseMock.mockImplementation((error) =>
+      error === missingCredentialsError
+        ? new Response(
+            JSON.stringify({
+              success: false,
+              errorCode: 'MISSING_API_KEY',
+              error: missingCredentialsError.message,
+            }),
+            {
+              status: 400,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            },
+          )
+        : null,
+    );
+
+    const { POST } = await import('@/app/api/verify-video-provider/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-video-provider', {
+        method: 'POST',
+        headers: {
+          'x-video-provider': 'seedance',
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('MISSING_API_KEY');
+    expect(testVideoConnectivityMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'verify-video-provider',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'video',
+          routeId: 'verify-video-provider',
+          selectedProviderId: null,
+          selectedModelId: null,
+          validationStatus: 'failed_closed',
+          fallbackReason: expect.stringContaining('doubao-seedance-1-5-pro-251215'),
+        }),
+      }),
+    );
   });
 
   it('requires a query before running web search', async () => {

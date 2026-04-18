@@ -1,0 +1,13 @@
+profiles:
+  teacher-differentiation-v1:
+    description: Baseline provider scenario routing for teacher differentiation rollout.
+    buckets:
+      scene:
+        - openai:gpt-4o
+        - openai:gpt-4o-mini
+      image:
+        - seedream:doubao-seedream-5-0-260128
+        - seedream:doubao-seedream-4-5-251128
+      video:
+        - seedance:doubao-seedance-1-5-pro-251215
+        - seedance:doubao-seedance-1-0-pro-250528

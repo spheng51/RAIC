@@ -28,6 +28,7 @@ import {
   withRequestWebSession,
 } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
+import { resolveVerificationProviderScenario } from '@/lib/server/provider-scenario-routing';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('VerifyVideoProvider');
@@ -49,21 +50,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const resolved = await resolveGovernedProviderConfig({
+    const scenarioResolved = await resolveVerificationProviderScenario({
       auth,
+      routeId: 'verify-video-provider',
+      taskBucket: 'video',
       family: 'video',
       providerId,
+      modelId: model,
       requestedSecret: clientApiKey,
       requestedBaseUrl: clientBaseUrl,
-      requestedModel: model,
     });
+
+    const resolved =
+      scenarioResolved ||
+      (await resolveGovernedProviderConfig({
+        auth,
+        family: 'video',
+        providerId,
+        requestedSecret: clientApiKey,
+        requestedBaseUrl: clientBaseUrl,
+        requestedModel: model,
+      }));
 
     if (!resolved.apiKey) {
       return apiErrorWithRequestSession(request, 'MISSING_API_KEY', 400, 'No API key configured');
     }
 
     const result = await testVideoConnectivity({
-      providerId,
+      providerId: resolved.providerId as VideoProviderId,
       apiKey: resolved.apiKey,
       baseUrl: resolved.baseUrl,
       model: resolved.modelId || model,
