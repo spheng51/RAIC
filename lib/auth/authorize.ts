@@ -22,6 +22,27 @@ export function getDefaultLandingPath(role: PlatformRole) {
   return '/';
 }
 
+export function sanitizePostAuthRedirectPath(redirectTo: unknown) {
+  if (typeof redirectTo !== 'string' || !redirectTo.startsWith('/')) {
+    return null;
+  }
+
+  if (
+    redirectTo.startsWith('//') ||
+    redirectTo === '/sign-in' ||
+    redirectTo.startsWith('/sign-in?') ||
+    redirectTo.startsWith('/api/')
+  ) {
+    return null;
+  }
+
+  return redirectTo;
+}
+
+export function resolvePostAuthRedirectPath(role: PlatformRole, redirectTo: unknown) {
+  return sanitizePostAuthRedirectPath(redirectTo) ?? getDefaultLandingPath(role);
+}
+
 export async function requireUser(): Promise<AuthContext> {
   const auth = await getCurrentAuth();
   if (!auth) {

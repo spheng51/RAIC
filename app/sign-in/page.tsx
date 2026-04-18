@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { GoogleSignInButton } from '@/components/auth/google-sign-in-button';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -11,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { getDefaultLandingPath } from '@/lib/auth/authorize';
+import { resolvePostAuthRedirectPath, sanitizePostAuthRedirectPath } from '@/lib/auth/authorize';
 import { getCurrentAuth } from '@/lib/auth/current-user';
 
 export default async function SignInPage({
@@ -19,13 +20,15 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  const params = await searchParams;
+  const redirectTo = sanitizePostAuthRedirectPath(params.next) ?? '/studio';
   const auth = await getCurrentAuth();
   if (auth) {
-    redirect(getDefaultLandingPath(auth.session.role));
+    redirect(resolvePostAuthRedirectPath(auth.session.role, redirectTo));
   }
 
-  const params = await searchParams;
-  const redirectTo = params.next?.startsWith('/') ? params.next : '/studio';
+  const isAdminIntent = redirectTo === '/admin' || redirectTo.startsWith('/admin?');
+  const showsReturnHint = redirectTo !== '/studio';
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.05),_transparent)] px-6 py-12">
@@ -73,7 +76,22 @@ export default async function SignInPage({
               are ready to assign it explicitly.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {showsReturnHint ? (
+              <div className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">Return path</Badge>
+                  <code className="rounded bg-background px-1.5 py-0.5 font-mono text-xs text-foreground">
+                    {redirectTo}
+                  </code>
+                </div>
+                <p className="mt-2 leading-6">
+                  {isAdminIntent
+                    ? 'After sign-in, RAIC will return you to the admin route. Accounts without org-admin access will land on the restricted-access page instead of the admin console.'
+                    : 'After sign-in, RAIC will continue to the protected route that sent you here.'}
+                </p>
+              </div>
+            ) : null}
             <GoogleSignInButton redirectTo={redirectTo} />
           </CardContent>
           <CardFooter className="flex flex-col items-stretch gap-3 border-t">
