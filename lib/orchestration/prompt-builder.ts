@@ -5,9 +5,11 @@
  */
 
 import type { StatelessChatRequest } from '@/lib/types/chat';
+import type { AdaptiveGenerationContext } from '@/lib/types/classroom-intelligence';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { WhiteboardActionRecord, AgentTurnSummary } from './director-prompt';
 import { getActionDescriptions, getEffectiveActions } from './tool-schemas';
+import { formatAdaptiveContextForPrompt } from '@/lib/server/classroom-intelligence';
 
 // ==================== Role Guidelines ====================
 
@@ -97,6 +99,7 @@ export function buildStructuredPrompt(
   whiteboardLedger?: WhiteboardActionRecord[],
   userProfile?: { nickname?: string; bio?: string },
   agentResponses?: AgentTurnSummary[],
+  adaptiveContext?: AdaptiveGenerationContext | null,
 ): string {
   // Determine current scene type for action filtering
   const currentScene = storeState.currentSceneId
@@ -124,6 +127,7 @@ Personalize your teaching based on their background when relevant. Address them 
 
   // Build peer context section (what agents already said this round)
   const peerContext = buildPeerContextSection(agentResponses, agentConfig.name);
+  const adaptiveContextSection = formatAdaptiveContextForPrompt(adaptiveContext ?? null);
 
   // Whether spotlight/laser are available (only on slide scenes)
   const hasSlideActions =
@@ -177,7 +181,9 @@ ${agentConfig.persona}
 
 ## Your Classroom Role
 ${roleGuideline}
-${studentProfileSection}${peerContext}${languageConstraint}
+${studentProfileSection}${peerContext}${languageConstraint}${
+    adaptiveContextSection ? `\n${adaptiveContextSection}\n` : ''
+  }
 # Output Format
 You MUST output a JSON array for ALL responses. Each element is an object with a \`type\` field:
 

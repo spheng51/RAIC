@@ -6,6 +6,7 @@
  */
 
 import type { UIMessage } from 'ai';
+import type { AdaptiveGenerationContext } from '@/lib/types/classroom-intelligence';
 
 // Session Types
 export type SessionType = 'qa' | 'discussion' | 'lecture';
@@ -275,6 +276,8 @@ export interface StatelessChatRequest {
     nickname?: string;
     bio?: string;
   };
+  /** Internal-only adaptive context injected by the server for repeated-session teachers */
+  adaptiveContext?: AdaptiveGenerationContext | null;
   /** OpenAI-compatible API credentials */
   apiKey: string;
   baseUrl?: string;

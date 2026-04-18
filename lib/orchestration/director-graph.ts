@@ -26,6 +26,7 @@ import { AISdkLangGraphAdapter } from './ai-sdk-adapter';
 import type { StatelessEvent } from '@/lib/types/chat';
 import type { StatelessChatRequest } from '@/lib/types/chat';
 import type { ThinkingConfig } from '@/lib/types/provider';
+import type { AdaptiveGenerationContext } from '@/lib/types/classroom-intelligence';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import {
@@ -57,6 +58,7 @@ const OrchestratorState = Annotation.Root({
   discussionContext: Annotation<{ topic: string; prompt?: string } | null>,
   triggerAgentId: Annotation<string | null>,
   userProfile: Annotation<{ nickname?: string; bio?: string } | null>,
+  adaptiveContext: Annotation<AdaptiveGenerationContext | null>,
   /** Request-scoped agent configs for generated agents (not in the default registry) */
   agentConfigOverrides: Annotation<Record<string, AgentConfig>>,
 
@@ -288,6 +290,7 @@ async function runAgentGeneration(
     state.whiteboardLedger,
     state.userProfile || undefined,
     state.agentResponses,
+    state.adaptiveContext,
   );
   const openaiMessages = convertMessagesToOpenAI(state.messages, agentId);
   const adapter = new AISdkLangGraphAdapter(state.languageModel, state.thinkingConfig ?? undefined);
@@ -538,6 +541,7 @@ export function buildInitialState(
     discussionContext,
     triggerAgentId: request.config.triggerAgentId || null,
     userProfile: request.userProfile || null,
+    adaptiveContext: request.adaptiveContext ?? null,
     agentConfigOverrides,
     currentAgentId: null,
     turnCount,

@@ -5,6 +5,7 @@ const requireClassroomAccessMock = vi.fn();
 const resolveModelMock = vi.fn();
 const toGovernedProviderApiErrorResponseMock = vi.fn();
 const statelessGenerateMock = vi.fn();
+const buildAdaptiveRuntimeContextMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -16,6 +17,10 @@ vi.mock('@/lib/server/resolve-model', () => ({
 
 vi.mock('@/lib/server/ai-governance', () => ({
   toGovernedProviderApiErrorResponse: toGovernedProviderApiErrorResponseMock,
+}));
+
+vi.mock('@/lib/server/classroom-intelligence', () => ({
+  buildAdaptiveRuntimeContext: buildAdaptiveRuntimeContextMock,
 }));
 
 vi.mock('@/lib/orchestration/stateless-generate', () => ({
@@ -38,7 +43,9 @@ describe('POST /api/chat', () => {
     resolveModelMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
     statelessGenerateMock.mockReset();
+    buildAdaptiveRuntimeContextMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
+    buildAdaptiveRuntimeContextMock.mockResolvedValue(null);
   });
 
   it('rejects classroom chat requests that do not have classroom access', async () => {
@@ -184,5 +191,123 @@ describe('POST /api/chat', () => {
       organizationId: 'org-1',
       userId: 'teacher-1',
     });
+  });
+
+  it('injects adaptive runtime context only for teacher web sessions', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'teacher-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'teacher' },
+      },
+      source: 'web',
+    });
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'resolved-key',
+    });
+    buildAdaptiveRuntimeContextMock.mockResolvedValue({
+      requirementFingerprint: 'class-1',
+      priorSessions: 1,
+      lastCompletedSceneTitle: 'Force vectors in orbit',
+      masteryHints: ['transfer windows'],
+      revisitIntent: 'remediate',
+      pacingPreference: 'remediate',
+      reflectionSummary: 'Spend more time on transfer windows before moving on.',
+      confidenceScore: 2,
+    });
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'room-1' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(buildAdaptiveRuntimeContextMock).toHaveBeenCalledWith({
+      classroomId: 'room-1',
+      userId: 'teacher-1',
+    });
+    expect(statelessGenerateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adaptiveContext: expect.objectContaining({
+          lastCompletedSceneTitle: 'Force vectors in orbit',
+          revisitIntent: 'remediate',
+        }),
+      }),
+      expect.any(AbortSignal),
+      expect.anything(),
+      { enabled: false },
+    );
+  });
+
+  it('keeps classroom-cookie flows on the current non-adaptive path', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'student-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'student' },
+      },
+      source: 'classroom',
+    });
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'resolved-key',
+    });
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'room-1' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
   });
 });

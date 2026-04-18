@@ -21,6 +21,7 @@ import type { ThinkingConfig } from '@/lib/types/provider';
 import { apiErrorWithRequestSession, withRequestWebSession } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
+import { buildAdaptiveRuntimeContext } from '@/lib/server/classroom-intelligence';
 import { resolveModel } from '@/lib/server/resolve-model';
 const log = createLogger('Chat API');
 
@@ -114,6 +115,18 @@ export async function POST(req: NextRequest) {
       return apiErrorWithRequestSession(req, 'MISSING_API_KEY', 401, 'API Key is required');
     }
 
+    let adaptiveContext = null;
+    if (access.source === 'web' && access.auth.session.role === 'teacher') {
+      try {
+        adaptiveContext = await buildAdaptiveRuntimeContext({
+          classroomId,
+          userId: access.auth.user.id,
+        });
+      } catch (error) {
+        log.warn(`Adaptive runtime context unavailable for classroom ${classroomId}:`, error);
+      }
+    }
+
     log.info('Processing request');
     log.info(
       `Agents: ${body.config.agentIds.join(', ')}, Messages: ${body.messages.length}, Turn: ${body.directorState?.turnCount ?? 0}`,
@@ -156,6 +169,7 @@ export async function POST(req: NextRequest) {
           {
             ...body,
             apiKey: resolvedApiKey,
+            adaptiveContext,
           },
           signal,
           languageModel,
