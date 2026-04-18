@@ -190,6 +190,35 @@ export function isLocalOnlyProvider(providerId?: string | null): boolean {
   return providerId === 'lmstudio' || providerId === 'ollama';
 }
 
+export function normalizeBuiltInOpenAICompatibleBaseUrl(
+  providerId?: string | null,
+  baseUrl?: string | null,
+): string {
+  const trimmed = baseUrl?.trim() ?? '';
+  if (!trimmed || !isLocalOnlyProvider(providerId)) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+
+    if (!normalizedPath || normalizedPath === '/') {
+      parsed.pathname = '/v1';
+      return parsed.toString().replace(/\/$/, '');
+    }
+
+    if (normalizedPath === '/v1') {
+      parsed.pathname = '/v1';
+      return parsed.toString().replace(/\/$/, '');
+    }
+
+    return trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 export function hasHostedLocalProviderTopologyMismatch(params: {
   providerId?: string | null;
   originHostname?: string | null;

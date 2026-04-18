@@ -131,6 +131,15 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
       if (key === 'settings.browserLocalLmstudioCorsHint') {
         return `LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with ${vars?.command ?? 'command'}.`;
       }
+      if (key === 'settings.activeModel') {
+        return 'Active Model';
+      }
+      if (key === 'settings.activeModelDescription') {
+        return 'Select which model OpenRAIC should use for this provider.';
+      }
+      if (key === 'settings.requestUrl') {
+        return 'Request URL';
+      }
       if (key === 'settings.noModelsAvailable') {
         return 'No models available for testing';
       }
@@ -149,6 +158,7 @@ const mockSettingsState = {
   aiPolicy: { allowPersonalCustomBaseUrls: true },
   providerId: 'lmstudio',
   modelId: 'qwen/qwen3.5-35b-a3b',
+  setModel: vi.fn(),
 };
 
 vi.mock('@/lib/store/settings', () => ({
@@ -267,6 +277,9 @@ describe('ProviderConfigPanel', () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSettingsState.providerId = 'lmstudio';
+    mockSettingsState.modelId = 'qwen/qwen3.5-35b-a3b';
+    mockSettingsState.setModel.mockReset();
   });
 
   afterEach(async () => {
@@ -418,5 +431,57 @@ describe('ProviderConfigPanel', () => {
     expect(mounted.container.textContent).toContain(
       'LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with lms server start --cors.',
     );
+  });
+
+  it('normalizes bare LM Studio base URLs to /v1 on blur and in the request preview', async () => {
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'open-raic.com',
+      baseUrl: 'http://127.0.0.1:1234',
+    });
+
+    expect(mounted.container.textContent).toContain(
+      'Request URL: http://127.0.0.1:1234/v1/chat/completions',
+    );
+
+    const input = mounted.container.querySelector(
+      '[data-testid="provider-base-url-lmstudio"]',
+    ) as HTMLInputElement | null;
+
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input?.focus();
+      input?.blur();
+    });
+
+    expect(mounted.onConfigChange).toHaveBeenLastCalledWith(
+      '',
+      'http://127.0.0.1:1234/v1',
+      false,
+      'server',
+    );
+  });
+
+  it('lets the provider panel switch the active model for LM Studio', async () => {
+    mockSettingsState.providerId = 'openai';
+    mockSettingsState.modelId = 'gpt-4o';
+
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'open-raic.com',
+    });
+
+    const activateButton = mounted.container.querySelector(
+      '[data-testid="activate-model-lmstudio-qwen/qwen3.5-35b-a3b"]',
+    ) as HTMLButtonElement | null;
+
+    expect(activateButton).not.toBeNull();
+
+    await act(async () => {
+      activateButton?.click();
+    });
+
+    expect(mockSettingsState.setModel).toHaveBeenCalledWith('lmstudio', 'qwen/qwen3.5-35b-a3b');
   });
 });

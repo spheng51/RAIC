@@ -7,6 +7,7 @@ import {
   isLocalOrPrivateBaseUrl,
   isLocalOrPrivateHostname,
   isLoopbackHostname,
+  normalizeBuiltInOpenAICompatibleBaseUrl,
 } from '@/lib/utils/url';
 
 describe('url topology helpers', () => {
@@ -50,6 +51,27 @@ describe('url topology helpers', () => {
     expect(getBrowserLocalTargetAddressSpace('http://192.168.1.25:8080')).toBe('local');
     expect(getBrowserLocalTargetAddressSpace('http://printer.local')).toBe('local');
     expect(getBrowserLocalTargetAddressSpace('https://api.example.com/v1')).toBeNull();
+  });
+
+  it('normalizes bare LM Studio and Ollama root base URLs to /v1', () => {
+    expect(normalizeBuiltInOpenAICompatibleBaseUrl('lmstudio', 'http://127.0.0.1:1234')).toBe(
+      'http://127.0.0.1:1234/v1',
+    );
+    expect(normalizeBuiltInOpenAICompatibleBaseUrl('ollama', 'http://localhost:11434')).toBe(
+      'http://localhost:11434/v1',
+    );
+  });
+
+  it('preserves explicit OpenAI-compatible local paths when normalizing built-in local providers', () => {
+    expect(normalizeBuiltInOpenAICompatibleBaseUrl('lmstudio', 'http://127.0.0.1:1234/v1')).toBe(
+      'http://127.0.0.1:1234/v1',
+    );
+    expect(
+      normalizeBuiltInOpenAICompatibleBaseUrl('lmstudio', 'http://127.0.0.1:1234/custom'),
+    ).toBe('http://127.0.0.1:1234/custom');
+    expect(normalizeBuiltInOpenAICompatibleBaseUrl('openai', 'https://api.example.com')).toBe(
+      'https://api.example.com',
+    );
   });
 
   it('distinguishes hosted origins from local origins', () => {

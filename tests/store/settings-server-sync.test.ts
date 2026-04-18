@@ -551,6 +551,33 @@ describe('fetchServerProviders — provider availability sync', () => {
     expect(store.getState().modelId).toBe('local-model');
   });
 
+  it('auto-selects the first LM Studio model when no active model exists yet', async () => {
+    const store = await getStore();
+    store.setState({
+      providerId: 'openai',
+      modelId: '',
+    });
+
+    store.getState().setProviderConfig('lmstudio', {
+      models: [{ id: 'local-model', name: 'Local Model' }],
+    });
+
+    expect(store.getState().providerId).toBe('lmstudio');
+    expect(store.getState().modelId).toBe('local-model');
+  });
+
+  it('does not replace an existing active model when adding the first LM Studio model', async () => {
+    const store = await getStore();
+    store.getState().setModel('openai', 'gpt-4o');
+
+    store.getState().setProviderConfig('lmstudio', {
+      models: [{ id: 'local-model', name: 'Local Model' }],
+    });
+
+    expect(store.getState().providerId).toBe('openai');
+    expect(store.getState().modelId).toBe('gpt-4o');
+  });
+
   it('preserves a local browser-local LM Studio transport mode through server sync', async () => {
     const store = await getStore();
     store.getState().setProviderConfig('lmstudio', {

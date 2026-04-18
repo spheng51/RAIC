@@ -45,6 +45,14 @@ describe('locale resource parity', () => {
         settings.browserLocalLmstudioCorsHint,
         `${locale.code} missing settings.browserLocalLmstudioCorsHint`,
       ).toBeTruthy();
+      expect(
+        settings.activeModelDescription,
+        `${locale.code} missing settings.activeModelDescription`,
+      ).toBeTruthy();
+      expect(
+        settings.modelsManagementDescription,
+        `${locale.code} missing settings.modelsManagementDescription`,
+      ).toBeTruthy();
     }
   });
 });

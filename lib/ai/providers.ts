@@ -35,6 +35,7 @@ import type {
   ThinkingConfig,
 } from '@/lib/types/provider';
 import { createLogger } from '@/lib/logger';
+import { normalizeBuiltInOpenAICompatibleBaseUrl } from '@/lib/utils/url';
 // NOTE: Do NOT import thinking-context.ts here — it uses node:async_hooks
 // which is server-only, and this file is also used on the client via
 // settings.ts. The thinking context is read from globalThis instead
@@ -1184,7 +1185,10 @@ export function getModel(config: ModelConfig): ModelWithInfo {
   // Resolve base URL: explicit > provider default > SDK default
   const effectiveBaseUrl = normalizeMiniMaxAnthropicBaseUrl(
     config.providerId,
-    config.baseUrl || provider?.defaultBaseUrl || undefined,
+    normalizeBuiltInOpenAICompatibleBaseUrl(
+      config.providerId,
+      config.baseUrl || provider?.defaultBaseUrl || undefined,
+    ) || undefined,
   );
   const normalizedModelId = normalizeProviderModelId(config.providerId, config.modelId);
 

@@ -75,6 +75,22 @@ describe('browser-local openai transport helpers', () => {
     ).rejects.toThrow('could not reach local Ollama');
   });
 
+  it('normalizes bare LM Studio root URLs before browser-local verification', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await verifyBrowserLocalOpenAIModel({
+      providerId: 'lmstudio',
+      providerName: 'LM Studio',
+      modelId: 'qwen/test',
+      baseUrl: 'http://127.0.0.1:1234',
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:1234/v1/chat/completions');
+  });
+
   it('uses loopback targetAddressSpace for localhost endpoints', async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -150,6 +166,39 @@ describe('browser-local openai transport helpers', () => {
 
     expect(result.hadContent).toBe(true);
     expect(chunks.join('')).toBe('Hello world');
+  });
+
+  it('normalizes bare Ollama root URLs before browser-local streaming', async () => {
+    const fetchMock = vi.fn(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\ndata: [DONE]\n\n'),
+          );
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamBrowserLocalOpenAIChat({
+      providerId: 'ollama',
+      providerName: 'Ollama',
+      modelId: 'llama3.1',
+      baseUrl: 'http://localhost:11434',
+      messages: [{ role: 'user', content: 'Say hello' }],
+      onTextDelta() {},
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://localhost:11434/v1/chat/completions');
   });
 
   it('uses loopback targetAddressSpace for browser-local streaming to localhost', async () => {

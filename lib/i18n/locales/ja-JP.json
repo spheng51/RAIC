@@ -523,7 +523,7 @@
     "deleteModel": "削除",
     "cancelEdit": "キャンセル",
     "saveModel": "保存",
-    "modelsManagementDescription": "このプロバイダーのモデルを管理します。使用するモデルの選択は「一般」から行ってください。",
+    "modelsManagementDescription": "このプロバイダーのモデルをここで管理します。OpenRAIC で使用するモデルは、上の「使用中のモデル」から選択してください。",
     "howToUse": "使い方",
     "step1ConfigureProvider": "「モデルプロバイダー」でプロバイダーを選択または追加し、接続設定（APIキー、ベースURLなど）を設定します",
     "step2SelectModel": "下の「使用中のモデル」で使用するモデルを選択します",

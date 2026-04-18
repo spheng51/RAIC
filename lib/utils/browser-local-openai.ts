@@ -1,5 +1,8 @@
 import type { ProviderId } from '@/lib/ai/providers';
-import { getBrowserLocalTargetAddressSpace } from '@/lib/utils/url';
+import {
+  getBrowserLocalTargetAddressSpace,
+  normalizeBuiltInOpenAICompatibleBaseUrl,
+} from '@/lib/utils/url';
 
 export interface BrowserLocalOpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -28,13 +31,14 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function getChatCompletionsUrl(baseUrl: string): string {
+function getChatCompletionsUrl(providerId: ProviderId, baseUrl: string): string {
   const normalized = baseUrl.trim();
   if (!normalized) {
     throw new Error('A valid Base URL is required.');
   }
 
-  const url = new URL(normalized.endsWith('/') ? normalized : `${normalized}/`);
+  const resolvedBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(providerId, normalized);
+  const url = new URL(resolvedBaseUrl.endsWith('/') ? resolvedBaseUrl : `${resolvedBaseUrl}/`);
   return new URL('chat/completions', url).toString();
 }
 
@@ -225,13 +229,17 @@ export function getBrowserLocalFetchFailureMessage(
 export async function verifyBrowserLocalOpenAIModel(
   params: BrowserLocalOpenAIParams,
 ): Promise<void> {
-  const chatUrl = getChatCompletionsUrl(trimTrailingSlash(params.baseUrl));
+  const resolvedBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(
+    params.providerId,
+    trimTrailingSlash(params.baseUrl),
+  );
+  const chatUrl = getChatCompletionsUrl(params.providerId, resolvedBaseUrl);
   let response: Response;
 
   try {
     response = await fetch(
       chatUrl,
-      createBrowserLocalFetchInit(params.baseUrl, {
+      createBrowserLocalFetchInit(resolvedBaseUrl, {
         method: 'POST',
         headers: createBrowserLocalHeaders(params.apiKey),
         body: JSON.stringify({
@@ -252,7 +260,7 @@ export async function verifyBrowserLocalOpenAIModel(
     throw new Error(
       getBrowserLocalFetchFailureMessage(params.providerName, {
         permissionState: await getLocalNetworkAccessPermissionState(),
-        targetAddressSpace: getBrowserLocalTargetAddressSpace(params.baseUrl),
+        targetAddressSpace: getBrowserLocalTargetAddressSpace(resolvedBaseUrl),
       }),
     );
   }
@@ -300,13 +308,17 @@ function extractStreamDelta(payload: unknown): string {
 export async function streamBrowserLocalOpenAIChat(
   params: BrowserLocalStreamParams,
 ): Promise<{ hadContent: boolean }> {
-  const chatUrl = getChatCompletionsUrl(trimTrailingSlash(params.baseUrl));
+  const resolvedBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(
+    params.providerId,
+    trimTrailingSlash(params.baseUrl),
+  );
+  const chatUrl = getChatCompletionsUrl(params.providerId, resolvedBaseUrl);
   let response: Response;
 
   try {
     response = await fetch(
       chatUrl,
-      createBrowserLocalFetchInit(params.baseUrl, {
+      createBrowserLocalFetchInit(resolvedBaseUrl, {
         method: 'POST',
         headers: createBrowserLocalHeaders(params.apiKey),
         body: JSON.stringify({
@@ -326,7 +338,7 @@ export async function streamBrowserLocalOpenAIChat(
     throw new Error(
       getBrowserLocalFetchFailureMessage(params.providerName, {
         permissionState: await getLocalNetworkAccessPermissionState(),
-        targetAddressSpace: getBrowserLocalTargetAddressSpace(params.baseUrl),
+        targetAddressSpace: getBrowserLocalTargetAddressSpace(resolvedBaseUrl),
       }),
     );
   }

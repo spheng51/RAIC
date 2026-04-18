@@ -20,6 +20,7 @@ import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
 import { validateProvider, validateModel } from '@/lib/store/settings-validation';
+import { isLocalOnlyProvider } from '@/lib/utils/url';
 import type {
   AIPolicySettings,
   AIProviderSource,
@@ -691,15 +692,34 @@ export const useSettingsStore = create<SettingsState>()(
         setModel: (providerId, modelId) => set({ providerId, modelId }),
 
         setProviderConfig: (providerId, config) =>
-          set((state) => ({
-            providersConfig: {
-              ...state.providersConfig,
-              [providerId]: {
-                ...state.providersConfig[providerId],
-                ...config,
+          set((state) => {
+            const existingConfig = state.providersConfig[providerId];
+            const nextConfig = {
+              ...existingConfig,
+              ...config,
+            };
+            const nextModels = config.models;
+            const shouldAutoSelectFirstLocalModel =
+              isLocalOnlyProvider(providerId) &&
+              !state.modelId &&
+              Array.isArray(nextModels) &&
+              existingConfig?.models.length === 0 &&
+              nextModels.length > 0 &&
+              !!nextModels[0]?.id;
+
+            return {
+              providersConfig: {
+                ...state.providersConfig,
+                [providerId]: nextConfig,
               },
-            },
-          })),
+              ...(shouldAutoSelectFirstLocalModel
+                ? {
+                    providerId,
+                    modelId: nextModels[0].id,
+                  }
+                : {}),
+            };
+          }),
 
         setProvidersConfig: (config) => set({ providersConfig: config }),
 

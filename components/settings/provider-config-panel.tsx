@@ -39,7 +39,11 @@ import type { ProvidersConfig } from '@/lib/types/settings';
 import type { ProviderTransportMode } from '@/lib/types/provider';
 import { formatContextWindow } from './utils';
 import { cn } from '@/lib/utils';
-import { hasHostedLocalProviderTopologyMismatch, isHostedOrigin } from '@/lib/utils/url';
+import {
+  hasHostedLocalProviderTopologyMismatch,
+  isHostedOrigin,
+  normalizeBuiltInOpenAICompatibleBaseUrl,
+} from '@/lib/utils/url';
 import { verifyBrowserLocalOpenAIModel } from '@/lib/utils/browser-local-openai';
 import {
   isBrowserLocalTransport,
@@ -88,6 +92,7 @@ export function ProviderConfigPanel({
   const aiPolicy = useSettingsStore((state) => state.aiPolicy);
   const currentProviderId = useSettingsStore((state) => state.providerId);
   const currentModelId = useSettingsStore((state) => state.modelId);
+  const setModel = useSettingsStore((state) => state.setModel);
 
   // Local state for this provider
   const [apiKey, setApiKey] = useState(initialApiKey);
@@ -126,6 +131,15 @@ export function ProviderConfigPanel({
     onConfigChange(apiKey, url, requiresApiKey, transportMode);
   };
 
+  const handleBaseUrlBlur = () => {
+    const normalizedBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(provider.id, baseUrl);
+    if (normalizedBaseUrl !== baseUrl) {
+      setBaseUrl(normalizedBaseUrl);
+      onConfigChange(apiKey, normalizedBaseUrl, requiresApiKey, transportMode);
+    }
+    onSave();
+  };
+
   const handleRequiresApiKeyChange = (requires: boolean) => {
     setRequiresApiKey(requires);
     onConfigChange(apiKey, baseUrl, requires, transportMode);
@@ -148,8 +162,11 @@ export function ProviderConfigPanel({
   const canUseOptionalApiKey = provider.supportsOptionalApiKey === true;
   const canEditApiKey = requiresApiKey || isServerConfigured || canUseOptionalApiKey;
   const supportsBrowserLocalMode = supportsBrowserLocalTransport(provider.id);
-  const effectiveBaseUrl =
-    baseUrl || governedConfig?.serverBaseUrl || provider.defaultBaseUrl || '';
+  const normalizedInputBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(provider.id, baseUrl);
+  const effectiveBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(
+    provider.id,
+    normalizedInputBaseUrl || governedConfig?.serverBaseUrl || provider.defaultBaseUrl || '',
+  );
   const serverTopologyMismatch = hasHostedLocalProviderTopologyMismatch({
     providerId: provider.id,
     originHostname,
@@ -172,6 +189,7 @@ export function ProviderConfigPanel({
           command: 'lms server start --cors',
         })
       : '';
+  const activeModelId = provider.id === currentProviderId ? currentModelId : '';
 
   const handleTestApi = useCallback(async () => {
     if (hostedLocalProviderWarning) {
@@ -215,7 +233,7 @@ export function ProviderConfigPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          baseUrl,
+          baseUrl: normalizedInputBaseUrl,
           model: `${provider.id}:${testModelId}`,
           providerType: provider.type,
           requiresApiKey: requiresApiKey,
@@ -247,6 +265,7 @@ export function ProviderConfigPanel({
     provider.type,
     requiresApiKey,
     providersConfig,
+    normalizedInputBaseUrl,
     t,
     hostedLocalProviderWarning,
   ]);
@@ -404,7 +423,7 @@ export function ProviderConfigPanel({
           placeholder={provider.defaultBaseUrl || 'https://api.example.com/v1'}
           value={baseUrl}
           onChange={(e) => handleBaseUrlChange(e.target.value)}
-          onBlur={onSave}
+          onBlur={handleBaseUrlBlur}
           className="h-8"
           disabled={!canOverrideBaseUrl}
         />
@@ -442,7 +461,39 @@ export function ProviderConfigPanel({
         )}
       </div>
 
-      {/* Models - No selection state, just list for management */}
+      {/* Active model selection */}
+      <div className="space-y-3">
+        <Label className="text-base">{t('settings.activeModel')}</Label>
+        <p className="text-xs text-muted-foreground">{t('settings.activeModelDescription')}</p>
+        {models.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/70 p-3 text-sm text-muted-foreground">
+            {t('settings.noModelsAvailable')}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {models.map((model) => {
+              const isActiveModel = activeModelId === model.id;
+
+              return (
+                <Button
+                  key={model.id}
+                  type="button"
+                  size="sm"
+                  variant={isActiveModel ? 'default' : 'outline'}
+                  className="max-w-full"
+                  data-testid={`activate-model-${provider.id}-${model.id}`}
+                  onClick={() => setModel(provider.id, model.id)}
+                >
+                  {isActiveModel && <CheckCircle2 className="mr-1 h-3.5 w-3.5 shrink-0" />}
+                  <span className="truncate font-mono text-xs">{model.name}</span>
+                </Button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Models management list */}
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
