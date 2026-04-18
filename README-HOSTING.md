@@ -1,6 +1,15 @@
-# OpenMAIC Running & Hosting Guide
+# Open-RAIC Running & Hosting Guide
 
 This guide is a quick, practical README focused on **running locally** and **hosting in production**.
+
+## Hard Cutover
+
+The legacy pre-cutover deployment path is retired. Production and staging deployment docs should now target the `spheng51/RAIC` repository and `open-raic.com` hostnames only.
+
+- Old cookies are invalid after the cutover. Users must sign in again.
+- Old browser state is ignored on RAIC hosts. Do not rely on carried-over local storage, cached settings, or pre-cutover tabs.
+- Docker users must recreate the old volume or migrate it manually before bringing up the renamed stack. No automatic volume rename or import is provided.
+- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Legacy pre-cutover skill installs are not treated as compatible.
 
 ## 1) Run Locally
 
@@ -99,6 +108,8 @@ cp .env.example .env.local
 docker compose up --build
 ```
 
+Hard-cutover note: if you previously ran the legacy stack, recreate the old Docker volume or migrate its data manually before starting RAIC. The renamed deployment does not adopt legacy volumes automatically.
+
 Recommended for self-hosting on a VPS or internal server.
 
 ## Option C: Traditional VM / Bare Metal
@@ -144,12 +155,15 @@ Optional production features:
 ## 5) Basic Ops Checklist
 
 - Run behind HTTPS.
+- Use RAIC hostnames only in OAuth config, smoke tests, and support runbooks. Do not keep any legacy pre-cutover domains live during the hard cutover.
+- Expect fresh browser sessions after the cutover. Old cookies are invalid and old browser state is intentionally ignored.
 - Keep generic Vercel preview URLs out of teacher/admin auth sign-off unless you add a fixed staging domain.
 - Restrict who can access admin surfaces.
 - Rotate API keys regularly.
 - Monitor logs and restart policy.
 - Keep dependencies updated (`pnpm up` on a regular schedule).
 - Keep secrets only in Vercel environment variables, not in repo files or `NEXT_PUBLIC_*`.
+- Reinstall or reconfigure the renamed `openraic` OpenClaw skill anywhere classroom launches depend on chat-side automation.
 
 ---
 

@@ -453,9 +453,9 @@
     "browserLocalModeLabel": "浏览器本地模式",
     "browserLocalModeDescription": "直接从当前浏览器向本机上的本地或私有网络 LM Studio/Ollama 端点发送请求。",
     "browserLocalModeNotice": "{{provider}} 的浏览器本地模式仅在当前设备上生效，且目前只支持问答和讨论。课堂生成、场景生成/重生成、PBL、工具调用及其他依赖服务端编排的工作流，仍需使用具备可访问网络地址的 server 模式。",
-    "browserLocalPermissionHint": "在这种模式下，Hosted OpenRAIC 会直接使用你的浏览器发起请求，因此浏览器在访问当前设备前可能会提示授予本地网络访问权限。",
+    "browserLocalPermissionHint": "在这种模式下，Hosted Open-RAIC 会直接使用你的浏览器发起请求，因此浏览器在访问当前设备前可能会提示授予本地网络访问权限。",
     "browserLocalLmstudioCorsHint": "LM Studio 在浏览器本地模式下必须允许浏览器 CORS。如有需要，可使用 {{command}} 启动本地服务。",
-    "hostedLocalProviderWarning": "公共/托管版 OpenRAIC 无法通过 server 模式访问你本机的 {{provider}} 端点。模型请求是从 OpenRAIC 服务器发出，而不是从你的浏览器发出。请改用浏览器本地模式、在本机/私有网络中部署 OpenRAIC，或改用服务端可访问的网络地址。",
+    "hostedLocalProviderWarning": "公共/托管版 Open-RAIC 无法通过 server 模式访问你本机的 {{provider}} 端点。模型请求是从 Open-RAIC 服务器发出，而不是从你的浏览器发出。请改用浏览器本地模式、在本机/私有网络中部署 Open-RAIC，或改用服务端可访问的网络地址。",
     "browserLocalUnsupportedWorkflow": "浏览器本地模式目前只支持问答和讨论。",
     "browserLocalUnsupportedWorkflowDetail": "生成、重生成、课堂/PBL 工作流、工具调用以及其他依赖服务端编排的流程，仍然需要使用具备可访问网络地址的 server 模式。",
     "capabilities": {
@@ -523,7 +523,7 @@
     "deleteModel": "删除",
     "cancelEdit": "取消",
     "saveModel": "保存",
-    "modelsManagementDescription": "在此管理该提供方的模型列表。OpenRAIC 实际使用的模型请在上方“使用模型”中选择。",
+    "modelsManagementDescription": "在此管理该提供方的模型列表。Open-RAIC 实际使用的模型请在上方“使用模型”中选择。",
     "howToUse": "使用说明",
     "step1ConfigureProvider": "前往\"模型提供方\"页面，选择或添加一个提供方，配置连接信息（API 密钥、Base URL 等）",
     "step2SelectModel": "在下方\"使用模型\"中选择要使用的模型",
@@ -888,7 +888,7 @@
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "服务端已配置 Tavily API Key",
     "optional": "可选",
-    "hostedLocalProviderWarning": "托管版 OpenRAIC 无法访问位于 localhost 或私有地址上的本地 {{provider}} 服务。这个应用是由服务器而不是浏览器发起 provider 请求。请改用本地 OpenRAIC、同机/同网段的私有 self-host 部署，或使用服务端可访问的网络地址。"
+    "hostedLocalProviderWarning": "托管版 Open-RAIC 无法访问位于 localhost 或私有地址上的本地 {{provider}} 服务。这个应用是由服务器而不是浏览器发起 provider 请求。请改用本地 Open-RAIC、同机/同网段的私有 self-host 部署，或使用服务端可访问的网络地址。"
   },
   "profile": {
     "title": "个人资料",

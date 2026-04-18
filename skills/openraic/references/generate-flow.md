@@ -2,15 +2,14 @@
 
 ## Preconditions
 
-- Repo path is confirmed
-- Startup mode has been chosen
-- OpenMAIC is healthy at the selected `url`
-- Provider keys are configured
-- For self-hosted deployments, set `APP_BASE_URL` so OpenMAIC returns trusted absolute `url` / `pollUrl` links
+- Repo path is confirmed.
+- Startup mode has been chosen.
+- Open-RAIC is healthy at the selected `url`.
+- Provider keys are configured.
+- For self-hosted deployments, set `APP_BASE_URL` so Open-RAIC returns trusted absolute `url` / `pollUrl` links.
 
-> **Hosted mode**: If using hosted OpenMAIC (open.maic.chat), all
-> preconditions (repo, startup, provider keys) are already satisfied.
-> Include `Authorization: Bearer <access-code>` header on all requests below.
+> **Hosted mode**: If using hosted Open-RAIC (`https://open-raic.com`), all preconditions (repo, startup, provider keys) are already satisfied.
+> Include `Authorization: Bearer <access-code>` on all requests below.
 > See [hosted-mode.md](hosted-mode.md) for details.
 
 ## Requirement-Only Generation
@@ -35,14 +34,12 @@ Only send supported content fields:
 
 - `requirement` (required)
 - optional `pdfContent`
-- optional `language` (`"zh-CN"` | `"en-US"`, defaults to `"zh-CN"`) — any other value silently falls back to `"zh-CN"`
-- optional `enableWebSearch` (boolean) — include web search context in outline generation
-- optional `enableImageGeneration` (boolean) — allow image generation metadata in outlines
-- optional `enableVideoGeneration` (boolean) — allow video generation metadata in outlines
-- optional `enableTTS` (boolean) — enable server-side TTS audio generation for speech actions
-- optional `agentMode` (`"default"` | `"generate"`) — controls agent profile strategy:
-  - `"default"` (or omitted): uses built-in default agents
-  - `"generate"`: uses LLM to generate custom agent profiles tailored to the course content
+- optional `language` (`"zh-CN"` | `"en-US"`, defaults to `"zh-CN"`)
+- optional `enableWebSearch` (boolean)
+- optional `enableImageGeneration` (boolean)
+- optional `enableVideoGeneration` (boolean)
+- optional `enableTTS` (boolean)
+- optional `agentMode` (`"default"` | `"generate"`)
 
 All optional boolean fields default to `false` when omitted. Omitting them preserves backward compatibility.
 
@@ -120,7 +117,7 @@ GET {pollUrl}
 - Prefer fewer poll attempts over aggressive polling. Long-running jobs are more likely to survive agent-loop limits if the tool-call cadence stays low.
 - Within a single agent turn, cap active polling to about 10 minutes. If the job is still not finished, tell the user it is still running and include the `jobId` and `pollUrl` so a later turn can continue checking without resubmitting.
 - Report progress to the user only when `status`, `step`, or visible progress meaningfully changes. Do not spam every poll result.
-- Do not try to recover from auth, provider, model, or base URL errors by changing request parameters. Tell the user to fix OpenMAIC server-side config and retry only after they confirm.
+- Do not try to recover from auth, provider, model, or base URL errors by changing request parameters. Tell the user to fix Open-RAIC server-side config and retry only after they confirm.
 - On `failed`, surface the server error and include the `jobId`.
 - On `succeeded`, use `result.classroomId` and `result.url` from the final poll response.
 

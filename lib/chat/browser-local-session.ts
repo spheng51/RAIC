@@ -99,7 +99,7 @@ function buildSystemPrompt({
   }
 
   sections.push(
-    'You are responding in OpenRAIC browser-local mode.',
+    'You are responding in Open-RAIC browser-local mode.',
     'This mode is single-agent, text-only, and limited to QA or discussion chat.',
     'Do not claim to use tools, whiteboards, scene generation, web search, multi-agent coordination, or any server-only workflow.',
     'If the user asks for unsupported work, explain that browser-local mode only supports QA and discussion text chat.',

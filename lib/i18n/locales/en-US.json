@@ -453,9 +453,9 @@
     "browserLocalModeLabel": "Browser-local mode",
     "browserLocalModeDescription": "Send LM Studio/Ollama requests directly from this browser to a local or private endpoint on this device.",
     "browserLocalModeNotice": "{{provider}} browser-local mode is device-only and supports Q&A and Discussion only. Classroom generation, scene generation/regeneration, PBL, tools, and other server-orchestrated workflows still require server mode with a network-reachable endpoint.",
-    "browserLocalPermissionHint": "Hosted OpenRAIC uses your browser directly in this mode, so your browser may prompt for local-network access before it can reach this device.",
+    "browserLocalPermissionHint": "Hosted Open-RAIC uses your browser directly in this mode, so your browser may prompt for local-network access before it can reach this device.",
     "browserLocalLmstudioCorsHint": "LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with {{command}}.",
-    "hostedLocalProviderWarning": "Hosted/public OpenRAIC cannot use server mode to reach your local {{provider}} endpoint. Provider traffic runs from the server, not from your browser. Use Browser-local mode, run OpenRAIC locally/private on the same machine or network, or use a network-reachable endpoint instead.",
+    "hostedLocalProviderWarning": "Hosted/public Open-RAIC cannot use server mode to reach your local {{provider}} endpoint. Provider traffic runs from the server, not from your browser. Use Browser-local mode, run Open-RAIC locally/private on the same machine or network, or use a network-reachable endpoint instead.",
     "browserLocalUnsupportedWorkflow": "Browser-local mode supports Q&A and Discussion only.",
     "browserLocalUnsupportedWorkflowDetail": "Generation, regeneration, classroom/PBL workflows, tools, and other server-orchestrated flows still require server mode with a network-reachable endpoint.",
     "capabilities": {
@@ -523,7 +523,7 @@
     "deleteModel": "Delete",
     "cancelEdit": "Cancel",
     "saveModel": "Save",
-    "modelsManagementDescription": "Manage models for this provider here. Use the Active Model selector above to choose which one OpenRAIC uses.",
+    "modelsManagementDescription": "Manage models for this provider here. Use the Active Model selector above to choose which one Open-RAIC uses.",
     "howToUse": "How to Use",
     "step1ConfigureProvider": "Go to \"Model Providers\", select or add a provider, and configure connection settings (API key, Base URL, etc.)",
     "step2SelectModel": "Select the model you want to use in \"Active Model\" below",
@@ -888,7 +888,7 @@
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "Server-side Tavily API key is configured",
     "optional": "Optional",
-    "hostedLocalProviderWarning": "Hosted OpenRAIC cannot reach your local {{provider}} server at a localhost/private address. This app sends provider traffic from the server, not your browser. Use local OpenRAIC, private self-hosting on the same machine or network, or a network-reachable endpoint instead."
+    "hostedLocalProviderWarning": "Hosted Open-RAIC cannot reach your local {{provider}} server at a localhost/private address. This app sends provider traffic from the server, not your browser. Use local Open-RAIC, private self-hosting on the same machine or network, or a network-reachable endpoint instead."
   },
   "profile": {
     "title": "Profile",

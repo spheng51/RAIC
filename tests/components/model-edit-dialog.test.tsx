@@ -82,7 +82,7 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
         return `LM Studio must allow browser CORS for browser-local mode. If needed, start the local server with ${vars?.command ?? 'command'}.`;
       }
       if (key === 'settings.hostedLocalProviderWarning') {
-        return `Hosted OpenRAIC cannot reach your local ${vars?.provider ?? 'provider'} server at a localhost/private address.`;
+        return `Hosted Open-RAIC cannot reach your local ${vars?.provider ?? 'provider'} server at a localhost/private address.`;
       }
       if (key === 'settings.testConnection') {
         return 'Test Connection';

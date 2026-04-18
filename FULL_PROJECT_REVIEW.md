@@ -1,4 +1,4 @@
-# Full Project Review - OpenMAIC (RAIC)
+# Full Project Review - Open-RAIC (RAIC)
 
 Date: 2026-04-12
 Reviewer: Codex agent

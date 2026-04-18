@@ -15,7 +15,7 @@ function getLocalProviderEnvName(providerId: string): string {
 }
 
 function getHostedLocalProviderMessage(providerName: string): string {
-  return `Hosted OpenRAIC cannot reach your local ${providerName} server at a localhost/private address. This app sends provider traffic from the server, not your browser. Use local OpenRAIC, private self-hosting on the same machine or network, or a network-reachable endpoint instead.`;
+  return `Hosted Open-RAIC cannot reach your local ${providerName} server at a localhost/private address. This app sends provider traffic from the server, not your browser. Use local Open-RAIC, private self-hosting on the same machine or network, or a network-reachable endpoint instead.`;
 }
 
 function getPrivateDeploymentLocalProviderMessage(
@@ -23,7 +23,7 @@ function getPrivateDeploymentLocalProviderMessage(
   providerName: string,
 ): string {
   const envName = getLocalProviderEnvName(providerId);
-  return `OpenRAIC cannot use a browser-supplied localhost/private address for ${providerName} in this deployment. If you are running locally, make sure ${providerName} is running. For private/self-host production, prefer ${envName} or server-providers.yml on the server, and set ALLOW_LOCAL_NETWORKS=true only when browser-supplied local URLs must be allowed.`;
+  return `Open-RAIC cannot use a browser-supplied localhost/private address for ${providerName} in this deployment. If you are running locally, make sure ${providerName} is running. For private/self-host production, prefer ${envName} or server-providers.yml on the server, and set ALLOW_LOCAL_NETWORKS=true only when browser-supplied local URLs must be allowed.`;
 }
 
 export function remapModelVerificationError(params: {

@@ -82,6 +82,17 @@ Run these gates after each slice merge and before pushing `main`:
 - `NEXT_PUBLIC_*` variables must never carry secret material. Keep only non-sensitive runtime configuration in `NEXT_PUBLIC_*`.
 - Treat `server-providers` overrides as internal: use production environment variables (`RAIC_*`, provider keys, etc.) only.
 
+## Hard cutover guardrails
+
+The rename cutover is not a compatibility rollout. Operators should treat it as a clean switch to the `spheng51/RAIC` repo and RAIC deployment targets.
+
+- Use `spheng51/RAIC` in deployment tickets, Vercel project mappings, mirrors, and operator handoff notes. Retire legacy repo names instead of aliasing them in release docs.
+- Use RAIC hostnames only in smoke plans and auth/OAuth examples. Legacy pre-cutover hostnames should not remain in deployment-facing instructions.
+- Old cookies are invalid after cutover. Start smoke tests from a fresh sign-in and treat any pre-cutover session token as unusable.
+- Old browser state is ignored by design. Local storage, cached tabs, and other browser-carried state from before the rename are not supported inputs to post-cutover validation.
+- Docker/self-hosted operators must recreate legacy volumes or migrate the data manually before starting the renamed stack. The release does not rename or import old volumes automatically.
+- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Do not assume the old pre-cutover skill registration or config will be discovered automatically.
+
 ## Drift prevention after each push
 
 - `git status --short --branch`

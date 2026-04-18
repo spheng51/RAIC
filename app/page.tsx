@@ -498,7 +498,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           >
             <motion.img
               src="/openraic-logo.svg"
-              alt="OpenRAIC"
+              alt="Open-RAIC"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.18, duration: 0.45, ease: 'easeOut' }}
@@ -711,7 +711,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
       {/* Footer — flows with content, at the very end */}
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
-        OpenRAIC Open Source Project
+        Open-RAIC Open Source Project
       </div>
     </main>
   );

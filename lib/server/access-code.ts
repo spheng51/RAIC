@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
-export const ACCESS_CODE_COOKIE_NAME = 'openmaic_access';
+export const ACCESS_CODE_COOKIE_NAME = 'openraic_access';
 export const ACCESS_CODE_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ACCESS_CODE_TOKEN_TTL_MS = ACCESS_CODE_TOKEN_TTL_SECONDS * 1000;
 

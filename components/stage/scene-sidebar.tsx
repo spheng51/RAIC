@@ -185,7 +185,7 @@ export function SceneSidebar({
           >
             <img src="/openraic-mark.svg" alt="" className="size-6" />
             <span className="text-sm font-semibold tracking-[0.08em] text-gray-700 dark:text-gray-200">
-              OpenRAIC
+              Open-RAIC
             </span>
           </button>
           <button

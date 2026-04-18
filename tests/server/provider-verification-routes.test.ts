@@ -453,7 +453,7 @@ describe('provider and verification routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toContain('Hosted OpenRAIC cannot reach your local LM Studio server');
+    expect(body.error).toContain('Hosted Open-RAIC cannot reach your local LM Studio server');
     expect(body.error).not.toContain('Local/private network URLs are not allowed');
   });
 
@@ -478,7 +478,7 @@ describe('provider and verification routes', () => {
 
     expect(response.status).toBe(500);
     expect(body.error).toContain(
-      'OpenRAIC cannot use a browser-supplied localhost/private address for Ollama',
+      'Open-RAIC cannot use a browser-supplied localhost/private address for Ollama',
     );
     expect(body.error).toContain('ALLOW_LOCAL_NETWORKS=true');
   });

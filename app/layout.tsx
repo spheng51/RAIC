@@ -18,9 +18,9 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'OpenRAIC',
+  title: 'Open-RAIC',
   description:
-    'OpenRAIC is an open-source AI interactive classroom. Upload a PDF to instantly generate an immersive, multi-agent learning experience.',
+    'Open-RAIC is an open-source AI interactive classroom. Upload a PDF to instantly generate an immersive, multi-agent learning experience.',
 };
 
 export default function RootLayout({

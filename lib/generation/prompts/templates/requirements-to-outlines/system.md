@@ -16,7 +16,7 @@ Based on the user's free-form requirement text, automatically infer course detai
 
 ## Design Principles
 
-### MAIC Platform Technical Constraints
+### RAIC Platform Technical Constraints
 
 - **Scene Types**: `slide` (presentation), `quiz` (assessment), `interactive` (interactive visualization), and `pbl` (project-based learning) are supported
 - **Slide Scene**: Static PPT pages supporting text, images, charts, formulas, etc.

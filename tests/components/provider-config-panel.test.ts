@@ -114,7 +114,7 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
         return 'Test Connection';
       }
       if (key === 'settings.hostedLocalProviderWarning') {
-        return `Hosted OpenRAIC cannot reach your local ${vars?.provider ?? 'provider'} server at a localhost/private address.`;
+        return `Hosted Open-RAIC cannot reach your local ${vars?.provider ?? 'provider'} server at a localhost/private address.`;
       }
       if (key === 'settings.browserLocalModeLabel') {
         return 'Browser-local mode';
@@ -135,7 +135,7 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
         return 'Active Model';
       }
       if (key === 'settings.activeModelDescription') {
-        return 'Select which model OpenRAIC should use for this provider.';
+        return 'Select which model Open-RAIC should use for this provider.';
       }
       if (key === 'settings.requestUrl') {
         return 'Request URL';
@@ -324,7 +324,7 @@ describe('ProviderConfigPanel', () => {
     });
 
     expect(mounted.container.textContent).toContain(
-      'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',
+      'Hosted Open-RAIC cannot reach your local LM Studio server at a localhost/private address.',
     );
     expect(mounted.container.textContent).not.toContain(
       'This device will connect directly to your local LM Studio server.',
@@ -354,7 +354,7 @@ describe('ProviderConfigPanel', () => {
       'browser-local',
     );
     expect(mounted.container.textContent).not.toContain(
-      'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',
+      'Hosted Open-RAIC cannot reach your local LM Studio server at a localhost/private address.',
     );
     expect(mounted.container.textContent).toContain(
       'This device will connect directly to your local LM Studio server.',
@@ -395,14 +395,14 @@ describe('ProviderConfigPanel', () => {
     );
   });
 
-  it('keeps testing enabled for local OpenRAIC origins', async () => {
+  it('keeps testing enabled for local Open-RAIC origins', async () => {
     const mounted = await mountProviderConfigPanel({
       providerId: 'lmstudio',
       originHostname: 'localhost',
     });
 
     expect(mounted.container.textContent).not.toContain(
-      'Hosted OpenRAIC cannot reach your local LM Studio server at a localhost/private address.',
+      'Hosted Open-RAIC cannot reach your local LM Studio server at a localhost/private address.',
     );
 
     const testButton = mounted.container.querySelector(

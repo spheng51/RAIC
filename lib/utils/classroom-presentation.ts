@@ -300,7 +300,7 @@ export function buildMiroFishExportNotice(
   }
 
   lines.push(
-    'Open the classroom in OpenMAIC to access the live lesson, simulation, or report pane.',
+    'Open the classroom in Open-RAIC to access the live lesson, simulation, or report pane.',
   );
 
   return lines.join('\n');
