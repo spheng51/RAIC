@@ -17,7 +17,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
+import { generateVideo, normalizeVideoOptions, VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { getRequestAuth } from '@/lib/auth/current-user';
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
@@ -30,13 +30,69 @@ import {
   resolveGovernedProviderConfig,
   toGovernedProviderApiErrorResponse,
 } from '@/lib/server/ai-governance';
+import {
+  resolveScenarioManagedProviderRoute,
+  type ScenarioProviderCandidateValidationContext,
+} from '@/lib/server/provider-scenario-routing';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('VideoGeneration API');
 
 export const maxDuration = 300;
 
+function createVideoScenarioValidator(options: VideoGenerationOptions) {
+  return async function validateVideoScenarioCandidate({
+    provider,
+    resolved,
+  }: ScenarioProviderCandidateValidationContext): Promise<string | null> {
+    const providerConfig = VIDEO_PROVIDERS[provider.providerId as VideoProviderId];
+    if (!providerConfig) {
+      return `provider "${provider.providerId}" is not registered for video generation`;
+    }
+
+    if (resolved.baseUrl) {
+      const ssrfError = await validateUrlForSSRF(resolved.baseUrl);
+      if (ssrfError) {
+        return `provider "${provider.providerId}" resolved with an unsafe base URL: ${ssrfError}`;
+      }
+    }
+
+    const normalizedOptions = normalizeVideoOptions(
+      provider.providerId as VideoProviderId,
+      options,
+    );
+
+    if (
+      normalizedOptions.duration &&
+      providerConfig.supportedDurations?.length &&
+      !providerConfig.supportedDurations.includes(normalizedOptions.duration)
+    ) {
+      return `duration "${normalizedOptions.duration}" is not supported by provider "${provider.providerId}"`;
+    }
+
+    if (
+      normalizedOptions.aspectRatio &&
+      providerConfig.supportedAspectRatios?.length &&
+      !providerConfig.supportedAspectRatios.includes(normalizedOptions.aspectRatio)
+    ) {
+      return `aspect ratio "${normalizedOptions.aspectRatio}" is not supported by provider "${provider.providerId}"`;
+    }
+
+    if (
+      normalizedOptions.resolution &&
+      providerConfig.supportedResolutions?.length &&
+      !providerConfig.supportedResolutions.includes(normalizedOptions.resolution)
+    ) {
+      return `resolution "${normalizedOptions.resolution}" is not supported by provider "${provider.providerId}"`;
+    }
+
+    return null;
+  };
+}
+
 export async function POST(request: NextRequest) {
+  let resolvedProviderId: string | undefined;
+  let resolvedModelId: string | undefined;
   try {
     const body = (await request.json()) as VideoGenerationOptions;
 
@@ -50,6 +106,8 @@ export async function POST(request: NextRequest) {
     const clientBaseUrl =
       request.headers.get('x-video-base-url') || request.headers.get('x-base-url') || undefined;
     const clientModel = request.headers.get('x-video-model') || undefined;
+    resolvedProviderId = providerId;
+    resolvedModelId = clientModel ?? undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
@@ -59,27 +117,41 @@ export async function POST(request: NextRequest) {
     }
 
     const auth = await getRequestAuth(request);
-    const resolved = await resolveGovernedProviderConfig({
-      auth,
-      family: 'video',
-      providerId,
-      requestedSecret: clientApiKey,
-      requestedBaseUrl: clientBaseUrl,
-      requestedModel: clientModel,
-    });
+    const resolved =
+      (await resolveScenarioManagedProviderRoute({
+        auth,
+        routeId: 'generate-video',
+        taskBucket: 'video',
+        family: 'video',
+        requestedProviderId: providerId,
+        requestedModelId: clientModel,
+        requestedSecret: clientApiKey,
+        requestedBaseUrl: clientBaseUrl,
+        validateResolvedCandidate: createVideoScenarioValidator(body),
+      })) ||
+      (await resolveGovernedProviderConfig({
+        auth,
+        family: 'video',
+        providerId,
+        requestedSecret: clientApiKey,
+        requestedBaseUrl: clientBaseUrl,
+        requestedModel: clientModel,
+      }));
+    resolvedProviderId = resolved.providerId;
+    resolvedModelId = resolved.modelId || clientModel || undefined;
 
     // Normalize options against provider capabilities
-    const options = normalizeVideoOptions(providerId, body);
+    const options = normalizeVideoOptions(resolved.providerId as VideoProviderId, body);
 
     log.info(
-      `Generating video: provider=${providerId}, model=${clientModel || 'default'}, ` +
+      `Generating video: provider=${resolvedProviderId}, model=${resolvedModelId || 'default'}, ` +
         `prompt="${body.prompt.slice(0, 80)}...", duration=${options.duration ?? 'auto'}, ` +
         `aspect=${options.aspectRatio ?? 'auto'}, resolution=${options.resolution ?? 'auto'}`,
     );
 
     const result = await generateVideo(
       {
-        providerId,
+        providerId: resolved.providerId as VideoProviderId,
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
         model: resolved.modelId || clientModel,
@@ -104,7 +176,7 @@ export async function POST(request: NextRequest) {
       return apiErrorWithRequestSession(request, 'CONTENT_SENSITIVE', 400, message);
     }
     log.error(
-      `Video generation failed [provider=${request.headers.get('x-video-provider') ?? 'kling'}, model=${request.headers.get('x-video-model') ?? 'default'}]:`,
+      `Video generation failed [provider=${resolvedProviderId ?? 'seedance'}, model=${resolvedModelId ?? 'default'}]:`,
       error,
     );
     return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, message);

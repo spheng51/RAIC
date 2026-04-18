@@ -16,7 +16,11 @@
  */
 
 import { NextRequest } from 'next/server';
-import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
+import {
+  aspectRatioToDimensions,
+  generateImage,
+  IMAGE_PROVIDERS,
+} from '@/lib/media/image-providers';
 import { getRequestAuth } from '@/lib/auth/current-user';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
@@ -29,13 +33,51 @@ import {
   resolveGovernedProviderConfig,
   toGovernedProviderApiErrorResponse,
 } from '@/lib/server/ai-governance';
+import {
+  resolveScenarioManagedProviderRoute,
+  type ScenarioProviderCandidateValidationContext,
+} from '@/lib/server/provider-scenario-routing';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('ImageGeneration API');
 
 export const maxDuration = 60;
 
+function createImageScenarioValidator(options: ImageGenerationOptions) {
+  return async function validateImageScenarioCandidate({
+    provider,
+    resolved,
+  }: ScenarioProviderCandidateValidationContext): Promise<string | null> {
+    const providerConfig = IMAGE_PROVIDERS[provider.providerId as ImageProviderId];
+    if (!providerConfig) {
+      return `provider "${provider.providerId}" is not registered for image generation`;
+    }
+
+    if (resolved.baseUrl) {
+      const ssrfError = await validateUrlForSSRF(resolved.baseUrl);
+      if (ssrfError) {
+        return `provider "${provider.providerId}" resolved with an unsafe base URL: ${ssrfError}`;
+      }
+    }
+
+    if (
+      options.aspectRatio &&
+      !providerConfig.supportedAspectRatios.includes(options.aspectRatio)
+    ) {
+      return `aspect ratio "${options.aspectRatio}" is not supported by provider "${provider.providerId}"`;
+    }
+
+    if (options.style && !providerConfig.supportedStyles?.includes(options.style)) {
+      return `style "${options.style}" is not supported by provider "${provider.providerId}"`;
+    }
+
+    return null;
+  };
+}
+
 export async function POST(request: NextRequest) {
+  let resolvedProviderId: string | undefined;
+  let resolvedModelId: string | undefined;
   try {
     const body = (await request.json()) as ImageGenerationOptions;
 
@@ -49,6 +91,8 @@ export async function POST(request: NextRequest) {
     const clientBaseUrl =
       request.headers.get('x-image-base-url') || request.headers.get('x-base-url') || undefined;
     const clientModel = request.headers.get('x-image-model') || undefined;
+    resolvedProviderId = providerId;
+    resolvedModelId = clientModel ?? undefined;
 
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
@@ -58,14 +102,28 @@ export async function POST(request: NextRequest) {
     }
 
     const auth = await getRequestAuth(request);
-    const resolved = await resolveGovernedProviderConfig({
-      auth,
-      family: 'image',
-      providerId,
-      requestedSecret: clientApiKey,
-      requestedBaseUrl: clientBaseUrl,
-      requestedModel: clientModel,
-    });
+    const resolved =
+      (await resolveScenarioManagedProviderRoute({
+        auth,
+        routeId: 'generate-image',
+        taskBucket: 'image',
+        family: 'image',
+        requestedProviderId: providerId,
+        requestedModelId: clientModel,
+        requestedSecret: clientApiKey,
+        requestedBaseUrl: clientBaseUrl,
+        validateResolvedCandidate: createImageScenarioValidator(body),
+      })) ||
+      (await resolveGovernedProviderConfig({
+        auth,
+        family: 'image',
+        providerId,
+        requestedSecret: clientApiKey,
+        requestedBaseUrl: clientBaseUrl,
+        requestedModel: clientModel,
+      }));
+    resolvedProviderId = resolved.providerId;
+    resolvedModelId = resolved.modelId || clientModel || undefined;
 
     // Resolve dimensions from aspect ratio if not explicitly set
     if (!body.width && !body.height && body.aspectRatio) {
@@ -75,13 +133,13 @@ export async function POST(request: NextRequest) {
     }
 
     log.info(
-      `Generating image: provider=${providerId}, model=${clientModel || 'default'}, ` +
+      `Generating image: provider=${resolvedProviderId}, model=${resolvedModelId || 'default'}, ` +
         `prompt="${body.prompt.slice(0, 80)}...", size=${body.width ?? 'auto'}x${body.height ?? 'auto'}`,
     );
 
     const result = await generateImage(
       {
-        providerId,
+        providerId: resolved.providerId as ImageProviderId,
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
         model: resolved.modelId || clientModel,
@@ -102,7 +160,7 @@ export async function POST(request: NextRequest) {
       return apiErrorWithRequestSession(request, 'CONTENT_SENSITIVE', 400, message);
     }
     log.error(
-      `Image generation failed [provider=${request.headers.get('x-image-provider') ?? 'seedream'}, model=${request.headers.get('x-image-model') ?? 'default'}]:`,
+      `Image generation failed [provider=${resolvedProviderId ?? 'seedream'}, model=${resolvedModelId ?? 'default'}]:`,
       error,
     );
     return apiErrorWithRequestSession(request, 'INTERNAL_ERROR', 500, message);

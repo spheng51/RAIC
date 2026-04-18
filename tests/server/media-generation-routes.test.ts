@@ -53,11 +53,78 @@ vi.mock('@/lib/audio/tts-providers', () => ({
 }));
 
 vi.mock('@/lib/media/image-providers', () => ({
+  IMAGE_PROVIDERS: {
+    seedream: {
+      id: 'seedream',
+      name: 'Seedream',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://ark.cn-beijing.volces.com',
+      models: [
+        { id: 'doubao-seedream-5-0-260128', name: 'Seedream 5.0 Lite' },
+        { id: 'doubao-seedream-4-5-251128', name: 'Seedream 4.5' },
+      ],
+      supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+    },
+    'qwen-image': {
+      id: 'qwen-image',
+      name: 'Qwen Image',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://dashscope.aliyuncs.com',
+      models: [{ id: 'qwen-image-max', name: 'Qwen Image Max' }],
+      supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+    },
+    'nano-banana': {
+      id: 'nano-banana',
+      name: 'Nano Banana',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+      models: [
+        {
+          id: 'gemini-3.1-flash-image-preview',
+          name: 'Gemini 3.1 Flash Image',
+        },
+      ],
+      supportedAspectRatios: ['16:9', '4:3', '1:1'],
+    },
+  },
   aspectRatioToDimensions: aspectRatioToDimensionsMock,
   generateImage: generateImageMock,
 }));
 
 vi.mock('@/lib/media/video-providers', () => ({
+  VIDEO_PROVIDERS: {
+    seedance: {
+      id: 'seedance',
+      name: 'Seedance',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://ark.cn-beijing.volces.com',
+      models: [{ id: 'doubao-seedance-1-5-pro-251215', name: 'Seedance 1.5 Pro' }],
+      supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16', '3:4', '21:9'],
+      supportedDurations: [5, 10],
+      supportedResolutions: ['480p', '720p', '1080p'],
+      maxDuration: 10,
+    },
+    kling: {
+      id: 'kling',
+      name: 'Kling',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://api-beijing.klingai.com',
+      models: [{ id: 'kling-v2-6', name: 'Kling V2.6' }],
+      supportedAspectRatios: ['16:9', '1:1', '9:16'],
+      supportedDurations: [5, 10],
+    },
+    veo: {
+      id: 'veo',
+      name: 'Veo',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+      models: [{ id: 'veo-3.1-fast-generate-001', name: 'Veo 3.1 Fast' }],
+      supportedAspectRatios: ['16:9', '1:1', '9:16'],
+      supportedDurations: [8],
+      supportedResolutions: ['720p'],
+      maxDuration: 8,
+    },
+  },
   generateVideo: generateVideoMock,
   normalizeVideoOptions: normalizeVideoOptionsMock,
 }));
@@ -132,7 +199,21 @@ describe('media generation routes', () => {
         modelId: requestedModel || 'provider-model',
       }),
     );
-    toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
+    toGovernedProviderApiErrorResponseMock.mockImplementation((error) =>
+      error instanceof MockGovernedProviderResolutionError
+        ? new Response(
+            JSON.stringify({
+              success: false,
+              errorCode: error.apiErrorCode,
+              error: error.message,
+            }),
+            {
+              status: error.status,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          )
+        : null,
+    );
     validateUrlForSSRFMock.mockResolvedValue(null);
   });
 
@@ -184,6 +265,201 @@ describe('media generation routes', () => {
         prompt: 'A solar-powered classroom',
         width: 1280,
         height: 720,
+      }),
+    );
+  });
+
+  it('routes image generation through the scenario bucket even when the request hints a different provider', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        image: [
+          { providerId: 'seedream', modelId: 'doubao-seedream-5-0-260128' },
+          { providerId: 'qwen-image', modelId: 'qwen-image-max' },
+        ],
+      },
+    });
+    generateImageMock.mockResolvedValue({ url: 'https://cdn.example.com/image.png' });
+
+    const { POST } = await import('@/app/api/generate/image/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/image', {
+        method: 'POST',
+        headers: {
+          'x-image-provider': 'qwen-image',
+          'x-image-model': 'qwen-image-max',
+        },
+        body: JSON.stringify({
+          prompt: 'A scenario-routed classroom poster',
+          aspectRatio: '16:9',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        family: 'image',
+        providerId: 'seedream',
+        requestedModel: 'doubao-seedream-5-0-260128',
+      }),
+    );
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'seedream',
+        model: 'doubao-seedream-5-0-260128',
+      }),
+      expect.objectContaining({
+        prompt: 'A scenario-routed classroom poster',
+        width: 1280,
+        height: 720,
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-image',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'image',
+          routeId: 'generate-image',
+          selectedProviderId: 'seedream',
+          selectedModelId: 'doubao-seedream-5-0-260128',
+          validationStatus: 'selected',
+          requestedProviderId: 'qwen-image',
+          requestedModelId: 'qwen-image-max',
+        }),
+      }),
+    );
+    expect(body).toEqual({
+      success: true,
+      result: { url: 'https://cdn.example.com/image.png' },
+    });
+  });
+
+  it('falls back to the next validated image scenario candidate when the first provider cannot satisfy the aspect ratio', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        image: [
+          { providerId: 'nano-banana', modelId: 'gemini-3.1-flash-image-preview' },
+          { providerId: 'seedream', modelId: 'doubao-seedream-5-0-260128' },
+        ],
+      },
+    });
+    generateImageMock.mockResolvedValue({ url: 'https://cdn.example.com/image.png' });
+
+    const { POST } = await import('@/app/api/generate/image/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/image', {
+        method: 'POST',
+        headers: {
+          'x-image-provider': 'nano-banana',
+          'x-image-model': 'gemini-3.1-flash-image-preview',
+        },
+        body: JSON.stringify({
+          prompt: 'A vertical lab poster',
+          aspectRatio: '9:16',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        family: 'image',
+        providerId: 'nano-banana',
+        requestedModel: 'gemini-3.1-flash-image-preview',
+      }),
+    );
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        family: 'image',
+        providerId: 'seedream',
+        requestedModel: 'doubao-seedream-5-0-260128',
+      }),
+    );
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'seedream',
+        model: 'doubao-seedream-5-0-260128',
+      }),
+      expect.objectContaining({
+        aspectRatio: '9:16',
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-image',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'image',
+          routeId: 'generate-image',
+          selectedProviderId: 'seedream',
+          selectedModelId: 'doubao-seedream-5-0-260128',
+          fallbackProviderId: 'seedream',
+          fallbackModelId: 'doubao-seedream-5-0-260128',
+          validationStatus: 'fallback_selected',
+          requestedProviderId: 'nano-banana',
+          requestedModelId: 'gemini-3.1-flash-image-preview',
+          fallbackReason: expect.stringContaining('nano-banana:gemini-3.1-flash-image-preview'),
+        }),
+      }),
+    );
+    expect(body.success).toBe(true);
+  });
+
+  it('fails closed for scenario-managed image generation when every candidate is invalid', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        image: [{ providerId: 'seedream', modelId: 'doubao-seedream-5-0-260128' }],
+      },
+    });
+
+    const { POST } = await import('@/app/api/generate/image/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/image', {
+        method: 'POST',
+        headers: {
+          'x-image-provider': 'seedream',
+        },
+        body: JSON.stringify({
+          prompt: 'A watercolor classroom mural',
+          style: 'watercolor',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(generateImageMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-image',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'image',
+          routeId: 'generate-image',
+          selectedProviderId: null,
+          selectedModelId: null,
+          validationStatus: 'failed_closed',
+          fallbackReason: expect.stringContaining('watercolor'),
+        }),
       }),
     );
   });
@@ -243,6 +519,277 @@ describe('media generation routes', () => {
       expect.objectContaining({
         duration: 5,
         resolution: '720p',
+      }),
+    );
+  });
+
+  it('routes video generation through the scenario bucket even when the request hints a different provider', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        video: [
+          { providerId: 'seedance', modelId: 'doubao-seedance-1-5-pro-251215' },
+          { providerId: 'kling', modelId: 'kling-v2-6' },
+        ],
+      },
+    });
+    normalizeVideoOptionsMock.mockImplementation((providerId, options) =>
+      providerId === 'seedance'
+        ? {
+            ...options,
+            duration: 5,
+            aspectRatio: '16:9',
+            resolution: '720p',
+          }
+        : options,
+    );
+    generateVideoMock.mockResolvedValue({
+      url: 'https://cdn.example.com/video.mp4',
+      width: 1280,
+      height: 720,
+      duration: 5,
+    });
+
+    const { POST } = await import('@/app/api/generate/video/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/video', {
+        method: 'POST',
+        headers: {
+          'x-video-provider': 'kling',
+          'x-video-model': 'kling-v2-6',
+        },
+        body: JSON.stringify({
+          prompt: 'Animate a group experiment',
+          duration: 5,
+          aspectRatio: '16:9',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        family: 'video',
+        providerId: 'seedance',
+        requestedModel: 'doubao-seedance-1-5-pro-251215',
+      }),
+    );
+    expect(generateVideoMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'seedance',
+        model: 'doubao-seedance-1-5-pro-251215',
+      }),
+      expect.objectContaining({
+        duration: 5,
+        aspectRatio: '16:9',
+        resolution: '720p',
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-video',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'video',
+          routeId: 'generate-video',
+          selectedProviderId: 'seedance',
+          selectedModelId: 'doubao-seedance-1-5-pro-251215',
+          validationStatus: 'selected',
+          requestedProviderId: 'kling',
+          requestedModelId: 'kling-v2-6',
+        }),
+      }),
+    );
+    expect(body.success).toBe(true);
+  });
+
+  it('falls back to the next validated video scenario candidate when the first provider resolves to an unsafe base URL', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        video: [
+          { providerId: 'veo', modelId: 'veo-3.1-fast-generate-001' },
+          { providerId: 'seedance', modelId: 'doubao-seedance-1-5-pro-251215' },
+        ],
+      },
+    });
+    resolveGovernedProviderConfigMock
+      .mockResolvedValueOnce({
+        providerId: 'veo',
+        apiKey: 'server-key',
+        baseUrl: 'http://127.0.0.1:1234',
+        modelId: 'veo-3.1-fast-generate-001',
+      })
+      .mockResolvedValueOnce({
+        providerId: 'seedance',
+        apiKey: 'server-key',
+        baseUrl: 'https://video.example.com',
+        modelId: 'doubao-seedance-1-5-pro-251215',
+      });
+    validateUrlForSSRFMock.mockResolvedValueOnce('Local/private network URLs are not allowed');
+    validateUrlForSSRFMock.mockResolvedValueOnce(null);
+    normalizeVideoOptionsMock.mockImplementation((providerId, options) =>
+      providerId === 'veo'
+        ? {
+            ...options,
+            duration: 8,
+            aspectRatio: '16:9',
+            resolution: '720p',
+          }
+        : {
+            ...options,
+            duration: 5,
+            aspectRatio: '16:9',
+            resolution: '720p',
+          },
+    );
+    generateVideoMock.mockResolvedValue({
+      url: 'https://cdn.example.com/video.mp4',
+      width: 1280,
+      height: 720,
+      duration: 5,
+    });
+
+    const { POST } = await import('@/app/api/generate/video/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/video', {
+        method: 'POST',
+        headers: {
+          'x-video-provider': 'veo',
+          'x-video-model': 'veo-3.1-fast-generate-001',
+        },
+        body: JSON.stringify({
+          prompt: 'Animate the launch sequence',
+          duration: 8,
+          aspectRatio: '16:9',
+          resolution: '720p',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        family: 'video',
+        providerId: 'veo',
+        requestedModel: 'veo-3.1-fast-generate-001',
+      }),
+    );
+    expect(resolveGovernedProviderConfigMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        family: 'video',
+        providerId: 'seedance',
+        requestedModel: 'doubao-seedance-1-5-pro-251215',
+      }),
+    );
+    expect(generateVideoMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'seedance',
+        model: 'doubao-seedance-1-5-pro-251215',
+      }),
+      expect.objectContaining({
+        duration: 5,
+        aspectRatio: '16:9',
+        resolution: '720p',
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-video',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'video',
+          routeId: 'generate-video',
+          selectedProviderId: 'seedance',
+          selectedModelId: 'doubao-seedance-1-5-pro-251215',
+          fallbackProviderId: 'seedance',
+          fallbackModelId: 'doubao-seedance-1-5-pro-251215',
+          validationStatus: 'fallback_selected',
+          requestedProviderId: 'veo',
+          requestedModelId: 'veo-3.1-fast-generate-001',
+          fallbackReason: expect.stringContaining('veo:veo-3.1-fast-generate-001'),
+        }),
+      }),
+    );
+    expect(body.success).toBe(true);
+  });
+
+  it('fails closed for scenario-managed video generation when every candidate is uncredentialed', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        video: [{ providerId: 'seedance', modelId: 'doubao-seedance-1-5-pro-251215' }],
+      },
+    });
+    const missingCredentialsError = new MockGovernedProviderResolutionError(
+      'MISSING_PROVIDER_CREDENTIALS',
+      'No API key configured for provider "seedance".',
+      {
+        status: 400,
+        apiErrorCode: 'MISSING_API_KEY',
+      },
+    );
+    resolveGovernedProviderConfigMock.mockRejectedValue(missingCredentialsError);
+    toGovernedProviderApiErrorResponseMock.mockImplementation((error) =>
+      error === missingCredentialsError
+        ? new Response(
+            JSON.stringify({
+              success: false,
+              errorCode: 'MISSING_API_KEY',
+              error: missingCredentialsError.message,
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          )
+        : null,
+    );
+
+    const { POST } = await import('@/app/api/generate/video/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/video', {
+        method: 'POST',
+        headers: {
+          'x-video-provider': 'seedance',
+        },
+        body: JSON.stringify({
+          prompt: 'Animate the experiment',
+          duration: 5,
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('MISSING_API_KEY');
+    expect(generateVideoMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'generate-video',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'video',
+          routeId: 'generate-video',
+          selectedProviderId: null,
+          selectedModelId: null,
+          validationStatus: 'failed_closed',
+          fallbackReason: expect.stringContaining('seedance:doubao-seedance-1-5-pro-251215'),
+        }),
       }),
     );
   });
