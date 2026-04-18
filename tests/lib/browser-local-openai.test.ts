@@ -5,6 +5,21 @@ import {
   verifyBrowserLocalOpenAIModel,
 } from '@/lib/utils/browser-local-openai';
 
+function createSseResponse(events: string[]): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(events.join('')));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
 describe('browser-local openai transport helpers', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -76,7 +91,9 @@ describe('browser-local openai transport helpers', () => {
   });
 
   it('normalizes bare LM Studio root URLs before browser-local verification', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    const fetchMock = vi.fn(async () =>
+      createSseResponse(['data: {"choices":[{"delta":{"content":"OK"}}]}\n\n', 'data: [DONE]\n\n']),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await verifyBrowserLocalOpenAIModel({
@@ -92,7 +109,9 @@ describe('browser-local openai transport helpers', () => {
   });
 
   it('uses loopback targetAddressSpace for localhost endpoints', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    const fetchMock = vi.fn(async () =>
+      createSseResponse(['data: {"choices":[{"delta":{"content":"OK"}}]}\n\n', 'data: [DONE]\n\n']),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await verifyBrowserLocalOpenAIModel({
@@ -110,7 +129,9 @@ describe('browser-local openai transport helpers', () => {
   });
 
   it('uses local targetAddressSpace for private-network endpoints', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    const fetchMock = vi.fn(async () =>
+      createSseResponse(['data: {"choices":[{"delta":{"content":"OK"}}]}\n\n', 'data: [DONE]\n\n']),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await verifyBrowserLocalOpenAIModel({
@@ -130,26 +151,13 @@ describe('browser-local openai transport helpers', () => {
   it('streams browser-local chat deltas from an OpenAI-compatible SSE response', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => {
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              encoder.encode(
-                'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
-                  'data: {"choices":[{"delta":{"content":" world"}}]}\n\n' +
-                  'data: [DONE]\n\n',
-              ),
-            );
-            controller.close();
-          },
-        });
-
-        return new Response(stream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
-      }),
+      vi.fn(async () =>
+        createSseResponse([
+          'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+          'data: {"choices":[{"delta":{"content":" world"}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]),
+      ),
     );
 
     const chunks: string[] = [];
@@ -164,27 +172,101 @@ describe('browser-local openai transport helpers', () => {
       },
     });
 
-    expect(result.hadContent).toBe(true);
+    expect(result.hadVisibleContent).toBe(true);
+    expect(result.hadReasoningContent).toBe(false);
     expect(chunks.join('')).toBe('Hello world');
   });
 
-  it('normalizes bare Ollama root URLs before browser-local streaming', async () => {
-    const fetchMock = vi.fn(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\ndata: [DONE]\n\n'),
-          );
-          controller.close();
-        },
-      });
+  it('streams reasoning deltas before visible content for reasoning-first models', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createSseResponse([
+          'data: {"choices":[{"delta":{"reasoning_content":"Thinking..."}}]}\n\n',
+          'data: {"choices":[{"delta":{"content":"OK"}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]),
+      ),
+    );
 
-      return new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
+    const textChunks: string[] = [];
+    const reasoningChunks: string[] = [];
+    const result = await streamBrowserLocalOpenAIChat({
+      providerId: 'lmstudio',
+      providerName: 'LM Studio',
+      modelId: 'qwen/test',
+      baseUrl: 'http://127.0.0.1:1234/v1',
+      messages: [{ role: 'user', content: 'Say hello' }],
+      onTextDelta(delta) {
+        textChunks.push(delta);
+      },
+      onReasoningDelta(delta) {
+        reasoningChunks.push(delta);
+      },
     });
+
+    expect(result.hadVisibleContent).toBe(true);
+    expect(result.hadReasoningContent).toBe(true);
+    expect(reasoningChunks.join('')).toBe('Thinking...');
+    expect(textChunks.join('')).toBe('OK');
+  });
+
+  it('rejects browser-local verification for reasoning-only LM Studio responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createSseResponse([
+          'data: {"choices":[{"delta":{"reasoning_content":"Thinking..."}}]}\n\n',
+          'data: {"choices":[{"finish_reason":"length"}]}\n\n',
+          'data: [DONE]\n\n',
+        ]),
+      ),
+    );
+
+    await expect(
+      verifyBrowserLocalOpenAIModel({
+        providerId: 'lmstudio',
+        providerName: 'LM Studio',
+        modelId: 'qwen/test',
+        baseUrl: 'http://127.0.0.1:1234/v1',
+      }),
+    ).rejects.toThrow('only returned reasoning output without any visible assistant text');
+  });
+
+  it('rejects browser-local streaming when a model only emits reasoning output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        createSseResponse([
+          'data: {"choices":[{"delta":{"reasoning_content":"Thinking..."}}]}\n\n',
+          'data: {"choices":[{"finish_reason":"length"}]}\n\n',
+          'data: [DONE]\n\n',
+        ]),
+      ),
+    );
+
+    const reasoningChunks: string[] = [];
+    await expect(
+      streamBrowserLocalOpenAIChat({
+        providerId: 'lmstudio',
+        providerName: 'LM Studio',
+        modelId: 'qwen/test',
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        messages: [{ role: 'user', content: 'Say hello' }],
+        onTextDelta() {},
+        onReasoningDelta(delta) {
+          reasoningChunks.push(delta);
+        },
+      }),
+    ).rejects.toThrow('only returned reasoning output without any visible assistant text');
+
+    expect(reasoningChunks.join('')).toBe('Thinking...');
+  });
+
+  it('normalizes bare Ollama root URLs before browser-local streaming', async () => {
+    const fetchMock = vi.fn(async () =>
+      createSseResponse(['data: {"choices":[{"delta":{"content":"OK"}}]}\n\n', 'data: [DONE]\n\n']),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await streamBrowserLocalOpenAIChat({
@@ -202,22 +284,9 @@ describe('browser-local openai transport helpers', () => {
   });
 
   it('uses loopback targetAddressSpace for browser-local streaming to localhost', async () => {
-    const fetchMock = vi.fn(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\ndata: [DONE]\n\n'),
-          );
-          controller.close();
-        },
-      });
-
-      return new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
-    });
+    const fetchMock = vi.fn(async () =>
+      createSseResponse(['data: {"choices":[{"delta":{"content":"OK"}}]}\n\n', 'data: [DONE]\n\n']),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await streamBrowserLocalOpenAIChat({

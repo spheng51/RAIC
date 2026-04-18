@@ -484,4 +484,50 @@ describe('ProviderConfigPanel', () => {
 
     expect(mockSettingsState.setModel).toHaveBeenCalledWith('lmstudio', 'qwen/qwen3.5-35b-a3b');
   });
+
+  it('shows a targeted compatibility error when browser-local LM Studio only returns reasoning output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                'data: {"choices":[{"delta":{"reasoning_content":"Thinking..."}}]}\n\n' +
+                  'data: {"choices":[{"finish_reason":"length"}]}\n\n' +
+                  'data: [DONE]\n\n',
+              ),
+            );
+            controller.close();
+          },
+        });
+
+        return new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }),
+    );
+
+    const mounted = await mountProviderConfigPanel({
+      providerId: 'lmstudio',
+      originHostname: 'open-raic.com',
+      transportMode: 'browser-local',
+    });
+
+    const testButton = mounted.container.querySelector(
+      '[data-testid="provider-test-lmstudio"]',
+    ) as HTMLButtonElement | null;
+
+    expect(testButton).not.toBeNull();
+
+    await act(async () => {
+      testButton?.click();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      'only returned reasoning output without any visible assistant text',
+    );
+  });
 });

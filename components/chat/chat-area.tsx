@@ -24,7 +24,7 @@ interface ChatAreaProps {
   onActiveBubble?: (messageId: string | null) => void;
   onLiveSpeech?: (text: string | null, agentId?: string | null) => void;
   onSpeechProgress?: (ratio: number | null) => void;
-  onThinking?: (state: { stage: string; agentId?: string } | null) => void;
+  onThinking?: (state: { stage: string; agentId?: string; text?: string } | null) => void;
   onCueUser?: (fromAgentId?: string, prompt?: string) => void;
   onLiveSessionError?: () => void;
   onStopSession?: () => void;

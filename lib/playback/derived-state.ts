@@ -18,7 +18,7 @@ export interface PlaybackRawState {
   lectureSpeech: string | null;
   liveSpeech: string | null;
   speakingAgentId: string | null;
-  thinkingState: { stage: string; agentId?: string } | null;
+  thinkingState: { stage: string; agentId?: string; text?: string } | null;
   isCueUser: boolean;
   isTopicPending: boolean;
   chatIsStreaming: boolean;
@@ -128,6 +128,8 @@ export function computePlaybackView(raw: PlaybackRawState): PlaybackView {
   let sourceText: string;
   if (liveSpeech) {
     sourceText = liveSpeech;
+  } else if (thinkingState?.text) {
+    sourceText = thinkingState.text;
   } else if (isInLiveFlow) {
     // In live flow but no text yet — show empty (loading dots handled by bubble)
     sourceText = '';
@@ -149,6 +151,8 @@ export function computePlaybackView(raw: PlaybackRawState): PlaybackView {
     activeRole = 'agent';
   } else if (liveSpeech) {
     activeRole = 'teacher';
+  } else if (thinkingState?.text && thinkingState.agentId) {
+    activeRole = 'agent';
   } else if (isAgentLoading) {
     activeRole = 'agent';
   } else if (isBubbleLoading) {
@@ -167,6 +171,8 @@ export function computePlaybackView(raw: PlaybackRawState): PlaybackView {
     bubbleRole = 'agent';
   } else if (liveSpeech) {
     bubbleRole = 'teacher';
+  } else if (thinkingState?.text && thinkingState.agentId) {
+    bubbleRole = 'agent';
   } else if (isAgentLoading) {
     bubbleRole = 'agent';
   } else if (isBubbleLoading) {

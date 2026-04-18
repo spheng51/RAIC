@@ -322,7 +322,7 @@ export type StatelessEvent =
     }
   | {
       type: 'thinking';
-      data: { stage: 'director' | 'agent_loading'; agentId?: string };
+      data: { stage: 'director' | 'agent_loading'; agentId?: string; text?: string };
     }
   | { type: 'cue_user'; data: { fromAgentId?: string; prompt?: string } }
   | {

@@ -12,7 +12,7 @@ import { getProvider, type ProviderId } from '@/lib/ai/providers';
 import type { ProviderTransportMode } from '@/lib/types/provider';
 import type { EditingModel } from '@/lib/types/settings';
 import { cn } from '@/lib/utils';
-import { hasHostedLocalProviderTopologyMismatch } from '@/lib/utils/url';
+import { hasHostedLocalProviderTopologyMismatch, isHostedOrigin } from '@/lib/utils/url';
 import { verifyBrowserLocalOpenAIModel } from '@/lib/utils/browser-local-openai';
 import { isBrowserLocalTransport } from '@/lib/utils/provider-transport';
 
@@ -68,6 +68,16 @@ export function ModelEditDialog({
   const browserLocalModeNotice = browserLocalMode
     ? t('settings.browserLocalModeNotice', { provider: providerName })
     : '';
+  const browserLocalPermissionHint =
+    browserLocalMode && isHostedOrigin(originHostname)
+      ? t('settings.browserLocalPermissionHint')
+      : '';
+  const browserLocalLmstudioCorsHint =
+    browserLocalMode && providerId === 'lmstudio'
+      ? t('settings.browserLocalLmstudioCorsHint', {
+          command: 'lms server start --cors',
+        })
+      : '';
 
   // Reset test status when dialog closes
   useEffect(() => {
@@ -385,7 +395,11 @@ export function ModelEditDialog({
             )}
             {browserLocalModeNotice && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300">
-                {browserLocalModeNotice}
+                <div className="space-y-2">
+                  <p>{browserLocalModeNotice}</p>
+                  {browserLocalPermissionHint && <p>{browserLocalPermissionHint}</p>}
+                  {browserLocalLmstudioCorsHint && <p>{browserLocalLmstudioCorsHint}</p>}
+                </div>
               </div>
             )}
             {testMessage && (

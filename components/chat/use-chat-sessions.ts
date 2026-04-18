@@ -37,7 +37,7 @@ const log = createLogger('ChatSessions');
 interface UseChatSessionsOptions {
   onLiveSpeech?: (text: string | null, agentId?: string | null) => void;
   onSpeechProgress?: (ratio: number | null) => void;
-  onThinking?: (state: { stage: string; agentId?: string } | null) => void;
+  onThinking?: (state: { stage: string; agentId?: string; text?: string } | null) => void;
   onCueUser?: (fromAgentId?: string, prompt?: string) => void;
   onActiveBubble?: (messageId: string | null) => void;
   onLiveSessionError?: () => void;
@@ -388,7 +388,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             onSpeechProgressRef.current?.(ratio);
           },
 
-          onThinking(data: { stage: string; agentId?: string } | null) {
+          onThinking(data: { stage: string; agentId?: string; text?: string } | null) {
             onThinkingRef.current?.(data);
           },
 
@@ -639,6 +639,8 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       const buffer = createBufferForSession(sessionId, sessionType);
       const messageId = `browser-local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       let didStartAgent = false;
+      let latestReasoningText = '';
+      let reasoningCleared = false;
 
       buffer.pushThinking({ stage: 'agent_loading', agentId });
 
@@ -673,7 +675,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
               : undefined,
         });
 
-        const { hadContent } = await streamBrowserLocalOpenAIChat({
+        const { hadVisibleContent } = await streamBrowserLocalOpenAIChat({
           providerId: requestTemplate.providerId,
           providerName: requestTemplate.providerName,
           modelId: requestTemplate.modelId,
@@ -682,6 +684,10 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           messages,
           signal: controller.signal,
           onTextDelta(delta) {
+            if (!reasoningCleared) {
+              reasoningCleared = true;
+              onThinkingRef.current?.(null);
+            }
             if (!didStartAgent) {
               buffer.pushAgentStart({
                 messageId,
@@ -694,6 +700,14 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             }
             buffer.pushText(messageId, delta, agentId);
           },
+          onReasoningDelta(delta) {
+            latestReasoningText += delta;
+            onThinkingRef.current?.({
+              stage: 'agent_loading',
+              agentId,
+              text: latestReasoningText,
+            });
+          },
         });
 
         if (didStartAgent) {
@@ -702,7 +716,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         buffer.pushDone({
           totalActions: 0,
           totalAgents: didStartAgent ? 1 : 0,
-          agentHadContent: hadContent,
+          agentHadContent: hadVisibleContent,
         });
 
         try {

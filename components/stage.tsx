@@ -175,6 +175,7 @@ export function Stage({
   const [thinkingState, setThinkingState] = useState<{
     stage: string;
     agentId?: string;
+    text?: string;
   } | null>(null);
 
   // Cue user state (Issue 7)

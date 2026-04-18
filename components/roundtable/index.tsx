@@ -59,7 +59,7 @@ interface RoundtableProps {
   readonly speechProgress?: number | null; // StreamBuffer reveal progress (0–1) for auto-scroll
   readonly showEndFlash?: boolean;
   readonly endFlashSessionType?: 'qa' | 'discussion';
-  readonly thinkingState?: { stage: string; agentId?: string } | null;
+  readonly thinkingState?: { stage: string; agentId?: string; text?: string } | null;
   readonly isCueUser?: boolean;
   readonly isTopicPending?: boolean;
   readonly onMessageSend?: (message: string) => void;

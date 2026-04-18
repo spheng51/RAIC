@@ -21,6 +21,13 @@ interface BrowserLocalOpenAIParams {
 interface BrowserLocalStreamParams extends BrowserLocalOpenAIParams {
   messages: BrowserLocalOpenAIMessage[];
   onTextDelta: (delta: string) => void;
+  onReasoningDelta?: (delta: string) => void;
+}
+
+export interface BrowserLocalStreamResult {
+  hadVisibleContent: boolean;
+  hadReasoningContent: boolean;
+  finishReason: string | null;
 }
 
 type LocalNetworkRequestInit = RequestInit & {
@@ -95,6 +102,10 @@ function extractTextFromContent(value: unknown): string {
   }
 
   return '';
+}
+
+function extractReasoningText(value: unknown): string {
+  return extractTextFromContent(value);
 }
 
 function extractErrorMessage(value: unknown): string | null {
@@ -174,6 +185,18 @@ async function createBrowserLocalApiErrorMessage(
     : `${providerName} request failed with HTTP ${response.status}.`;
 }
 
+function createBrowserLocalCompatibilityErrorMessage(
+  providerName: string,
+  modelId: string,
+  hadReasoningContent: boolean,
+): string {
+  if (hadReasoningContent) {
+    return `${providerName} reached model "${modelId}", but it only returned reasoning output without any visible assistant text. Browser-local mode currently requires a model that emits final answer content for Q&A and Discussion.`;
+  }
+
+  return `${providerName} reached model "${modelId}", but it did not return assistant text that browser-local mode can display.`;
+}
+
 type LocalNetworkPermissionState = 'granted' | 'prompt' | 'denied' | null;
 
 async function getLocalNetworkAccessPermissionState(): Promise<LocalNetworkPermissionState> {
@@ -245,9 +268,9 @@ export async function verifyBrowserLocalOpenAIModel(
         body: JSON.stringify({
           model: params.modelId,
           messages: [{ role: 'user', content: 'Reply with OK.' }],
-          max_tokens: 8,
+          max_tokens: 256,
           temperature: 0,
-          stream: false,
+          stream: true,
         }),
         signal: params.signal,
       }),
@@ -270,11 +293,30 @@ export async function verifyBrowserLocalOpenAIModel(
       await createBrowserLocalApiErrorMessage(response, params.providerName, params.modelId),
     );
   }
+
+  const result = await consumeBrowserLocalStreamResponse(response);
+  if (!result.hadVisibleContent) {
+    throw new Error(
+      createBrowserLocalCompatibilityErrorMessage(
+        params.providerName,
+        params.modelId,
+        result.hadReasoningContent,
+      ),
+    );
+  }
 }
 
-function extractStreamDelta(payload: unknown): string {
+function extractOutputParts(payload: unknown): {
+  visibleText: string;
+  reasoningText: string;
+  finishReason: string | null;
+} {
   if (!payload || typeof payload !== 'object') {
-    return '';
+    return {
+      visibleText: '',
+      reasoningText: '',
+      finishReason: null,
+    };
   }
 
   if (
@@ -286,28 +328,132 @@ function extractStreamDelta(payload: unknown): string {
   ) {
     const choice = payload.choices[0] as {
       delta?: { content?: unknown };
-      message?: { content?: unknown };
+      message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown };
       text?: unknown;
+      reasoning_content?: unknown;
+      reasoning?: unknown;
+      finish_reason?: unknown;
     };
 
-    return (
-      extractTextFromContent(choice.delta?.content) ||
-      extractTextFromContent(choice.message?.content) ||
-      extractTextFromContent(choice.text)
-    );
+    return {
+      visibleText:
+        extractTextFromContent(choice.delta?.content) ||
+        extractTextFromContent(choice.message?.content) ||
+        extractTextFromContent(choice.text),
+      reasoningText:
+        extractReasoningText(
+          (choice.delta as { reasoning_content?: unknown } | undefined)?.reasoning_content,
+        ) ||
+        extractReasoningText((choice.delta as { reasoning?: unknown } | undefined)?.reasoning) ||
+        extractReasoningText(choice.message?.reasoning_content) ||
+        extractReasoningText(choice.message?.reasoning) ||
+        extractReasoningText(choice.reasoning_content) ||
+        extractReasoningText(choice.reasoning),
+      finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
+    };
   }
 
   if ('message' in payload && payload.message && typeof payload.message === 'object') {
-    const message = payload.message as { content?: unknown };
-    return extractTextFromContent(message.content);
+    const message = payload.message as {
+      content?: unknown;
+      reasoning_content?: unknown;
+      reasoning?: unknown;
+    };
+    return {
+      visibleText: extractTextFromContent(message.content),
+      reasoningText:
+        extractReasoningText(message.reasoning_content) || extractReasoningText(message.reasoning),
+      finishReason: null,
+    };
   }
 
-  return '';
+  return {
+    visibleText: '',
+    reasoningText: '',
+    finishReason: null,
+  };
+}
+
+async function consumeBrowserLocalStreamResponse(
+  response: Response,
+  callbacks?: {
+    onTextDelta?: (delta: string) => void;
+    onReasoningDelta?: (delta: string) => void;
+  },
+): Promise<BrowserLocalStreamResult> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('The local model endpoint did not return a readable response stream.');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let hadVisibleContent = false;
+  let hadReasoningContent = false;
+  let finishReason: string | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const rawEvent of events) {
+        const dataLines = rawEvent
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim());
+
+        for (const dataLine of dataLines) {
+          if (!dataLine || dataLine === '[DONE]') {
+            continue;
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(dataLine);
+          } catch {
+            continue;
+          }
+
+          const {
+            visibleText,
+            reasoningText,
+            finishReason: nextFinishReason,
+          } = extractOutputParts(parsed);
+          if (visibleText) {
+            hadVisibleContent = true;
+            callbacks?.onTextDelta?.(visibleText);
+          }
+          if (reasoningText) {
+            hadReasoningContent = true;
+            callbacks?.onReasoningDelta?.(reasoningText);
+          }
+          if (nextFinishReason) {
+            finishReason = nextFinishReason;
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    hadVisibleContent,
+    hadReasoningContent,
+    finishReason,
+  };
 }
 
 export async function streamBrowserLocalOpenAIChat(
   params: BrowserLocalStreamParams,
-): Promise<{ hadContent: boolean }> {
+): Promise<BrowserLocalStreamResult> {
   const resolvedBaseUrl = normalizeBuiltInOpenAICompatibleBaseUrl(
     params.providerId,
     trimTrailingSlash(params.baseUrl),
@@ -349,55 +495,20 @@ export async function streamBrowserLocalOpenAIChat(
     );
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error(`${params.providerName} did not return a readable response stream.`);
+  const result = await consumeBrowserLocalStreamResponse(response, {
+    onTextDelta: params.onTextDelta,
+    onReasoningDelta: params.onReasoningDelta,
+  });
+
+  if (!result.hadVisibleContent) {
+    throw new Error(
+      createBrowserLocalCompatibilityErrorMessage(
+        params.providerName,
+        params.modelId,
+        result.hadReasoningContent,
+      ),
+    );
   }
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let hadContent = false;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      for (const rawEvent of events) {
-        const dataLines = rawEvent
-          .split('\n')
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).trim());
-
-        for (const dataLine of dataLines) {
-          if (!dataLine || dataLine === '[DONE]') {
-            continue;
-          }
-
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(dataLine);
-          } catch {
-            continue;
-          }
-
-          const delta = extractStreamDelta(parsed);
-          if (delta) {
-            hadContent = true;
-            params.onTextDelta(delta);
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return { hadContent };
+  return result;
 }
