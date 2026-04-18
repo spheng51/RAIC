@@ -12,7 +12,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
 const DEFAULT_CONFIDENCE_SCORE = '3';
@@ -44,9 +50,9 @@ export function SessionReflectionDialog({
   const [summary, setSummary] = useState('');
   const [challengingAreas, setChallengingAreas] = useState('');
   const [confidenceScore, setConfidenceScore] = useState(DEFAULT_CONFIDENCE_SCORE);
-  const [revisitIntent, setRevisitIntent] = useState<'continue' | 'revisit' | 'remediate' | 'deepen'>(
-    DEFAULT_REVISIT_INTENT,
-  );
+  const [revisitIntent, setRevisitIntent] = useState<
+    'continue' | 'revisit' | 'remediate' | 'deepen'
+  >(DEFAULT_REVISIT_INTENT);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [latestReflection, setLatestReflection] = useState<{
@@ -102,13 +108,21 @@ export function SessionReflectionDialog({
         setLatestContext(nextContext);
         setLatestReflection(nextLatestReflection);
         setSummary(nextLatestReflection?.summary ?? nextContext?.reflectionSummary ?? '');
-        setChallengingAreas((nextLatestReflection?.challengingAreas ?? nextContext?.masteryHints ?? []).join(', '));
+        setChallengingAreas(
+          (nextLatestReflection?.challengingAreas ?? nextContext?.masteryHints ?? []).join(', '),
+        );
         setConfidenceScore(
           String(
-            nextLatestReflection?.confidenceScore ?? nextContext?.confidenceScore ?? DEFAULT_CONFIDENCE_SCORE,
+            nextLatestReflection?.confidenceScore ??
+              nextContext?.confidenceScore ??
+              DEFAULT_CONFIDENCE_SCORE,
           ),
         );
-        setRevisitIntent(nextLatestReflection?.revisitIntent ?? nextContext?.revisitIntent ?? DEFAULT_REVISIT_INTENT);
+        setRevisitIntent(
+          nextLatestReflection?.revisitIntent ??
+            nextContext?.revisitIntent ??
+            DEFAULT_REVISIT_INTENT,
+        );
       })
       .catch((error) => {
         if (!cancelled) {
@@ -190,7 +204,8 @@ export function SessionReflectionDialog({
               {typeof latestContext?.completedSceneCount === 'number' &&
               typeof latestContext?.totalSceneCount === 'number' ? (
                 <p>
-                  Progress: {latestContext.completedSceneCount}/{latestContext.totalSceneCount} scenes
+                  Progress: {latestContext.completedSceneCount}/{latestContext.totalSceneCount}{' '}
+                  scenes
                 </p>
               ) : null}
               {latestReflection?.summary ? <p>Reflection: {latestReflection.summary}</p> : null}
@@ -259,7 +274,11 @@ export function SessionReflectionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loadingSnapshot || submitting}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loadingSnapshot || submitting}
+          >
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={loadingSnapshot || submitting}>

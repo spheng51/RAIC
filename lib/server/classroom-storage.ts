@@ -15,7 +15,10 @@ async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true });
 }
 
-async function withClassroomWriteLock<T>(classroomId: string, operation: () => Promise<T>): Promise<T> {
+async function withClassroomWriteLock<T>(
+  classroomId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
   const previous = classroomWriteLocks.get(classroomId) ?? Promise.resolve();
   let releaseCurrent!: () => void;
   const current = new Promise<void>((resolve) => {

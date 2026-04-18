@@ -160,8 +160,7 @@ function dedupeStrings(values: string[] | undefined): string[] {
 
 function isClassroomRevisitIntent(value: unknown): value is ClassroomRevisitIntent {
   return (
-    typeof value === 'string' &&
-    (CLASSROOM_REVISIT_INTENTS as readonly string[]).includes(value)
+    typeof value === 'string' && (CLASSROOM_REVISIT_INTENTS as readonly string[]).includes(value)
   );
 }
 
@@ -219,7 +218,9 @@ export function normalizeSceneProgress(input: {
   };
 }
 
-function mapClassroomSessionContextRow(row: ClassroomSessionContextRow): ClassroomSessionContextRecord {
+function mapClassroomSessionContextRow(
+  row: ClassroomSessionContextRow,
+): ClassroomSessionContextRecord {
   return {
     id: row.id,
     classroomId: row.classroom_id,
@@ -279,7 +280,10 @@ export function buildRequirementFingerprint(requirement: string): {
 } {
   const normalized = normalizeText(requirement);
   const preview = truncateText(normalized, REQUIREMENT_PREVIEW_MAX_LENGTH);
-  const fingerprint = createHash('sha256').update(normalized.toLowerCase()).digest('hex').slice(0, 24);
+  const fingerprint = createHash('sha256')
+    .update(normalized.toLowerCase())
+    .digest('hex')
+    .slice(0, 24);
 
   return {
     fingerprint,
@@ -297,7 +301,10 @@ function derivePacingPreference(input: {
   const progressRatio =
     input.totalSceneCount > 0 ? input.completedSceneCount / input.totalSceneCount : 0;
 
-  if (input.revisitIntent === 'remediate' || (normalizedConfidence !== null && normalizedConfidence <= 2)) {
+  if (
+    input.revisitIntent === 'remediate' ||
+    (normalizedConfidence !== null && normalizedConfidence <= 2)
+  ) {
     return 'remediate';
   }
 
@@ -628,9 +635,7 @@ export async function buildAdaptiveGenerationContext(input: {
   };
 }
 
-export function formatAdaptiveContextForPrompt(
-  context: AdaptiveGenerationContext | null,
-): string {
+export function formatAdaptiveContextForPrompt(context: AdaptiveGenerationContext | null): string {
   if (!context) {
     return '';
   }
@@ -826,8 +831,7 @@ export async function buildAdaptiveRuntimeContext(input: {
     ...(latestReflection?.challengingAreas ?? []),
   ]);
   const revisitIntent = latestReflection?.revisitIntent ?? context?.revisitIntent ?? 'continue';
-  const confidenceScore =
-    latestReflection?.confidenceScore ?? context?.confidenceScore ?? null;
+  const confidenceScore = latestReflection?.confidenceScore ?? context?.confidenceScore ?? null;
   const reflectionSummary = latestReflection?.summary ?? context?.reflectionSummary ?? null;
   const hasReturningSignals =
     (context?.completedSceneCount ?? 0) > 0 ||
@@ -975,10 +979,12 @@ export async function recordBenchmarkArtifact(
   return persisted;
 }
 
-export async function listBenchmarkArtifacts(input: {
-  scope?: string | null;
-  limit?: number;
-} = {}): Promise<BenchmarkArtifactRecord[]> {
+export async function listBenchmarkArtifacts(
+  input: {
+    scope?: string | null;
+    limit?: number;
+  } = {},
+): Promise<BenchmarkArtifactRecord[]> {
   const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
   const postgresResult = await runPostgresQuery<BenchmarkArtifactRow>(
     `SELECT

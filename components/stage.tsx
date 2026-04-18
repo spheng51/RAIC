@@ -1292,7 +1292,14 @@ export function Stage({
       // On last real scene → advance to pending page
       commitSceneSelection(PENDING_SCENE_ID, 'pending');
     }
-  }, [commitSceneSelection, currentSceneId, gatedSceneSwitch, hasNextPending, isPendingScene, scenes]);
+  }, [
+    commitSceneSelection,
+    currentSceneId,
+    gatedSceneSwitch,
+    hasNextPending,
+    isPendingScene,
+    scenes,
+  ]);
 
   const currentSceneIndex = isPendingScene
     ? scenes.length

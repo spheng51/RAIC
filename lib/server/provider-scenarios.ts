@@ -18,7 +18,9 @@ type ScenarioYamlShape = Partial<{
     string,
     Partial<{
       description: string;
-      buckets: Partial<Record<ProviderScenarioTaskBucket, Array<string | ProviderScenarioCandidate>>>;
+      buckets: Partial<
+        Record<ProviderScenarioTaskBucket, Array<string | ProviderScenarioCandidate>>
+      >;
     }>
   >;
 }>;
@@ -98,7 +100,8 @@ function loadYamlProfiles(): Record<string, ProviderScenarioProfile> {
         {
           id: profileId,
           description:
-            profile?.description?.trim() || 'Scenario profile loaded from server-provider-scenarios.yml.',
+            profile?.description?.trim() ||
+            'Scenario profile loaded from server-provider-scenarios.yml.',
           buckets: Object.fromEntries(
             Object.entries(profile?.buckets ?? {}).map(([bucket, candidates]) => [
               bucket,

@@ -26,7 +26,9 @@ interface SessionContextBody {
   revisitIntent?: 'continue' | 'revisit' | 'remediate' | 'deepen';
 }
 
-function canWriteTeacherContext(access: Exclude<Awaited<ReturnType<typeof requireClassroomAccess>>, NextResponse>) {
+function canWriteTeacherContext(
+  access: Exclude<Awaited<ReturnType<typeof requireClassroomAccess>>, NextResponse>,
+) {
   return access.source === 'web' && access.auth.session.role !== 'student';
 }
 
@@ -39,7 +41,12 @@ function parseSceneCount(value: unknown, fieldName: 'completedSceneCount' | 'tot
     return undefined;
   }
 
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    !Number.isInteger(value)
+  ) {
     throw new Error(`${fieldName} must be a non-negative integer`);
   }
 

@@ -79,7 +79,9 @@ describe('GET /api/admin/ops/benchmarks', () => {
   it('returns benchmark artifacts, latest snapshot, and perf budget status for system admins', async () => {
     const { GET } = await import('@/app/api/admin/ops/benchmarks/route');
     const response = await GET(
-      new NextRequest('http://localhost/api/admin/ops/benchmarks?scope=classroom-generation&limit=5'),
+      new NextRequest(
+        'http://localhost/api/admin/ops/benchmarks?scope=classroom-generation&limit=5',
+      ),
     );
     const json = await response.json();
 

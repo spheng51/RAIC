@@ -151,9 +151,8 @@ describe('classroom-storage helpers', () => {
   });
 
   it('serializes concurrent classroom updates against the latest persisted state', async () => {
-    const { persistClassroom, readClassroom, updateClassroom } = await import(
-      '@/lib/server/classroom-storage'
-    );
+    const { persistClassroom, readClassroom, updateClassroom } =
+      await import('@/lib/server/classroom-storage');
 
     await persistClassroom(
       {

@@ -234,13 +234,16 @@ test('single-controller classrooms switch surfaces and reclaim student control',
     await expect(student.classroom.readOnlyOverlayHeading).toBeHidden();
 
     const revokeResult = await teacher.page.evaluate(async (activeClassroomId) => {
-      const response = await fetch(`/api/classroom/${encodeURIComponent(activeClassroomId)}/control`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(activeClassroomId)}/control`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action: 'revoke' }),
         },
-        body: JSON.stringify({ action: 'revoke' }),
-      });
+      );
 
       return {
         ok: response.ok,

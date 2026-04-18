@@ -158,9 +158,7 @@ export default function ClassroomDetailPage() {
           return;
         }
 
-        const body = (await response.json().catch(() => null)) as
-          | { context?: unknown }
-          | null;
+        const body = (await response.json().catch(() => null)) as { context?: unknown } | null;
         if (!isPersistedSessionContextSnapshot(body?.context)) {
           return;
         }
@@ -375,7 +373,13 @@ export default function ClassroomDetailPage() {
         revisitIntent: ClassroomRevisitIntent;
       }> = {},
     ) => {
-      if (loading || error || classroomSource !== 'teacher-server' || !stage || scenes.length === 0) {
+      if (
+        loading ||
+        error ||
+        classroomSource !== 'teacher-server' ||
+        !stage ||
+        scenes.length === 0
+      ) {
         return;
       }
 

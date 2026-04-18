@@ -83,7 +83,10 @@ export function hydrateSessionProgressState(input: {
     }
   } else {
     const scenesBeforeLast = orderedScenes.slice(0, lastCompletedSceneIndex);
-    const retainedScenesBeforeLast = scenesBeforeLast.slice(0, Math.max(0, completedSceneCount - 1));
+    const retainedScenesBeforeLast = scenesBeforeLast.slice(
+      0,
+      Math.max(0, completedSceneCount - 1),
+    );
 
     for (const scene of retainedScenesBeforeLast) {
       completedSceneIds.add(scene.id);
@@ -92,7 +95,10 @@ export function hydrateSessionProgressState(input: {
 
     const remainingCount = completedSceneCount - completedSceneIds.size;
     if (remainingCount > 0) {
-      for (const scene of orderedScenes.slice(lastCompletedSceneIndex + 1, lastCompletedSceneIndex + 1 + remainingCount)) {
+      for (const scene of orderedScenes.slice(
+        lastCompletedSceneIndex + 1,
+        lastCompletedSceneIndex + 1 + remainingCount,
+      )) {
         completedSceneIds.add(scene.id);
       }
     }
@@ -180,7 +186,7 @@ export function applySceneSelectionSignal(input: {
   const fromScene =
     input.fromSceneId == null
       ? null
-      : orderedScenes.find((scene) => scene.id === input.fromSceneId) ?? null;
+      : (orderedScenes.find((scene) => scene.id === input.fromSceneId) ?? null);
   const targetScene = orderedScenes.find((scene) => scene.id === input.toSceneId) ?? null;
 
   if (!targetScene) {

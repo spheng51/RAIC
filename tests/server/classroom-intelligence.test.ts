@@ -236,7 +236,10 @@ describe('classroom intelligence persistence', () => {
     const unsafeMock = vi.fn(async (query: string, params?: unknown[]) => {
       const normalized = query.replace(/\s+/g, ' ').trim();
 
-      if (normalized.startsWith('SELECT') && normalized.includes('FROM classroom_session_contexts')) {
+      if (
+        normalized.startsWith('SELECT') &&
+        normalized.includes('FROM classroom_session_contexts')
+      ) {
         return [sessionContextRow];
       }
 
@@ -318,9 +321,10 @@ describe('classroom intelligence persistence', () => {
     expect(adaptiveContext?.revisitIntent).toBe('remediate');
     expect(benchmarks[0]?.id).toBe('bench-1');
     expect(client.begin).toHaveBeenCalledTimes(3);
-    expect(unsafeMock).toHaveBeenCalledWith(
-      expect.stringContaining('FROM classroom_reflections'),
-      ['class-1', 'teacher-1', 5],
-    );
+    expect(unsafeMock).toHaveBeenCalledWith(expect.stringContaining('FROM classroom_reflections'), [
+      'class-1',
+      'teacher-1',
+      5,
+    ]);
   });
 });

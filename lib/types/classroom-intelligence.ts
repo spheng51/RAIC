@@ -1,9 +1,4 @@
-export const CLASSROOM_REVISIT_INTENTS = [
-  'continue',
-  'revisit',
-  'remediate',
-  'deepen',
-] as const;
+export const CLASSROOM_REVISIT_INTENTS = ['continue', 'revisit', 'remediate', 'deepen'] as const;
 
 export type ClassroomRevisitIntent = (typeof CLASSROOM_REVISIT_INTENTS)[number];
 

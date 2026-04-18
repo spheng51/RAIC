@@ -58,7 +58,9 @@ vi.mock('@/components/ui/textarea', async () => {
 vi.mock('@/components/ui/select', async () => {
   const React = await import('react');
 
-  function collectOptions(children: React.ReactNode): Array<{ value: string; label: React.ReactNode }> {
+  function collectOptions(
+    children: React.ReactNode,
+  ): Array<{ value: string; label: React.ReactNode }> {
     const options: Array<{ value: string; label: React.ReactNode }> = [];
 
     React.Children.forEach(children, (child) => {
@@ -116,13 +118,8 @@ vi.mock('@/components/ui/select', async () => {
     SelectValue: () => null,
     SelectContent: ({ children }: { children?: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-    SelectItem: ({
-      children,
-      value,
-    }: {
-      children?: React.ReactNode;
-      value: string;
-    }) => React.createElement('option', { value }, children),
+    SelectItem: ({ children, value }: { children?: React.ReactNode; value: string }) =>
+      React.createElement('option', { value }, children),
   };
 });
 
@@ -156,7 +153,11 @@ function createDeferred<T>() {
 }
 
 async function mountDialog(
-  overrides: Partial<React.ComponentProps<typeof import('@/components/stage/session-reflection-dialog').SessionReflectionDialog>> = {},
+  overrides: Partial<
+    React.ComponentProps<
+      typeof import('@/components/stage/session-reflection-dialog').SessionReflectionDialog
+    >
+  > = {},
 ) {
   const { SessionReflectionDialog } = await import('@/components/stage/session-reflection-dialog');
   const container = document.createElement('div');
@@ -196,8 +197,9 @@ async function mountDialog(
 
 describe('SessionReflectionDialog', () => {
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
   });
