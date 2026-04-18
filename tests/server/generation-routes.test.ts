@@ -11,6 +11,7 @@ const formatImagePlaceholderMock = vi.fn();
 const formatTeacherPersonaForPromptMock = vi.fn();
 const generateSceneActionsMock = vi.fn();
 const generateSceneContentMock = vi.fn();
+const loadTeacherAdaptivePromptMock = vi.fn();
 const resolveModelFromHeadersMock = vi.fn();
 const streamLLMMock = vi.fn();
 const uniquifyMediaElementIdsMock = vi.fn();
@@ -22,6 +23,10 @@ vi.mock('@/lib/ai/llm', () => ({
 
 vi.mock('@/lib/server/resolve-model', () => ({
   resolveModelFromHeaders: resolveModelFromHeadersMock,
+}));
+
+vi.mock('@/lib/server/adaptive-runtime-prompt', () => ({
+  loadTeacherAdaptivePrompt: loadTeacherAdaptivePromptMock,
 }));
 
 vi.mock('@/lib/generation/generation-pipeline', () => ({
@@ -83,6 +88,7 @@ describe('generation routes', () => {
     formatTeacherPersonaForPromptMock.mockReset();
     generateSceneActionsMock.mockReset();
     generateSceneContentMock.mockReset();
+    loadTeacherAdaptivePromptMock.mockReset();
     resolveModelFromHeadersMock.mockReset();
     streamLLMMock.mockReset();
     uniquifyMediaElementIdsMock.mockReset();
@@ -92,6 +98,7 @@ describe('generation routes', () => {
     formatImageDescriptionMock.mockReturnValue('image-description');
     formatImagePlaceholderMock.mockReturnValue('image-placeholder');
     formatTeacherPersonaForPromptMock.mockReturnValue('');
+    loadTeacherAdaptivePromptMock.mockResolvedValue('');
     resolveModelFromHeadersMock.mockResolvedValue({
       model: 'resolved-model',
       modelInfo: { capabilities: {} },
@@ -211,6 +218,47 @@ describe('generation routes', () => {
     });
   });
 
+  it('passes teacher adaptive context into scene content generation', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
+    applyOutlineFallbacksMock.mockReturnValue(outline);
+    loadTeacherAdaptivePromptMock.mockResolvedValue(
+      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+    );
+    generateSceneContentMock.mockResolvedValue({ slideTitle: 'Welcome' });
+
+    const { POST } = await import('@/app/api/generate/scene-content/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-content', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          stageId: 'stage-1',
+          classroomId: 'room-1',
+          stageInfo: { name: 'Physics 101', language: 'en-US' },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+      }),
+    );
+    expect(generateSceneContentMock).toHaveBeenCalledWith(
+      outline,
+      expect.any(Function),
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+      undefined,
+      expect.stringContaining('## Adaptive Session Context'),
+    );
+  });
+
   it('validates required input for scene action generation', async () => {
     const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
 
@@ -259,6 +307,84 @@ describe('generation routes', () => {
     expect(response.status).toBe(200);
     expect(body.scene.id).toBe('scene-1');
     expect(body.previousSpeeches).toEqual(['Welcome aboard.']);
+  });
+
+  it('injects teacher adaptive context into scene action prompts', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
+    loadTeacherAdaptivePromptMock.mockResolvedValue(
+      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+    );
+    callLLMMock.mockResolvedValue({ text: '[]' });
+    generateSceneActionsMock.mockImplementation(async (_outline, _content, aiCall) => {
+      await aiCall('system prompt', 'user prompt');
+      return [{ type: 'speech', text: 'Welcome aboard.' }];
+    });
+    buildCompleteSceneMock.mockReturnValue({
+      id: 'scene-1',
+      order: 1,
+      type: 'slide',
+      actions: [{ type: 'speech', text: 'Welcome aboard.' }],
+      content: { slideTitle: 'Welcome' },
+    });
+
+    const { POST } = await import('@/app/api/generate/scene-actions/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          content: { slideTitle: 'Welcome' },
+          classroomId: 'room-1',
+          stageId: 'stage-1',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(callLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('## Adaptive Session Context'),
+      }),
+      'scene-actions',
+    );
+  });
+
+  it('keeps unmarked regeneration on the current non-adaptive path', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
+    callLLMMock.mockResolvedValue({ text: '[]' });
+    generateSceneActionsMock.mockImplementation(async (_outline, _content, aiCall) => {
+      await aiCall('system prompt', 'user prompt');
+      return [{ type: 'speech', text: 'Welcome aboard.' }];
+    });
+    buildCompleteSceneMock.mockReturnValue({
+      id: 'scene-1',
+      order: 1,
+      type: 'slide',
+      actions: [{ type: 'speech', text: 'Welcome aboard.' }],
+      content: { slideTitle: 'Welcome' },
+    });
+
+    const { POST } = await import('@/app/api/generate/scene-actions/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          content: { slideTitle: 'Welcome' },
+          stageId: 'stage-1',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(callLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'system prompt',
+      }),
+      'scene-actions',
+    );
   });
 
   it('validates required input for outline streaming', async () => {

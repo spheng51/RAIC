@@ -17,6 +17,7 @@ import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { loadTeacherAdaptivePrompt } from '@/lib/server/adaptive-runtime-prompt';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 
 const log = createLogger('Scene Content API');
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
         style?: string;
       };
       stageId: string;
+      classroomId?: string;
       agents?: AgentInfo[];
     };
 
@@ -65,6 +67,13 @@ export async function POST(req: NextRequest) {
     if (!stageId) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'stageId is required');
     }
+
+    const adaptivePrompt = await loadTeacherAdaptivePrompt({
+      classroomId: body.classroomId,
+      request: req,
+      onError: (error) =>
+        log.warn(`Adaptive scene-content context unavailable for ${body.classroomId}:`, error),
+    });
 
     // Ensure outline has language from stageInfo (fallback for older outlines)
     const outline: SceneOutline = {
@@ -86,11 +95,14 @@ export async function POST(req: NextRequest) {
       userPrompt: string,
       images?: Array<{ id: string; src: string }>,
     ): Promise<string> => {
+      const effectiveSystemPrompt = adaptivePrompt
+        ? `${systemPrompt}\n\n${adaptivePrompt}`
+        : systemPrompt;
       if (images?.length && hasVision) {
         const result = await callLLM(
           {
             model: languageModel,
-            system: systemPrompt,
+            system: effectiveSystemPrompt,
             messages: [
               {
                 role: 'user' as const,
@@ -106,7 +118,7 @@ export async function POST(req: NextRequest) {
       const result = await callLLM(
         {
           model: languageModel,
-          system: systemPrompt,
+          system: effectiveSystemPrompt,
           prompt: userPrompt,
           maxOutputTokens: modelInfo?.outputWindow,
         },
@@ -149,6 +161,7 @@ export async function POST(req: NextRequest) {
       hasVision,
       generatedMediaMapping,
       agents,
+      adaptivePrompt,
     );
 
     if (!content) {

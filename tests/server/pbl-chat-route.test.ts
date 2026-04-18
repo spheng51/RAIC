@@ -5,6 +5,7 @@ const requireClassroomAccessMock = vi.fn();
 const resolveModelFromHeadersWithScopeMock = vi.fn();
 const toGovernedProviderApiErrorResponseMock = vi.fn();
 const callLLMMock = vi.fn();
+const loadTeacherAdaptivePromptMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -20,6 +21,10 @@ vi.mock('@/lib/server/resolve-model', () => ({
 
 vi.mock('@/lib/ai/llm', () => ({
   callLLM: callLLMMock,
+}));
+
+vi.mock('@/lib/server/adaptive-runtime-prompt', () => ({
+  loadTeacherAdaptivePrompt: loadTeacherAdaptivePromptMock,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -38,7 +43,9 @@ describe('POST /api/pbl/chat', () => {
     resolveModelFromHeadersWithScopeMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
     callLLMMock.mockReset();
+    loadTeacherAdaptivePromptMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
+    loadTeacherAdaptivePromptMock.mockResolvedValue('');
   });
 
   it('rejects PBL chat requests that do not have classroom access', async () => {
@@ -185,5 +192,114 @@ describe('POST /api/pbl/chat', () => {
       errorCode: 'FORBIDDEN',
       success: false,
     });
+  });
+
+  it('injects adaptive prompt text for teacher web sessions', async () => {
+    const access = {
+      auth: {
+        user: { id: 'teacher-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'teacher' },
+      },
+      source: 'web',
+    };
+    requireClassroomAccessMock.mockResolvedValue(access);
+    resolveModelFromHeadersWithScopeMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+    });
+    loadTeacherAdaptivePromptMock.mockResolvedValue(
+      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+    );
+    callLLMMock.mockResolvedValue({ text: 'hello back' });
+
+    const { POST } = await import('@/app/api/pbl/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/pbl/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomId: 'room-1',
+          message: 'Hello',
+          agent: {
+            name: 'Question Agent',
+            actor_role: 'Coach',
+            role_division: 'management',
+            system_prompt: 'Help',
+            default_mode: 'question',
+            delay_time: 0,
+            env: {},
+            is_user_role: false,
+            is_active: true,
+            is_system_agent: false,
+          },
+          currentIssue: null,
+          recentMessages: [],
+          userRole: 'student',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        access,
+      }),
+    );
+    expect(callLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('## Adaptive Session Context'),
+      }),
+      'pbl-chat',
+    );
+  });
+
+  it('keeps classroom-cookie access on the non-adaptive PBL path', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'student-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'student' },
+      },
+      source: 'classroom',
+    });
+    resolveModelFromHeadersWithScopeMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+    });
+    callLLMMock.mockResolvedValue({ text: 'hello back' });
+
+    const { POST } = await import('@/app/api/pbl/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/pbl/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomId: 'room-1',
+          message: 'Hello',
+          agent: {
+            name: 'Question Agent',
+            actor_role: 'Coach',
+            role_division: 'management',
+            system_prompt: 'Help',
+            default_mode: 'question',
+            delay_time: 0,
+            env: {},
+            is_user_role: false,
+            is_active: true,
+            is_system_agent: false,
+          },
+          currentIssue: null,
+          recentMessages: [],
+          userRole: 'student',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalled();
+    expect(callLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.not.stringContaining('## Adaptive Session Context'),
+      }),
+      'pbl-chat',
+    );
   });
 });

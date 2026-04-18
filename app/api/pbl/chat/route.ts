@@ -15,6 +15,7 @@ import {
   apiSuccessWithRequestSession,
   withRequestWebSession,
 } from '@/lib/server/api-response';
+import { loadTeacherAdaptivePrompt } from '@/lib/server/adaptive-runtime-prompt';
 import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
 import { resolveModelFromHeadersWithScope } from '@/lib/server/resolve-model';
 const log = createLogger('PBL Chat');
@@ -52,6 +53,12 @@ export async function POST(req: NextRequest) {
       return access;
     }
 
+    const adaptivePrompt = await loadTeacherAdaptivePrompt({
+      classroomId,
+      access,
+      onError: (error) => log.warn(`Adaptive PBL context unavailable for ${classroomId}:`, error),
+    });
+
     // Get model config from headers
     const { model } = await resolveModelFromHeadersWithScope(req, {
       auth: access.auth,
@@ -80,7 +87,9 @@ export async function POST(req: NextRequest) {
             .join('\n')}`
         : '';
 
-    const systemPrompt = `${agent.system_prompt}${issueContext}${recentContext}${userRole ? `\n\nThe student's role is: ${userRole}` : ''}`;
+    const systemPrompt = `${agent.system_prompt}${
+      adaptivePrompt ? `\n\n${adaptivePrompt}` : ''
+    }${issueContext}${recentContext}${userRole ? `\n\nThe student's role is: ${userRole}` : ''}`;
 
     const result = await callLLM(
       {

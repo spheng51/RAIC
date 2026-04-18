@@ -155,6 +155,7 @@ export async function generateSceneContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  adaptivePrompt?: string,
 ): Promise<
   | GeneratedSlideContent
   | GeneratedQuizContent
@@ -176,6 +177,7 @@ export async function generateSceneContent(
       visionEnabled,
       generatedMediaMapping,
       agents,
+      adaptivePrompt,
     );
   }
 
@@ -189,13 +191,14 @@ export async function generateSceneContent(
         visionEnabled,
         generatedMediaMapping,
         agents,
+        adaptivePrompt,
       );
     case 'quiz':
-      return generateQuizContent(outline, aiCall);
+      return generateQuizContent(outline, aiCall, adaptivePrompt);
     case 'interactive':
-      return generateInteractiveContent(outline, aiCall, outline.language);
+      return generateInteractiveContent(outline, aiCall, outline.language, adaptivePrompt);
     case 'pbl':
-      return generatePBLSceneContent(outline, languageModel);
+      return generatePBLSceneContent(outline, languageModel, adaptivePrompt);
     default:
       return null;
   }
@@ -298,6 +301,10 @@ function resolveImageIds(
       return el;
     })
     .filter((el): el is NonNullable<typeof el> => el !== null);
+}
+
+function withAdaptivePrompt(systemPrompt: string, adaptivePrompt?: string): string {
+  return adaptivePrompt ? `${systemPrompt}\n\n${adaptivePrompt}` : systemPrompt;
 }
 
 /**
@@ -466,6 +473,7 @@ async function generateSlideContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  adaptivePrompt?: string,
 ): Promise<GeneratedSlideContent | null> {
   const lang = outline.language || 'zh-CN';
 
@@ -558,7 +566,11 @@ async function generateSlideContent(
     log.debug(`Vision images: ${visionImages.map((img) => img.id).join(', ')}`);
   }
 
-  const response = await aiCall(prompts.system, prompts.user, visionImages);
+  const response = await aiCall(
+    withAdaptivePrompt(prompts.system, adaptivePrompt),
+    prompts.user,
+    visionImages,
+  );
   const generatedData = parseJsonResponse<GeneratedSlideData>(response);
 
   if (!generatedData || !generatedData.elements || !Array.isArray(generatedData.elements)) {
@@ -632,6 +644,7 @@ async function generateSlideContent(
 async function generateQuizContent(
   outline: SceneOutline,
   aiCall: AICallFn,
+  adaptivePrompt?: string,
 ): Promise<GeneratedQuizContent | null> {
   const quizConfig = outline.quizConfig || {
     questionCount: 3,
@@ -653,7 +666,7 @@ async function generateQuizContent(
   }
 
   log.debug(`Generating quiz content for: ${outline.title}`);
-  const response = await aiCall(prompts.system, prompts.user);
+  const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
   const generatedQuestions = parseJsonResponse<QuizQuestion[]>(response);
 
   if (!generatedQuestions || !Array.isArray(generatedQuestions)) {
@@ -736,6 +749,7 @@ async function generateInteractiveContent(
   outline: SceneOutline,
   aiCall: AICallFn,
   language: 'zh-CN' | 'en-US' = 'zh-CN',
+  adaptivePrompt?: string,
 ): Promise<GeneratedInteractiveContent | null> {
   const config = outline.interactiveConfig!;
 
@@ -752,7 +766,10 @@ async function generateInteractiveContent(
 
     if (modelPrompts) {
       log.info(`Step 1: Scientific modeling for: ${outline.title}`);
-      const modelResponse = await aiCall(modelPrompts.system, modelPrompts.user);
+      const modelResponse = await aiCall(
+        withAdaptivePrompt(modelPrompts.system, adaptivePrompt),
+        modelPrompts.user,
+      );
       const parsed = parseJsonResponse<ScientificModel>(modelResponse);
       if (parsed && parsed.core_formulas) {
         scientificModel = parsed;
@@ -801,7 +818,10 @@ async function generateInteractiveContent(
   }
 
   log.info(`Step 2: Generating HTML for: ${outline.title}`);
-  const htmlResponse = await aiCall(htmlPrompts.system, htmlPrompts.user);
+  const htmlResponse = await aiCall(
+    withAdaptivePrompt(htmlPrompts.system, adaptivePrompt),
+    htmlPrompts.user,
+  );
   // Extract HTML from response
   const rawHtml = extractHtml(htmlResponse);
   if (!rawHtml) {
@@ -826,6 +846,7 @@ async function generateInteractiveContent(
 async function generatePBLSceneContent(
   outline: SceneOutline,
   languageModel?: LanguageModel,
+  adaptivePrompt?: string,
 ): Promise<GeneratedPBLContent | null> {
   if (!languageModel) {
     log.error('LanguageModel required for PBL generation');
@@ -853,6 +874,7 @@ async function generatePBLSceneContent(
       {
         onProgress: (msg) => log.info(`${msg}`),
       },
+      adaptivePrompt,
     );
     log.info(
       `PBL generated: ${projectConfig.agents.length} agents, ${projectConfig.issueboard.issues.length} issues`,
@@ -916,6 +938,7 @@ export async function generateSceneActions(
   ctx?: SceneGenerationContext,
   agents?: AgentInfo[],
   userProfile?: string,
+  adaptivePrompt?: string,
 ): Promise<Action[]> {
   const agentsText = formatAgentsForPrompt(agents);
 
@@ -937,7 +960,7 @@ export async function generateSceneActions(
       return generateDefaultSlideActions(outline, content.elements);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -965,7 +988,7 @@ export async function generateSceneActions(
       return generateDefaultQuizActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -992,7 +1015,7 @@ export async function generateSceneActions(
       return generateDefaultInteractiveActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -1019,7 +1042,7 @@ export async function generateSceneActions(
       return generateDefaultPBLActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {

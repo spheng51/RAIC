@@ -25,6 +25,7 @@ import type {
 import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
+import { loadTeacherAdaptivePrompt } from '@/lib/server/adaptive-runtime-prompt';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 
 const log = createLogger('Scene Actions API');
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
         | GeneratedInteractiveContent
         | GeneratedPBLContent;
       stageId: string;
+      classroomId?: string;
       agents?: AgentInfo[];
       previousSpeeches?: string[];
       userProfile?: string;
@@ -76,6 +78,13 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'stageId is required');
     }
 
+    const adaptivePrompt = await loadTeacherAdaptivePrompt({
+      classroomId: body.classroomId,
+      request: req,
+      onError: (error) =>
+        log.warn(`Adaptive scene-actions context unavailable for ${body.classroomId}:`, error),
+    });
+
     // ── Model resolution from request headers ──
     const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
     outlineTitle = outline?.title;
@@ -90,11 +99,14 @@ export async function POST(req: NextRequest) {
       userPrompt: string,
       images?: Array<{ id: string; src: string }>,
     ): Promise<string> => {
+      const effectiveSystemPrompt = adaptivePrompt
+        ? `${systemPrompt}\n\n${adaptivePrompt}`
+        : systemPrompt;
       if (images?.length && hasVision) {
         const result = await callLLM(
           {
             model: languageModel,
-            system: systemPrompt,
+            system: effectiveSystemPrompt,
             messages: [
               {
                 role: 'user' as const,
@@ -110,7 +122,7 @@ export async function POST(req: NextRequest) {
       const result = await callLLM(
         {
           model: languageModel,
-          system: systemPrompt,
+          system: effectiveSystemPrompt,
           prompt: userPrompt,
           maxOutputTokens: modelInfo?.outputWindow,
         },

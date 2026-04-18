@@ -43,6 +43,7 @@ export async function generatePBLContent(
   config: GeneratePBLConfig,
   model: LanguageModel,
   callbacks?: GeneratePBLCallbacks,
+  systemPromptSuffix?: string,
 ): Promise<PBLProjectConfig> {
   const { language } = config;
 
@@ -281,7 +282,9 @@ export async function generatePBLContent(
   };
 
   // Run the agentic loop
-  const systemPrompt = buildPBLSystemPrompt(config);
+  const systemPrompt = systemPromptSuffix
+    ? `${buildPBLSystemPrompt(config)}\n\n${systemPromptSuffix}`
+    : buildPBLSystemPrompt(config);
 
   const _result = await callLLM(
     {

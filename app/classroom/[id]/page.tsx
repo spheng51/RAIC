@@ -559,6 +559,7 @@ export default function ClassroomDetailPage() {
 
       loadImageMapping(storageIds).then((imageMapping) => {
         generateRemaining({
+          classroomId: classroomSource === 'teacher-server' ? classroomId : undefined,
           pdfImages: params.pdfImages,
           imageMapping,
           stageInfo: {

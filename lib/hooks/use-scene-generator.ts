@@ -65,6 +65,7 @@ async function fetchSceneContent(
     outline: SceneOutline;
     allOutlines: SceneOutline[];
     stageId: string;
+    classroomId?: string;
     pdfImages?: PdfImage[];
     imageMapping?: ImageMapping;
     stageInfo: {
@@ -99,6 +100,7 @@ async function fetchSceneActions(
     allOutlines: SceneOutline[];
     content: unknown;
     stageId: string;
+    classroomId?: string;
     agents?: AgentInfo[];
     previousSpeeches?: string[];
     userProfile?: string;
@@ -219,6 +221,7 @@ export interface UseSceneGeneratorOptions {
 }
 
 export interface GenerationParams {
+  classroomId?: string;
   pdfImages?: PdfImage[];
   imageMapping?: ImageMapping;
   stageInfo: {
@@ -328,6 +331,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
               outline,
               allOutlines: outlines,
               stageId: stage.id,
+              classroomId: params.classroomId,
               pdfImages: params.pdfImages,
               imageMapping: params.imageMapping,
               stageInfo: params.stageInfo,
@@ -362,6 +366,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
               allOutlines: outlines,
               content: contentResult.content,
               stageId: stage.id,
+              classroomId: params.classroomId,
               agents: params.agents,
               previousSpeeches,
               userProfile: params.userProfile,
@@ -486,6 +491,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
             outline,
             allOutlines: state.outlines,
             stageId: state.stage.id,
+            classroomId: params.classroomId,
             pdfImages: params.pdfImages,
             imageMapping: params.imageMapping,
             stageInfo: params.stageInfo,
@@ -514,6 +520,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
             allOutlines: state.outlines,
             content: contentResult.content,
             stageId: state.stage.id,
+            classroomId: params.classroomId,
             agents: params.agents,
             previousSpeeches,
             userProfile: params.userProfile,
