@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { createHash, randomUUID } from 'crypto';
-import path from 'path';
 import perfBudgets from '@/ops/perf-budgets.json';
 import {
   readPlatformStore,
@@ -23,8 +22,9 @@ import {
   CLASSROOM_REVISIT_INTENTS,
 } from '@/lib/types/classroom-intelligence';
 import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
+import { getDataPath } from '@/lib/server/data-root';
 
-const PERF_RESULTS_PATH = path.join(process.cwd(), 'data', 'perf-results', 'latest.json');
+const PERF_RESULTS_PATH = getDataPath('perf-results', 'latest.json');
 const REQUIREMENT_PREVIEW_MAX_LENGTH = 180;
 const MAX_INTELLIGENCE_TAGS = 8;
 const MAX_REFLECTION_SUMMARY_LENGTH = 2000;

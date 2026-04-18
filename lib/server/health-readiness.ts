@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { PersistenceMode } from '@/lib/db/client';
 import { getPersistenceMode, runPostgresQuery } from '@/lib/db/client';
+import { isHostedEphemeralDataRoot } from '@/lib/server/data-root';
 import { hasEncryptionKeyConfigured } from '@/lib/server/encrypted-secrets';
 import { getMiroFishConfig, isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
 
@@ -54,6 +55,16 @@ async function getStorageReadiness(): Promise<HealthStorageReadiness> {
     const mode = await getPersistenceMode();
     if (mode === 'postgres') {
       await runPostgresQuery('SELECT 1');
+    }
+
+    if (mode === 'json' && isHostedEphemeralDataRoot()) {
+      return {
+        mode,
+        ...createReadyCheck(
+          false,
+          'DATABASE_URL is required for durable hosted storage; JSON fallback uses temporary runtime storage only',
+        ),
+      };
     }
 
     return {

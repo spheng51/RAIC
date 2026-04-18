@@ -5,9 +5,10 @@ import path from 'path';
 import { createRequire } from 'module';
 import { EMPTY_PLATFORM_STORE, PLATFORM_SCHEMA_SQL, type PlatformStore } from '@/lib/db/schema';
 import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
+import { getDataPath } from '@/lib/server/data-root';
 
 const runtimeRequire = createRequire(import.meta.url);
-const PLATFORM_DATA_DIR = path.join(process.cwd(), 'data', 'platform');
+const PLATFORM_DATA_DIR = getDataPath('platform');
 const PLATFORM_STORE_PATH = path.join(PLATFORM_DATA_DIR, 'platform-store.json');
 const TRANSIENT_PLATFORM_READ_CODES = new Set(['EPERM', 'EBUSY', 'ENOENT']);
 const PLATFORM_READ_RETRY_COUNT = 5;
