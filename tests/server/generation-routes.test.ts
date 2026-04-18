@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import {
+  noAdaptivePromptExpectation,
+  repeatedSessionPromptExpectation,
+  scorePromptReplay,
+} from '../support/adaptive-runtime-replay';
 
 const applyOutlineFallbacksMock = vi.fn();
 const buildCompleteSceneMock = vi.fn();
@@ -222,7 +227,14 @@ describe('generation routes', () => {
     const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
     applyOutlineFallbacksMock.mockReturnValue(outline);
     loadTeacherAdaptivePromptMock.mockResolvedValue(
-      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+      [
+        '## Adaptive Session Context',
+        'This requirement matches 1 prior session(s). Treat this as a repeated-session classroom, not a first-time lesson.',
+        '- Last completed segment: Orbital transfer maneuvers',
+        '- Revisit intent: remediate',
+        '- Mastery hints: transfer windows; burn timing',
+        '- Reflection summary: Spend more time on transfer windows before moving on.',
+      ].join('\n'),
     );
     generateSceneContentMock.mockResolvedValue({ slideTitle: 'Welcome' });
 
@@ -246,17 +258,45 @@ describe('generation routes', () => {
         classroomId: 'room-1',
       }),
     );
-    expect(generateSceneContentMock).toHaveBeenCalledWith(
-      outline,
-      expect.any(Function),
-      undefined,
-      undefined,
-      undefined,
-      false,
-      {},
-      undefined,
-      expect.stringContaining('## Adaptive Session Context'),
+    expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
+
+    const adaptivePrompt = generateSceneContentMock.mock.calls[0]?.[8];
+    expect(scorePromptReplay(adaptivePrompt, repeatedSessionPromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('fails open for first-run teacher scene content regeneration', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
+    applyOutlineFallbacksMock.mockReturnValue(outline);
+    loadTeacherAdaptivePromptMock.mockResolvedValue('');
+    generateSceneContentMock.mockResolvedValue({ slideTitle: 'Welcome' });
+
+    const { POST } = await import('@/app/api/generate/scene-content/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-content', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          stageId: 'stage-1',
+          classroomId: 'room-1',
+          stageInfo: { name: 'Physics 101', language: 'en-US' },
+        }),
+      }),
     );
+
+    expect(response.status).toBe(200);
+    expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
+
+    const adaptivePrompt = generateSceneContentMock.mock.calls[0]?.[8];
+    expect(scorePromptReplay(adaptivePrompt, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
   it('validates required input for scene action generation', async () => {
@@ -312,7 +352,14 @@ describe('generation routes', () => {
   it('injects teacher adaptive context into scene action prompts', async () => {
     const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
     loadTeacherAdaptivePromptMock.mockResolvedValue(
-      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+      [
+        '## Adaptive Session Context',
+        'This requirement matches 1 prior session(s). Treat this as a repeated-session classroom, not a first-time lesson.',
+        '- Last completed segment: Orbital transfer maneuvers',
+        '- Revisit intent: remediate',
+        '- Mastery hints: transfer windows; burn timing',
+        '- Reflection summary: Spend more time on transfer windows before moving on.',
+      ].join('\n'),
     );
     callLLMMock.mockResolvedValue({ text: '[]' });
     generateSceneActionsMock.mockImplementation(async (_outline, _content, aiCall) => {
@@ -342,16 +389,19 @@ describe('generation routes', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(callLLMMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining('## Adaptive Session Context'),
-      }),
-      'scene-actions',
-    );
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+
+    const llmRequest = callLLMMock.mock.calls[0]?.[0];
+    expect(scorePromptReplay(llmRequest?.system, repeatedSessionPromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
-  it('keeps unmarked regeneration on the current non-adaptive path', async () => {
+  it('fails open for first-run teacher scene action regeneration', async () => {
     const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
+    loadTeacherAdaptivePromptMock.mockResolvedValue('');
     callLLMMock.mockResolvedValue({ text: '[]' });
     generateSceneActionsMock.mockImplementation(async (_outline, _content, aiCall) => {
       await aiCall('system prompt', 'user prompt');
@@ -373,18 +423,21 @@ describe('generation routes', () => {
           outline,
           allOutlines: [outline],
           content: { slideTitle: 'Welcome' },
+          classroomId: 'room-1',
           stageId: 'stage-1',
         }),
       }),
     );
 
     expect(response.status).toBe(200);
-    expect(callLLMMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: 'system prompt',
-      }),
-      'scene-actions',
-    );
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+
+    const llmRequest = callLLMMock.mock.calls[0]?.[0];
+    expect(scorePromptReplay(llmRequest?.system, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
   it('validates required input for outline streaming', async () => {

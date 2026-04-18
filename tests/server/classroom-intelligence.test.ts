@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { promises as fs } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  repeatedSessionAdaptiveContext,
+  repeatedSessionPromptExpectation,
+  scorePromptReplay,
+} from '../support/adaptive-runtime-replay';
 
 type DbGlobals = typeof globalThis & {
   __raicPlatformJsonLock?: Promise<void>;
@@ -180,6 +185,45 @@ describe('classroom intelligence persistence', () => {
     expect(adaptiveContext?.masteryHints).toEqual(
       expect.arrayContaining(['transfer windows', 'burn timing']),
     );
+  });
+
+  it('returns no adaptive runtime context for first-run teacher classrooms', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    const { buildAdaptiveRuntimeContext, upsertClassroomSessionContext } =
+      await import('@/lib/server/classroom-intelligence');
+
+    await upsertClassroomSessionContext({
+      classroomId: 'class-1',
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      stageName: 'Orbital Mechanics',
+      language: 'en-US',
+      completedSceneCount: 0,
+      totalSceneCount: 6,
+      revisitIntent: 'continue',
+    });
+
+    const adaptiveContext = await buildAdaptiveRuntimeContext({
+      classroomId: 'class-1',
+      userId: 'teacher-1',
+    });
+
+    expect(adaptiveContext).toBeNull();
+  });
+
+  it('formats deterministic adaptive replay markers for Slice C scoring', async () => {
+    const { formatAdaptiveContextForPrompt } = await import('@/lib/server/classroom-intelligence');
+
+    const score = scorePromptReplay(
+      formatAdaptiveContextForPrompt(repeatedSessionAdaptiveContext),
+      repeatedSessionPromptExpectation,
+    );
+
+    expect(score).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
   it('uses Postgres-backed classroom intelligence records consistently', async () => {

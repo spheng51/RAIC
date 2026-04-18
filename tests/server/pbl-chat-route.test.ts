@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  noAdaptivePromptExpectation,
+  repeatedSessionPromptExpectation,
+  scorePromptReplay,
+} from '../support/adaptive-runtime-replay';
 
 const requireClassroomAccessMock = vi.fn();
 const resolveModelFromHeadersWithScopeMock = vi.fn();
@@ -208,7 +213,14 @@ describe('POST /api/pbl/chat', () => {
       model: { id: 'mock-model' },
     });
     loadTeacherAdaptivePromptMock.mockResolvedValue(
-      '## Adaptive Session Context\n- Last completed segment: Force vectors in orbit',
+      [
+        '## Adaptive Session Context',
+        'This requirement matches 1 prior session(s). Treat this as a repeated-session classroom, not a first-time lesson.',
+        '- Last completed segment: Orbital transfer maneuvers',
+        '- Revisit intent: remediate',
+        '- Mastery hints: transfer windows; burn timing',
+        '- Reflection summary: Spend more time on transfer windows before moving on.',
+      ].join('\n'),
     );
     callLLMMock.mockResolvedValue({ text: 'hello back' });
 
@@ -245,12 +257,66 @@ describe('POST /api/pbl/chat', () => {
         access,
       }),
     );
-    expect(callLLMMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining('## Adaptive Session Context'),
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+
+    const llmRequest = callLLMMock.mock.calls[0]?.[0];
+    expect(scorePromptReplay(llmRequest?.system, repeatedSessionPromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('fails open for first-run teacher PBL sessions without adaptive prompt state', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'teacher-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'teacher' },
+      },
+      source: 'web',
+    });
+    resolveModelFromHeadersWithScopeMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+    });
+    loadTeacherAdaptivePromptMock.mockResolvedValue('');
+    callLLMMock.mockResolvedValue({ text: 'hello back' });
+
+    const { POST } = await import('@/app/api/pbl/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/pbl/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          classroomId: 'room-1',
+          message: 'Hello',
+          agent: {
+            name: 'Question Agent',
+            actor_role: 'Coach',
+            role_division: 'management',
+            system_prompt: 'Help',
+            default_mode: 'question',
+            delay_time: 0,
+            env: {},
+            is_user_role: false,
+            is_active: true,
+            is_system_agent: false,
+          },
+          currentIssue: null,
+          recentMessages: [],
+          userRole: 'student',
+        }),
       }),
-      'pbl-chat',
     );
+
+    expect(response.status).toBe(200);
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+
+    const llmRequest = callLLMMock.mock.calls[0]?.[0];
+    expect(scorePromptReplay(llmRequest?.system, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
   it('keeps classroom-cookie access on the non-adaptive PBL path', async () => {
@@ -295,11 +361,13 @@ describe('POST /api/pbl/chat', () => {
 
     expect(response.status).toBe(200);
     expect(loadTeacherAdaptivePromptMock).toHaveBeenCalled();
-    expect(callLLMMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.not.stringContaining('## Adaptive Session Context'),
-      }),
-      'pbl-chat',
-    );
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+
+    const llmRequest = callLLMMock.mock.calls[0]?.[0];
+    expect(scorePromptReplay(llmRequest?.system, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 });

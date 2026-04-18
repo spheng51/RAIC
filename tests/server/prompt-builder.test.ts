@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { buildStructuredPrompt } from '@/lib/orchestration/prompt-builder';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { StatelessChatRequest } from '@/lib/types/chat';
-import type { AdaptiveGenerationContext } from '@/lib/types/classroom-intelligence';
+import {
+  noAdaptivePromptExpectation,
+  repeatedSessionAdaptiveContext,
+  repeatedSessionPromptExpectation,
+  scorePromptReplay,
+} from '../support/adaptive-runtime-replay';
 
 const teacherAgent: AgentConfig = {
   id: 'teacher-1',
@@ -34,18 +39,7 @@ const storeState = {
 } satisfies StatelessChatRequest['storeState'];
 
 describe('buildStructuredPrompt', () => {
-  it('includes adaptive session guidance when repeated-session context exists', () => {
-    const adaptiveContext: AdaptiveGenerationContext = {
-      requirementFingerprint: 'class-1',
-      priorSessions: 2,
-      lastCompletedSceneTitle: 'Orbital transfer maneuvers',
-      masteryHints: ['transfer windows', 'burn timing'],
-      revisitIntent: 'remediate',
-      pacingPreference: 'remediate',
-      reflectionSummary: 'Spend more time on transfer windows before moving on.',
-      confidenceScore: 2,
-    };
-
+  it('includes deterministic adaptive replay markers for repeated-session classrooms', () => {
     const prompt = buildStructuredPrompt(
       teacherAgent,
       storeState,
@@ -53,22 +47,29 @@ describe('buildStructuredPrompt', () => {
       undefined,
       undefined,
       undefined,
-      adaptiveContext,
+      repeatedSessionAdaptiveContext,
     );
 
-    expect(prompt).toContain('## Adaptive Session Context');
-    expect(prompt).toContain('Treat this as a repeated-session classroom');
-    expect(prompt).toContain('Last completed segment: Orbital transfer maneuvers');
-    expect(prompt).toContain('Mastery hints: transfer windows; burn timing');
-    expect(prompt).toContain(
-      'Reflection summary: Spend more time on transfer windows before moving on.',
-    );
+    expect(scorePromptReplay(prompt, repeatedSessionPromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
-  it('omits adaptive session guidance for first-run flows', () => {
+  it.each([
+    'teacher first-run classrooms',
+    'public demo flows',
+    'anonymous flows',
+    'student flows',
+    'classroom-cookie-only flows',
+  ])('omits adaptive enrichment for %s', () => {
     const prompt = buildStructuredPrompt(teacherAgent, storeState);
 
-    expect(prompt).not.toContain('## Adaptive Session Context');
-    expect(prompt).not.toContain('Treat this as a repeated-session classroom');
+    expect(scorePromptReplay(prompt, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 });

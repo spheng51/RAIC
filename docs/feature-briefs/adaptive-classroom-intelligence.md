@@ -35,6 +35,28 @@ Current sessions are strong for static content delivery but use mostly generic a
 - Coverage of adaptation decisions in unit/component tests.
 - Measurable rubric improvement on a fixed internal prompt corpus without increased P95 classroom route latency.
 
+## Slice C Deterministic Replay Gate
+
+- Replay coverage stays model-free and fixture-backed. It scores only persisted session-context plus latest reflection inputs that already exist in the teacher runtime path.
+- Required positive replay cases:
+  - teacher repeated-session `/api/chat`
+  - teacher repeated-session `/api/pbl/chat`
+  - teacher repeated-session scene regeneration
+- Required fail-open cases:
+  - teacher first-run classrooms
+  - public demo flows
+  - anonymous flows
+  - student flows
+  - classroom-cookie-only flows
+- Required positive signals:
+  - last completed segment
+  - mastery hints
+  - revisit or remediation intent
+  - latest reflection summary
+- Required negative signals:
+  - no adaptive prompt section or repeated-session markers in first-run, public, anonymous, student, or classroom-cookie flows
+- Slice C passes only when every deterministic replay case passes and the existing reconnect, reflection reset, benchmark gating, provider-profile merge, and MiroFish regressions remain green.
+
 ## Rollback Condition
 
 - Drop this slice if deterministic replay cannot be restored within two release cycles or if adaptation causes fallback rate to increase.

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  repeatedSessionAdaptiveContext,
+  scoreAdaptiveContextReplay,
+} from '../support/adaptive-runtime-replay';
 
 const requireClassroomAccessMock = vi.fn();
 const resolveModelMock = vi.fn();
@@ -209,16 +213,7 @@ describe('POST /api/chat', () => {
       providerId: 'openai',
       apiKey: 'resolved-key',
     });
-    buildAdaptiveRuntimeContextMock.mockResolvedValue({
-      requirementFingerprint: 'class-1',
-      priorSessions: 1,
-      lastCompletedSceneTitle: 'Force vectors in orbit',
-      masteryHints: ['transfer windows'],
-      revisitIntent: 'remediate',
-      pacingPreference: 'remediate',
-      reflectionSummary: 'Spend more time on transfer windows before moving on.',
-      confidenceScore: 2,
-    });
+    buildAdaptiveRuntimeContextMock.mockResolvedValue(repeatedSessionAdaptiveContext);
     statelessGenerateMock.mockReturnValue(
       (async function* () {
         return;
@@ -251,17 +246,69 @@ describe('POST /api/chat', () => {
       classroomId: 'room-1',
       userId: 'teacher-1',
     });
-    expect(statelessGenerateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        adaptiveContext: expect.objectContaining({
-          lastCompletedSceneTitle: 'Force vectors in orbit',
-          revisitIntent: 'remediate',
+    expect(statelessGenerateMock).toHaveBeenCalledTimes(1);
+
+    const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
+    expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'present')).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('fails open for first-run teacher web sessions with no saved adaptive context', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'teacher-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'teacher' },
+      },
+      source: 'web',
+    });
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'resolved-key',
+    });
+    buildAdaptiveRuntimeContextMock.mockResolvedValue(null);
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'room-1' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
         }),
       }),
-      expect.any(AbortSignal),
-      expect.anything(),
-      { enabled: false },
     );
+
+    expect(response.status).toBe(200);
+    expect(statelessGenerateMock).toHaveBeenCalledTimes(1);
+
+    const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
+    expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'absent')).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 
   it('keeps classroom-cookie flows on the current non-adaptive path', async () => {
@@ -309,5 +356,13 @@ describe('POST /api/chat', () => {
 
     expect(response.status).toBe(200);
     expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
+    expect(statelessGenerateMock).toHaveBeenCalledTimes(1);
+
+    const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
+    expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'absent')).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 });
