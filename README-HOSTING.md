@@ -83,8 +83,11 @@ Public launch on `open-raic.com`:
    - at least one production LLM provider key
    - any image/video/TTS/ASR/search provider keys needed for the public surface
    - MiroFish variables if MiroFish is part of the live deployment
+   - Keep the live Google sign-in IDs in `Production`; leave generic preview URLs out of teacher/admin auth unless you add a fixed staging domain with its own exact authorized origin.
 5. Add `open-raic.com` as the production domain, with optional `www.open-raic.com` redirect only.
 6. In Google Cloud OAuth, authorize `https://open-raic.com` and `https://www.open-raic.com` only if that hostname will actually serve the app.
+   For local development, also authorize `http://localhost:3000` and `http://localhost:3005`.
+   For this GIS ID-token flow, do not deploy a Google client secret.
 7. Run the full local release gates on `main` before each production merge:
    - `corepack pnpm run secrets:scan`
    - `corepack pnpm run ops:drift`

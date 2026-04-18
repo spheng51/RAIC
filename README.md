@@ -253,14 +253,15 @@ pnpm build && pnpm start
 This repository is configured for Vercel-first releases.
 
 1. Connect this repository in Vercel and import branch `main`.
-2. Set production environment variables in Vercel (`Production` + `Preview` scope):
+2. Set production environment variables in Vercel (`Production` scope):
    - provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.),
    - `RAIC_SECRET_ENCRYPTION_KEY`,
    - database URL and MIROFISH variables,
    - Google sign-in IDs:
-     - `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
-     - `GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
+      - `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
+      - `GOOGLE_CLIENT_ID=<google-web-client-id>.apps.googleusercontent.com`
    - admin/access and auth configuration as needed.
+   - Leave generic preview URLs out of teacher/admin Google auth unless you add a fixed staging domain with an exact authorized origin.
 3. Add `open-raic.com` in Project → Domains.
    - If using Vercel DNS, update registrar nameservers.
    - Otherwise add the registrar/Apex + optional `www` records exactly as prompted by Vercel.
