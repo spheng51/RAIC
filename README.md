@@ -177,6 +177,7 @@ Operator rollout notes, smoke checks, and release-gate steps are maintained as d
 For the enforced one-branch operating model, post-merge verification contract, and branch hygiene checks, see [OPS.md](./OPS.md) (`pnpm run ops:drift`, `pnpm run ops:verify`).
 For feature decomposition and next-cycle originality work, see:
 
+- [Execution Plan: Release Recovery + Next Two Milestones](./docs/execution-plans/2026-04-17-release-recovery-and-next-milestones.md)
 - [Adaptive Classroom Intelligence](./docs/feature-briefs/adaptive-classroom-intelligence.md)
 - [Experimentation & Provider Composer](./docs/feature-briefs/experimentation-provider-composer.md)
 - [Learning Analytics + Reflection](./docs/feature-briefs/learning-analytics-reflection.md)

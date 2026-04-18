@@ -13,6 +13,7 @@ type MockPostgresExecutor = {
   unsafe: <T>(query: string, params?: unknown[]) => Promise<T[]>;
   begin?: <T>(handler: (executor: MockPostgresExecutor) => Promise<T>) => Promise<T>;
 };
+
 function resetDbGlobals() {
   const globals = globalThis as DbGlobals;
   delete globals.__raicPlatformJsonLock;
@@ -157,6 +158,106 @@ function createStoreFixture(): PlatformStore {
         createdAt: '2026-04-10T00:00:00.000Z',
       },
     ],
+    classroomSessionContexts: [
+      {
+        id: 'context-stale',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        requirementFingerprint: 'req-stale',
+        requirementPreview: 'Old benchmarked requirement',
+        language: 'en-US',
+        stageName: 'Old Stage',
+        lastCompletedSceneId: 'scene-1',
+        lastCompletedSceneTitle: 'Intro',
+        completedSceneCount: 1,
+        totalSceneCount: 3,
+        masteryHints: ['fractions'],
+        revisitIntent: 'continue',
+        pacingPreference: 'adaptive',
+        reflectionSummary: 'Old note',
+        confidenceScore: 2,
+        createdAt: '2025-12-01T00:00:00.000Z',
+        updatedAt: '2025-12-01T00:00:00.000Z',
+      },
+      {
+        id: 'context-active',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        requirementFingerprint: 'req-active',
+        requirementPreview: 'Current requirement',
+        language: 'en-US',
+        stageName: 'Current Stage',
+        lastCompletedSceneId: 'scene-2',
+        lastCompletedSceneTitle: 'Practice',
+        completedSceneCount: 2,
+        totalSceneCount: 4,
+        masteryHints: ['word problems'],
+        revisitIntent: 'revisit',
+        pacingPreference: 'balance',
+        reflectionSummary: 'Keep practicing',
+        confidenceScore: 3,
+        createdAt: '2026-04-10T00:00:00.000Z',
+        updatedAt: '2026-04-10T00:00:00.000Z',
+      },
+    ],
+    classroomReflections: [
+      {
+        id: 'reflection-stale',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        summary: 'Old reflection',
+        challengingAreas: ['fractions'],
+        confidenceScore: 2,
+        revisitIntent: 'remediate',
+        createdAt: '2025-12-01T00:00:00.000Z',
+      },
+      {
+        id: 'reflection-active',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        summary: 'Recent reflection',
+        challengingAreas: ['word problems'],
+        confidenceScore: 4,
+        revisitIntent: 'continue',
+        createdAt: '2026-04-10T00:00:00.000Z',
+      },
+    ],
+    benchmarkArtifacts: [
+      {
+        id: 'artifact-stale',
+        scope: 'classroom-generation',
+        source: 'vitest',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        status: 'pass',
+        metrics: {
+          classroomStartToFirstSceneMs: { value: 7200, threshold: 8000, status: 'pass' },
+        },
+        notes: ['stale artifact'],
+        metadata: {},
+        createdAt: '2025-12-01T00:00:00.000Z',
+      },
+      {
+        id: 'artifact-active',
+        scope: 'classroom-generation',
+        source: 'vitest',
+        classroomId: 'room-1',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        status: 'pass',
+        metrics: {
+          classroomStartToFirstSceneMs: { value: 7100, threshold: 8000, status: 'pass' },
+        },
+        notes: ['active artifact'],
+        metadata: {},
+        createdAt: '2026-04-10T00:00:00.000Z',
+      },
+    ],
   };
 }
 
@@ -200,12 +301,18 @@ describe('platform retention cleanup', () => {
       joinTokens: 0,
       guestUsers: 0,
       auditLogs: 0,
+      sessionContexts: 0,
+      reflections: 0,
+      benchmarkArtifacts: 0,
     });
     expect(result.candidates).toEqual({
       sessions: 1,
       joinTokens: 1,
       guestUsers: 1,
       auditLogs: 1,
+      sessionContexts: 1,
+      reflections: 1,
+      benchmarkArtifacts: 1,
     });
   });
 
@@ -225,12 +332,20 @@ describe('platform retention cleanup', () => {
       joinTokens: 1,
       guestUsers: 1,
       auditLogs: 1,
+      sessionContexts: 1,
+      reflections: 1,
+      benchmarkArtifacts: 1,
     });
 
     const store = await readPlatformStore();
     expect(store.sessions.map((session) => session.id)).toEqual(['session-active']);
     expect(store.joinTokens.map((joinToken) => joinToken.id)).toEqual(['join-active']);
     expect(store.auditLogs.map((auditLog) => auditLog.id)).toEqual(['audit-active']);
+    expect(store.classroomSessionContexts.map((context) => context.id)).toEqual(['context-active']);
+    expect(store.classroomReflections.map((reflection) => reflection.id)).toEqual([
+      'reflection-active',
+    ]);
+    expect(store.benchmarkArtifacts.map((artifact) => artifact.id)).toEqual(['artifact-active']);
     expect(store.users.map((user) => user.id).sort()).toEqual(['guest-active', 'teacher-1']);
     expect(store.memberships).toHaveLength(0);
   });
@@ -265,6 +380,18 @@ describe('platform retention cleanup', () => {
         return [{ id: 'audit-stale' }];
       }
 
+      if (normalizedQuery.startsWith('SELECT id FROM classroom_session_contexts')) {
+        return [{ id: 'context-stale' }];
+      }
+
+      if (normalizedQuery.startsWith('SELECT id FROM classroom_reflections')) {
+        return [{ id: 'reflection-stale' }];
+      }
+
+      if (normalizedQuery.startsWith('SELECT id FROM benchmark_artifacts')) {
+        return [{ id: 'artifact-stale' }];
+      }
+
       return [];
     });
 
@@ -286,6 +413,9 @@ describe('platform retention cleanup', () => {
       joinTokens: 1,
       guestUsers: 1,
       auditLogs: 1,
+      sessionContexts: 1,
+      reflections: 1,
+      benchmarkArtifacts: 1,
     });
     expect(client.begin).toHaveBeenCalledTimes(1);
     expect(unsafeMock).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM sessions'), [
@@ -297,6 +427,18 @@ describe('platform retention cleanup', () => {
     expect(unsafeMock).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM audit_logs'), [
       ['audit-stale'],
     ]);
+    expect(unsafeMock).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM classroom_session_contexts'),
+      [['context-stale']],
+    );
+    expect(unsafeMock).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM classroom_reflections'),
+      [['reflection-stale']],
+    );
+    expect(unsafeMock).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM benchmark_artifacts'),
+      [['artifact-stale']],
+    );
     expect(unsafeMock).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM users'), [
       ['guest-stale'],
     ]);

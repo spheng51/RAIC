@@ -31,6 +31,9 @@ function parsePolicy(value: unknown): Partial<PlatformRetentionPolicy> | undefin
     'expiredJoinTokenRetentionDays',
     'guestUserRetentionDays',
     'auditLogRetentionDays',
+    'classroomSessionContextRetentionDays',
+    'classroomReflectionRetentionDays',
+    'benchmarkArtifactRetentionDays',
   ] as const) {
     const rawValue = value[key];
     if (rawValue === undefined) {

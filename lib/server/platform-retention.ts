@@ -9,12 +9,16 @@ import {
   type PersistenceMode,
 } from '@/lib/db/client';
 import type { PlatformStore } from '@/lib/db/schema';
+import { syncLatestBenchmarkArtifactSnapshot } from '@/lib/server/classroom-intelligence';
 
 export interface PlatformRetentionPolicy {
   staleSessionRetentionDays: number;
   expiredJoinTokenRetentionDays: number;
   guestUserRetentionDays: number;
   auditLogRetentionDays: number;
+  classroomSessionContextRetentionDays: number;
+  classroomReflectionRetentionDays: number;
+  benchmarkArtifactRetentionDays: number;
 }
 
 export interface PlatformRetentionCounts {
@@ -22,6 +26,9 @@ export interface PlatformRetentionCounts {
   joinTokens: number;
   guestUsers: number;
   auditLogs: number;
+  sessionContexts: number;
+  reflections: number;
+  benchmarkArtifacts: number;
 }
 
 export interface PlatformRetentionRunResult {
@@ -38,6 +45,9 @@ interface PlatformRetentionCandidateIds {
   joinTokenIds: string[];
   guestUserIds: string[];
   auditLogIds: string[];
+  sessionContextIds: string[];
+  reflectionIds: string[];
+  benchmarkArtifactIds: string[];
 }
 
 interface PlatformRetentionCutoffs {
@@ -45,6 +55,9 @@ interface PlatformRetentionCutoffs {
   joinTokenCutoffIso: string;
   guestUserCutoffIso: string;
   auditLogCutoffIso: string;
+  sessionContextCutoffIso: string;
+  reflectionCutoffIso: string;
+  benchmarkArtifactCutoffIso: string;
 }
 
 const EMPTY_COUNTS: PlatformRetentionCounts = {
@@ -52,6 +65,9 @@ const EMPTY_COUNTS: PlatformRetentionCounts = {
   joinTokens: 0,
   guestUsers: 0,
   auditLogs: 0,
+  sessionContexts: 0,
+  reflections: 0,
+  benchmarkArtifacts: 0,
 };
 
 export const DEFAULT_PLATFORM_RETENTION_POLICY: PlatformRetentionPolicy = {
@@ -59,6 +75,9 @@ export const DEFAULT_PLATFORM_RETENTION_POLICY: PlatformRetentionPolicy = {
   expiredJoinTokenRetentionDays: 2,
   guestUserRetentionDays: 7,
   auditLogRetentionDays: 90,
+  classroomSessionContextRetentionDays: 90,
+  classroomReflectionRetentionDays: 90,
+  benchmarkArtifactRetentionDays: 90,
 };
 
 function resolvePositiveInteger(
@@ -101,6 +120,21 @@ export function resolvePlatformRetentionPolicy(
       DEFAULT_PLATFORM_RETENTION_POLICY.auditLogRetentionDays,
       'auditLogRetentionDays',
     ),
+    classroomSessionContextRetentionDays: resolvePositiveInteger(
+      input.classroomSessionContextRetentionDays,
+      DEFAULT_PLATFORM_RETENTION_POLICY.classroomSessionContextRetentionDays,
+      'classroomSessionContextRetentionDays',
+    ),
+    classroomReflectionRetentionDays: resolvePositiveInteger(
+      input.classroomReflectionRetentionDays,
+      DEFAULT_PLATFORM_RETENTION_POLICY.classroomReflectionRetentionDays,
+      'classroomReflectionRetentionDays',
+    ),
+    benchmarkArtifactRetentionDays: resolvePositiveInteger(
+      input.benchmarkArtifactRetentionDays,
+      DEFAULT_PLATFORM_RETENTION_POLICY.benchmarkArtifactRetentionDays,
+      'benchmarkArtifactRetentionDays',
+    ),
   };
 }
 
@@ -115,6 +149,9 @@ function buildCutoffs(policy: PlatformRetentionPolicy, nowIso: string): Platform
     joinTokenCutoffIso: toCutoffIso(nowMs, policy.expiredJoinTokenRetentionDays),
     guestUserCutoffIso: toCutoffIso(nowMs, policy.guestUserRetentionDays),
     auditLogCutoffIso: toCutoffIso(nowMs, policy.auditLogRetentionDays),
+    sessionContextCutoffIso: toCutoffIso(nowMs, policy.classroomSessionContextRetentionDays),
+    reflectionCutoffIso: toCutoffIso(nowMs, policy.classroomReflectionRetentionDays),
+    benchmarkArtifactCutoffIso: toCutoffIso(nowMs, policy.benchmarkArtifactRetentionDays),
   };
 }
 
@@ -136,6 +173,9 @@ function collectJsonCandidateIds(
   const joinTokenCutoffMs = new Date(cutoffs.joinTokenCutoffIso).getTime();
   const guestUserCutoffMs = new Date(cutoffs.guestUserCutoffIso).getTime();
   const auditLogCutoffMs = new Date(cutoffs.auditLogCutoffIso).getTime();
+  const sessionContextCutoffMs = new Date(cutoffs.sessionContextCutoffIso).getTime();
+  const reflectionCutoffMs = new Date(cutoffs.reflectionCutoffIso).getTime();
+  const benchmarkArtifactCutoffMs = new Date(cutoffs.benchmarkArtifactCutoffIso).getTime();
 
   const staleSessionIds = new Set(
     store.sessions
@@ -191,11 +231,32 @@ function collectJsonCandidateIds(
       .map((auditLog) => auditLog.id),
   );
 
+  const sessionContextIds = new Set(
+    store.classroomSessionContexts
+      .filter((sessionContext) => isOlderThan(sessionContext.updatedAt, sessionContextCutoffMs))
+      .map((sessionContext) => sessionContext.id),
+  );
+
+  const reflectionIds = new Set(
+    store.classroomReflections
+      .filter((reflection) => isOlderThan(reflection.createdAt, reflectionCutoffMs))
+      .map((reflection) => reflection.id),
+  );
+
+  const benchmarkArtifactIds = new Set(
+    store.benchmarkArtifacts
+      .filter((artifact) => isOlderThan(artifact.createdAt, benchmarkArtifactCutoffMs))
+      .map((artifact) => artifact.id),
+  );
+
   return {
     sessionIds: [...staleSessionIds],
     joinTokenIds: [...joinTokenIds],
     guestUserIds: [...guestUserIds],
     auditLogIds: [...auditLogIds],
+    sessionContextIds: [...sessionContextIds],
+    reflectionIds: [...reflectionIds],
+    benchmarkArtifactIds: [...benchmarkArtifactIds],
   };
 }
 
@@ -254,11 +315,35 @@ async function collectPostgresCandidateIds(
     [cutoffs.auditLogCutoffIso],
   );
 
+  const sessionContextIds = await selectPostgresIds(
+    `SELECT id
+     FROM classroom_session_contexts
+     WHERE updated_at <= $1`,
+    [cutoffs.sessionContextCutoffIso],
+  );
+
+  const reflectionIds = await selectPostgresIds(
+    `SELECT id
+     FROM classroom_reflections
+     WHERE created_at <= $1`,
+    [cutoffs.reflectionCutoffIso],
+  );
+
+  const benchmarkArtifactIds = await selectPostgresIds(
+    `SELECT id
+     FROM benchmark_artifacts
+     WHERE created_at <= $1`,
+    [cutoffs.benchmarkArtifactCutoffIso],
+  );
+
   return {
     sessionIds,
     joinTokenIds,
     guestUserIds,
     auditLogIds,
+    sessionContextIds,
+    reflectionIds,
+    benchmarkArtifactIds,
   };
 }
 
@@ -270,6 +355,9 @@ function countsFromCandidateIds(
     joinTokens: candidateIds.joinTokenIds.length,
     guestUsers: candidateIds.guestUserIds.length,
     auditLogs: candidateIds.auditLogIds.length,
+    sessionContexts: candidateIds.sessionContextIds.length,
+    reflections: candidateIds.reflectionIds.length,
+    benchmarkArtifacts: candidateIds.benchmarkArtifactIds.length,
   };
 }
 
@@ -278,11 +366,23 @@ async function deleteJsonCandidates(candidateIds: PlatformRetentionCandidateIds)
   const joinTokenIds = new Set(candidateIds.joinTokenIds);
   const guestUserIds = new Set(candidateIds.guestUserIds);
   const auditLogIds = new Set(candidateIds.auditLogIds);
+  const sessionContextIds = new Set(candidateIds.sessionContextIds);
+  const reflectionIds = new Set(candidateIds.reflectionIds);
+  const benchmarkArtifactIds = new Set(candidateIds.benchmarkArtifactIds);
 
   await updatePlatformStore((store) => {
     store.sessions = store.sessions.filter((session) => !sessionIds.has(session.id));
     store.joinTokens = store.joinTokens.filter((joinToken) => !joinTokenIds.has(joinToken.id));
     store.auditLogs = store.auditLogs.filter((auditLog) => !auditLogIds.has(auditLog.id));
+    store.classroomSessionContexts = store.classroomSessionContexts.filter(
+      (sessionContext) => !sessionContextIds.has(sessionContext.id),
+    );
+    store.classroomReflections = store.classroomReflections.filter(
+      (reflection) => !reflectionIds.has(reflection.id),
+    );
+    store.benchmarkArtifacts = store.benchmarkArtifacts.filter(
+      (artifact) => !benchmarkArtifactIds.has(artifact.id),
+    );
     store.memberships = store.memberships.filter(
       (membership) => !guestUserIds.has(membership.userId),
     );
@@ -310,6 +410,24 @@ async function deletePostgresCandidates(candidateIds: PlatformRetentionCandidate
     if (candidateIds.auditLogIds.length > 0) {
       await executor.unsafe(`DELETE FROM audit_logs WHERE id = ANY($1::text[])`, [
         candidateIds.auditLogIds,
+      ]);
+    }
+
+    if (candidateIds.sessionContextIds.length > 0) {
+      await executor.unsafe(`DELETE FROM classroom_session_contexts WHERE id = ANY($1::text[])`, [
+        candidateIds.sessionContextIds,
+      ]);
+    }
+
+    if (candidateIds.reflectionIds.length > 0) {
+      await executor.unsafe(`DELETE FROM classroom_reflections WHERE id = ANY($1::text[])`, [
+        candidateIds.reflectionIds,
+      ]);
+    }
+
+    if (candidateIds.benchmarkArtifactIds.length > 0) {
+      await executor.unsafe(`DELETE FROM benchmark_artifacts WHERE id = ANY($1::text[])`, [
+        candidateIds.benchmarkArtifactIds,
       ]);
     }
 
@@ -353,6 +471,10 @@ export async function runPlatformRetentionCleanup(input?: {
     await deletePostgresCandidates(candidateIds);
   } else {
     await deleteJsonCandidates(candidateIds);
+  }
+
+  if (candidateIds.benchmarkArtifactIds.length > 0) {
+    await syncLatestBenchmarkArtifactSnapshot();
   }
 
   return {

@@ -33,6 +33,12 @@ For each functional slice:
 
 Use `pnpm run ops:verify` for the full required set, or run the same commands manually.
 
+### Parallel prep / single merge lane
+
+- Specialists may prepare disjoint work in parallel, but only one mergeable slice is active at a time.
+- One release integrator owns the active merge lane, assembles the slice, runs the final gate set on local `main`, and handles branch cleanup.
+- If two contributors or agents need the same write scope, defer the later change to the next slice rather than stacking unrelated work.
+
 ## Operational scripts
 
 - `pnpm run ops:drift`: local branch-and-git-state preflight.
@@ -55,6 +61,16 @@ Run these gates after each slice merge and before pushing `main`:
 - Performance budget targets are tracked in `ops/perf-budgets.json`.
 - Use that budget file to evaluate latency-sensitive classroom/runtime changes when a deterministic benchmark harness exists for the touched path.
 - Attach benchmark evidence to release notes or PR notes for critical-path changes rather than relying on ad hoc claims.
+
+### Live benchmark evidence capture
+
+- `pnpm run ops:verify` now requires a real live snapshot at `data/perf-results/latest.json`; the replay fixture is baseline coverage only.
+- Capture live evidence through the internal admin ops endpoint, which records through `recordBenchmarkArtifact()` and updates the latest snapshot:
+  - `POST /api/admin/ops/benchmarks`
+  - auth: `system_admin` web session
+  - required body fields: `scope`, `source`, and at least one numeric metric from `ops/perf-budgets.json`
+- Do not reuse `ops/benchmark-replay.json` or any payload with `metadata.fixture=true`; fixture-derived evidence is rejected and cannot satisfy the release gate.
+- Verify the capture by checking both `/api/admin/ops/benchmarks` and the on-disk `data/perf-results/latest.json` snapshot before running `pnpm run ops:verify`.
 
 ## Release security guardrails
 
@@ -91,6 +107,10 @@ This cycle is split into three tracks for deliberate originality and performance
   - Post-merge cleanup automation and evidence attachment
   - PR template and docs checklists for performance risk and benchmark links
   - Non-blocking CI trend reporting
+
+The active dated execution sequence for the current cycle is documented in:
+
+- `docs/execution-plans/2026-04-17-release-recovery-and-next-milestones.md`
 
 Feature stack details are documented in:
 

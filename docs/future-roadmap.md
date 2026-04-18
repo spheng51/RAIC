@@ -1,67 +1,62 @@
-# Future Roadmap: Originality + Performance + Reliability
+# Future Roadmap: Release Recovery + Originality + Reliability
 
-This roadmap converts the current single-branch model into a repeatable innovation engine.
+This roadmap translates the current single-branch model into a dated execution sequence with one validated slice landing at a time.
 
-## 1) Operating baseline (immediate)
+The active cycle plan for this window is documented in [Execution Plan: Release Recovery + Next Two Milestones (2026-04-17)](./execution-plans/2026-04-17-release-recovery-and-next-milestones.md).
+
+## 1) Operating baseline
 
 - Keep `main` as the only shared branch.
 - Keep development in short-lived local scratch branches (`codex/*`).
 - For every slice:
-  - run slice-targeted checks,
-  - run `pnpm run ops:verify`,
-  - run deterministic benchmark checks when the slice touches classroom runtime paths and a harness exists.
-- Keep PRs one-purpose only and avoid multi-objective behavior merges.
+  - run slice-targeted checks first,
+  - merge into local `main`,
+  - run the required gate sequence on `main`,
+  - attach benchmark evidence when the slice touches latency-sensitive classroom paths.
+- Keep PRs and merge slices one-purpose only. Do not merge multi-objective behavior stacks.
 
-## 2) Originality execution (2-6 weeks cadence)
+## 2) Active milestone sequence
 
-Run one bounded slice at a time.
+- Milestone 0: Release Recovery and Slice Decomposition
+  - Goal: decompose parked intelligence/provider work into promotable slices and clear the current MiroFish and benchmark-evidence blockers.
+  - Focus: reviewed correctness fixes, MiroFish reclaim-control E2E recovery, live benchmark snapshot capture, and clean merge-lane hygiene.
 
-- Adaptive Classroom Intelligence
-  - Goal: contextual classroom behavior using deterministic prior-session context.
-  - Acceptance:
-    - quality score improves on fixed internal corpus,
-    - no increase in end-to-end p95 latency for baseline classroom paths.
-  - Required artifacts: feature brief plus before/after corpus summary.
+- Milestone 1: Adaptive Classroom Intelligence v1
+  - Goal: activate teacher-only repeated-session intelligence using session-context and reflection as the source of truth.
+  - Acceptance: deterministic adaptation replay coverage, unchanged public/student flows, and no regression against classroom runtime budgets.
 
-- Experimentation & Provider Composer
-  - Goal: deterministic provider routing scenarios for generation workflows.
-  - Acceptance:
-    - provider capability validation is explicit and fails closed,
-    - rollback condition documented per experiment set.
+- Milestone 2: Experimentation & Provider Composer v1
+  - Goal: complete provider-scenario routing with explicit capability validation, fallback telemetry, and rollback-ready internal routing coverage.
+  - Acceptance: fail-closed behavior, unchanged public provider contracts, and benchmark-backed routing stability.
 
-- Learning Analytics + Reflection
-  - Goal: in-session reflection and quality signal capture with no new public payload contracts.
-  - Acceptance:
-    - deterministic telemetry fixture,
-    - quality-loop signals are available for experimentation.
+- Queued next milestone: Learning Analytics + Reflection activation
+  - Goal: turn the already-landed teacher-only reflection foundation into internal experimentation signals after Provider Composer stabilizes.
 
-## 3) Performance track (4-8 weeks overlap with originality)
+## 3) Performance and ops overlap
 
-- Add and enforce budget-aware baselines once the benchmark harness lands.
-- Optimize deterministic and low-noise execution:
-  - cache/reuse provider capability metadata,
-  - request coalescing for repeated classroom state fetches,
+- Keep benchmark artifact capture and `ops:verify` evidence enforcement active throughout every milestone.
+- Track deltas in `data/perf-results/latest.json` and surface the latest benchmark artifact in internal admin ops views.
+- Optimize deterministic and low-noise execution as milestones advance:
+  - provider capability metadata reuse,
+  - repeated classroom state reuse where safe,
   - controlled e2e fixture setup and teardown.
-- Track deltas in `ops/perf-results/latest.json` and attach to PRs when latency-critical paths are touched.
 
-## 4) Reliability hardening (ongoing)
+## 4) Reliability hardening
 
-- `ops:drift` and branch hygiene are mandatory at handoff.
-- Keep performance trend job in CI as non-blocking visibility.
-- Maintain PR checklist items for benchmark artifacts and rollback preconditions.
-- Keep PR #13 decomposition streams single-threaded:
-  - access-code hardening,
-  - custom-provider credential enforcement,
-  - happy-path deterministic e2e.
+- `ops:drift` and branch hygiene remain mandatory at handoff.
+- Keep performance trend visibility in CI as non-blocking reporting unless explicitly promoted to a required gate.
+- Maintain rollback preconditions, benchmark evidence links, and single-purpose slice boundaries for every merge.
+- Keep follow-up decomposition streams and future reliability work serialized through the same merge model.
 
 ## 5) Exit criteria for each slice
 
-- Functional gates: `pnpm run ops:verify`
-- Perf gates: run the relevant deterministic benchmark harness for the touched path once it exists.
-- No regressions in core `main` behavior and no stale branch/worktree residue.
+- Functional gates: the full release gate set on local `main`, including `pnpm run ops:verify`.
+- Perf gates: a valid non-fixture benchmark artifact when the slice touches latency-sensitive classroom or provider paths.
+- Merge hygiene: no stale local branches, worktrees, or parked multi-objective residue after handoff.
 
 ## 6) Governance contract
 
-- No public API changes unless explicitly scoped as breaking.
-- No mixed "cleanup + feature + reliability" changes in one slice.
-- Each slice must include deterministic rollback conditions before merge.
+- No public API changes unless explicitly scoped and reviewed as such.
+- No mixed "cleanup + feature + reliability" slices.
+- Each slice must define rollback conditions before merge.
+- Reflection and session-context behavior remain teacher-only until the later analytics milestone explicitly expands scope.
