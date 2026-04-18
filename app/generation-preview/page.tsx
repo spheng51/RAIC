@@ -28,6 +28,7 @@ import type { Stage } from '@/lib/types/stage';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { createLogger } from '@/lib/logger';
+import { buildGenerationPreviewAgentProfilesRequest } from './agent-profile-avatar-request';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 import {
@@ -593,57 +594,6 @@ function GenerationPreviewContent() {
         if (agentStepIdx >= 0) setCurrentStepIndex(agentStepIdx);
 
         try {
-          const allAvatars = [
-            {
-              path: '/avatars/teacher-kids.png',
-              desc: 'Heroic male teacher with glasses, tablet, blue-and-yellow comic burst background',
-            },
-            {
-              path: '/avatars/teacher-2.png',
-              desc: 'Female teacher with long dark hair, blue traditional outfit, gentle expression',
-            },
-            {
-              path: '/avatars/assist-kids.png',
-              desc: 'Helpful female assistant with glasses, notebook and stylus, mint-and-coral support vibe',
-            },
-            {
-              path: '/avatars/assist-2.png',
-              desc: 'Young female in orange top and purple overalls, cheerful and approachable',
-            },
-            {
-              path: '/avatars/clown-kids.png',
-              desc: 'Playful curly-haired girl with glasses, silly gesture, orange-and-sky-blue fun energy',
-            },
-            {
-              path: '/avatars/clown-2.png',
-              desc: 'Playful girl with curly hair doing rock gesture, blue shirt, humorous vibe',
-            },
-            {
-              path: '/avatars/curious-kids.png',
-              desc: 'Wide-eyed boy with glasses and a book, lime-and-magenta question-mark background',
-            },
-            {
-              path: '/avatars/curious-2.png',
-              desc: 'Boy with backpack holding a book and question mark bubble, inquisitive',
-            },
-            {
-              path: '/avatars/note-taker-kids.png',
-              desc: 'Organized boy with glasses writing in a notebook, cyan-and-amber checklist background',
-            },
-            {
-              path: '/avatars/note-taker-2.png',
-              desc: 'Active boy with yellow backpack waving, blue outfit, enthusiastic learner',
-            },
-            {
-              path: '/avatars/thinker-kids.png',
-              desc: 'Thoughtful girl with glasses and an open book, deep-indigo-and-coral idea orbit background',
-            },
-            {
-              path: '/avatars/thinker-2.png',
-              desc: 'Girl reading a book intently, long dark hair, intellectual and focused',
-            },
-          ];
-
           const getAvailableVoicesForGeneration = () => {
             const providers = getAvailableProvidersWithVoices(settings.ttsProvidersConfig);
             return providers.flatMap((p) =>
@@ -659,13 +609,13 @@ function GenerationPreviewContent() {
           const agentResp = await fetch('/api/generate/agent-profiles', {
             method: 'POST',
             headers: getApiHeaders(),
-            body: JSON.stringify({
-              stageInfo: { name: stage.name, description: stage.description },
-              language: currentSession.requirements.language || 'zh-CN',
-              availableAvatars: allAvatars.map((a) => a.path),
-              avatarDescriptions: allAvatars.map((a) => ({ path: a.path, desc: a.desc })),
-              availableVoices: getAvailableVoicesForGeneration(),
-            }),
+            body: JSON.stringify(
+              buildGenerationPreviewAgentProfilesRequest(
+                { name: stage.name, description: stage.description },
+                currentSession.requirements.language || 'zh-CN',
+                getAvailableVoicesForGeneration(),
+              ),
+            ),
             signal,
           });
 

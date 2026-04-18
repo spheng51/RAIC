@@ -3,29 +3,12 @@
  * Persists avatar, nickname & bio to localStorage
  */
 
+import { SPECIALIST_AVATAR_PATHS } from '@/lib/constants/specialist-avatar-catalog';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /** Predefined avatar options */
-export const AVATAR_OPTIONS = [
-  '/avatars/user.png',
-  '/avatars/teacher-kids.png',
-  '/avatars/assist-kids.png',
-  '/avatars/clown-kids.png',
-  '/avatars/curious-kids.png',
-  '/avatars/note-taker-kids.png',
-  '/avatars/thinker-kids.png',
-  '/avatars/librarian.png',
-  '/avatars/principal.png',
-  '/avatars/coach.png',
-  '/avatars/counselor.png',
-  '/avatars/teacher-2.png',
-  '/avatars/assist-2.png',
-  '/avatars/clown-2.png',
-  '/avatars/curious-2.png',
-  '/avatars/note-taker-2.png',
-  '/avatars/thinker-2.png',
-] as const;
+export const AVATAR_OPTIONS = SPECIALIST_AVATAR_PATHS;
 
 export interface UserProfileState {
   /** Local avatar path or data-URL (for custom uploads) */
