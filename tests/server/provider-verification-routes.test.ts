@@ -734,6 +734,141 @@ describe('provider and verification routes', () => {
     expect(body.errorCode).toBe('MISSING_REQUIRED_FIELD');
   });
 
+  it('routes web search through the scenario-managed provider and emits audit telemetry', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        webSearch: [{ providerId: 'tavily' }],
+      },
+    });
+    buildSearchQueryMock.mockResolvedValue({
+      query: 'renewable energy',
+      hasPdfContext: false,
+      rawRequirementLength: 16,
+      rewriteAttempted: false,
+      finalQueryLength: 16,
+    });
+    searchWithTavilyMock.mockResolvedValue({
+      answer: 'Search answer',
+      query: 'renewable energy',
+      responseTime: 123,
+      sources: [{ title: 'Source', url: 'https://example.com' }],
+    });
+    formatSearchResultsAsContextMock.mockReturnValue('formatted context');
+
+    const { POST } = await import('@/app/api/web-search/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/web-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'renewable energy',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(resolveGovernedProviderConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        family: 'webSearch',
+        providerId: 'tavily',
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'web-search',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'webSearch',
+          routeId: 'web-search',
+          selectedProviderId: 'tavily',
+          selectedModelId: null,
+          validationStatus: 'selected',
+          requestedProviderId: 'tavily',
+          requestedModelId: null,
+        }),
+      }),
+    );
+    expect(body).toEqual({
+      success: true,
+      answer: 'Search answer',
+      context: 'formatted context',
+      query: 'renewable energy',
+      responseTime: 123,
+      sources: [{ title: 'Source', url: 'https://example.com' }],
+    });
+  });
+
+  it('fails closed for scenario-managed web search when no validated candidate remains', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed provider routing.',
+      buckets: {
+        webSearch: [{ providerId: 'tavily' }],
+      },
+    });
+    const missingCredentialsError = new MockGovernedProviderResolutionError(
+      'MISSING_PROVIDER_CREDENTIALS',
+      'No API key configured for provider "tavily".',
+      {
+        status: 400,
+        apiErrorCode: 'MISSING_API_KEY',
+      },
+    );
+    resolveGovernedProviderConfigMock.mockRejectedValue(missingCredentialsError);
+    toGovernedProviderApiErrorResponseMock.mockImplementation((error) =>
+      error === missingCredentialsError
+        ? new Response(
+            JSON.stringify({
+              success: false,
+              errorCode: 'MISSING_API_KEY',
+              error: missingCredentialsError.message,
+            }),
+            {
+              status: 400,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            },
+          )
+        : null,
+    );
+
+    const { POST } = await import('@/app/api/web-search/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/web-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'renewable energy',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('MISSING_API_KEY');
+    expect(searchWithTavilyMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'web-search',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'webSearch',
+          routeId: 'web-search',
+          selectedProviderId: null,
+          selectedModelId: null,
+          validationStatus: 'failed_closed',
+          fallbackReason: expect.stringContaining('tavily'),
+        }),
+      }),
+    );
+  });
+
   it('returns web-search results and formatted context', async () => {
     buildSearchQueryMock.mockResolvedValue({
       query: 'renewable energy',

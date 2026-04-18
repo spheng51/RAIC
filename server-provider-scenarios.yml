@@ -8,6 +8,20 @@ profiles:
       image:
         - seedream:doubao-seedream-5-0-260128
         - seedream:doubao-seedream-4-5-251128
+      webSearch:
+        - tavily
+      transcript:
+        - openai-whisper:gpt-4o-mini-transcribe
+        - openai-whisper:whisper-1
+        - qwen-asr:qwen3-asr-flash
+      tts:
+        - openai-tts:gpt-4o-mini-tts
+        - qwen-tts:qwen3-tts-flash
+        - minimax-tts:speech-2.8-hd
+        - glm-tts:glm-tts
+        - elevenlabs-tts:eleven_multilingual_v2
+        - doubao-tts
+        - azure-tts
       video:
         - seedance:doubao-seedance-1-5-pro-251215
         - seedance:doubao-seedance-1-0-pro-250528

@@ -23,6 +23,7 @@ import {
   buildSearchQuery,
   SEARCH_QUERY_REWRITE_EXCERPT_LENGTH,
 } from '@/lib/server/search-query-builder';
+import { resolveScenarioManagedProviderRoute } from '@/lib/server/provider-scenario-routing';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
 
@@ -48,12 +49,21 @@ export async function POST(req: NextRequest) {
     }
 
     const auth = await getRequestAuth(req);
-    const resolvedWebSearch = await resolveGovernedProviderConfig({
-      auth,
-      family: 'webSearch',
-      providerId: 'tavily',
-      requestedSecret: clientApiKey || undefined,
-    });
+    const resolvedWebSearch =
+      (await resolveScenarioManagedProviderRoute({
+        auth,
+        routeId: 'web-search',
+        taskBucket: 'webSearch',
+        family: 'webSearch',
+        requestedProviderId: 'tavily',
+        requestedSecret: clientApiKey || undefined,
+      })) ||
+      (await resolveGovernedProviderConfig({
+        auth,
+        family: 'webSearch',
+        providerId: 'tavily',
+        requestedSecret: clientApiKey || undefined,
+      }));
 
     const boundedPdfText = pdfText?.slice(0, SEARCH_QUERY_REWRITE_EXCERPT_LENGTH);
 

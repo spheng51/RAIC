@@ -12,6 +12,7 @@ import {
   resolveGovernedProviderConfig,
   toGovernedProviderApiErrorResponse,
 } from '@/lib/server/ai-governance';
+import { resolveScenarioManagedProviderRoute } from '@/lib/server/provider-scenario-routing';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 const log = createLogger('Transcription');
 
@@ -52,17 +53,31 @@ export async function POST(req: NextRequest) {
     }
 
     const auth = await getRequestAuth(req);
-    const resolved = await resolveGovernedProviderConfig({
-      auth,
-      family: 'asr',
-      providerId: effectiveProviderId,
-      requestedSecret: apiKey || undefined,
-      requestedBaseUrl: clientBaseUrl,
-      requestedModel: modelId || undefined,
-    });
+    const resolved =
+      (await resolveScenarioManagedProviderRoute({
+        auth,
+        routeId: 'transcription',
+        taskBucket: 'transcript',
+        family: 'asr',
+        requestedProviderId: effectiveProviderId,
+        requestedModelId: modelId || undefined,
+        requestedSecret: apiKey || undefined,
+        requestedBaseUrl: clientBaseUrl,
+      })) ||
+      (await resolveGovernedProviderConfig({
+        auth,
+        family: 'asr',
+        providerId: effectiveProviderId,
+        requestedSecret: apiKey || undefined,
+        requestedBaseUrl: clientBaseUrl,
+        requestedModel: modelId || undefined,
+      }));
+
+    resolvedProviderId = resolved.providerId;
+    resolvedModelId = resolved.modelId || modelId || undefined;
 
     const config = {
-      providerId: effectiveProviderId,
+      providerId: resolved.providerId as ASRProviderId,
       modelId: resolved.modelId || modelId || undefined,
       language: language || 'auto',
       apiKey: resolved.apiKey,

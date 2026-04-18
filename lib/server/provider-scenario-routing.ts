@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { parseModelString } from '@/lib/ai/providers';
+import { ASR_PROVIDERS, TTS_PROVIDERS } from '@/lib/audio/constants';
+import type { TTSVoiceInfo } from '@/lib/audio/types';
 import type { AuthContext } from '@/lib/auth/current-user';
 import { appendAuditLog } from '@/lib/db/repositories/audit-logs';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
@@ -18,12 +20,26 @@ import type {
   ProviderScenarioTaskBucket,
 } from '@/lib/types/classroom-intelligence';
 import type { ProviderType } from '@/lib/types/provider';
+import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 
 export type VerificationScenarioRouteId =
   | 'verify-model'
   | 'verify-image-provider'
   | 'verify-video-provider';
 
+export type ScenarioRouteId =
+  | VerificationScenarioRouteId
+  | 'web-search'
+  | 'transcription'
+  | 'generate-tts'
+  | 'generate-image'
+  | 'generate-video'
+  | 'scene-outlines-stream'
+  | 'scene-content'
+  | 'scene-actions';
+
+type ScenarioManagedFamily = 'asr' | 'image' | 'tts' | 'video' | 'webSearch';
+type ScenarioSelectionMode = 'authoritative' | 'requested_provider';
 type ScenarioValidationStatus = 'selected' | 'fallback_selected' | 'failed_closed';
 
 interface ScenarioAttemptRecord {
@@ -36,7 +52,7 @@ interface ScenarioAttemptRecord {
 interface ScenarioAuditMetadata extends Record<string, unknown> {
   scenarioProfileId: string;
   taskBucket: ProviderScenarioTaskBucket;
-  routeId: VerificationScenarioRouteId;
+  routeId: ScenarioRouteId;
   selectedProviderId: string | null;
   selectedModelId: string | null;
   fallbackProviderId: string | null;
@@ -44,7 +60,7 @@ interface ScenarioAuditMetadata extends Record<string, unknown> {
   fallbackReason: string | null;
   validationStatus: ScenarioValidationStatus;
   attemptedCandidates: ScenarioAttemptRecord[];
-  requestedProviderId: string;
+  requestedProviderId: string | null;
   requestedModelId: string | null;
 }
 
@@ -53,9 +69,18 @@ interface ManagedScenarioCandidates {
   candidates: ProviderScenarioCandidate[];
 }
 
+interface ScenarioProviderRegistryEntry {
+  providerId: string;
+  requiresApiKey: boolean;
+  defaultBaseUrl?: string;
+  clientOnly?: boolean;
+  models?: Array<{ id: string; name: string }>;
+  voices?: TTSVoiceInfo[];
+}
+
 interface ScenarioProviderSelection {
   providerId: string;
-  modelId?: string;
+  modelId: string | null;
   apiKey: string;
   baseUrl?: string;
   scenarioProfileId: string;
@@ -71,16 +96,47 @@ interface ResolveVerificationModelScenarioInput {
   providerType?: ProviderType;
 }
 
-interface ResolveVerificationProviderScenarioInput {
+interface ResolveScenarioManagedProviderRouteInput {
   auth: AuthContext | null;
-  routeId: VerificationScenarioRouteId;
+  routeId: ScenarioRouteId;
   taskBucket: ProviderScenarioTaskBucket;
-  family: 'image' | 'video';
-  providerId: ImageProviderId | VideoProviderId;
-  modelId?: string;
+  family: ScenarioManagedFamily;
+  requestedProviderId?: string | null;
+  requestedModelId?: string | null;
   requestedSecret?: string;
   requestedBaseUrl?: string;
+  selectionMode?: ScenarioSelectionMode;
+  validateResolvedCandidate?: ScenarioProviderRouteValidator;
 }
+
+interface ResolveScenarioProviderCandidateInput {
+  auth: AuthContext | null;
+  routeId: ScenarioRouteId;
+  taskBucket: ProviderScenarioTaskBucket;
+  family: ScenarioManagedFamily;
+  candidate: ProviderScenarioCandidate;
+  requestedSecret?: string;
+  requestedBaseUrl?: string;
+  validateResolvedCandidate?: ScenarioProviderRouteValidator;
+  requestedProviderId: string | null;
+  requestedModelId: string | null;
+}
+
+export interface ScenarioProviderCandidateValidationContext {
+  routeId: ScenarioRouteId;
+  taskBucket: ProviderScenarioTaskBucket;
+  family: ScenarioManagedFamily;
+  candidate: ProviderScenarioCandidate;
+  provider: ScenarioProviderRegistryEntry;
+  resolved: Awaited<ReturnType<typeof resolveGovernedProviderConfig>>;
+  selectedModelId: string | null;
+  requestedProviderId: string | null;
+  requestedModelId: string | null;
+}
+
+export type ScenarioProviderRouteValidator = (
+  input: ScenarioProviderCandidateValidationContext,
+) => string | null | Promise<string | null>;
 
 function buildFallbackReason(attempts: ScenarioAttemptRecord[]): string | null {
   const rejectedAttempts = attempts.filter((attempt) => attempt.status === 'rejected');
@@ -121,23 +177,29 @@ async function appendScenarioAuditLog(
       metadata,
     });
   } catch {
-    // Best-effort scenario telemetry must not block verification.
+    // Best-effort scenario telemetry must not block request handling.
   }
 }
 
-function getManagedScenarioCandidates(
+function getRequestedScenarioCandidates(
   candidates: ProviderScenarioCandidate[],
-  preferredProviderId: string,
-  preferredModelId?: string,
+  requestedProviderId?: string | null,
+  requestedModelId?: string | null,
 ): ManagedScenarioCandidates {
+  const normalizedProviderId = requestedProviderId?.trim();
+  if (!normalizedProviderId) {
+    return { managed: false, candidates: [] };
+  }
+
   const providerMatches = candidates.filter(
-    (candidate) => candidate.providerId === preferredProviderId,
+    (candidate) => candidate.providerId === normalizedProviderId,
   );
   if (providerMatches.length === 0) {
     return { managed: false, candidates: [] };
   }
 
-  if (!preferredModelId) {
+  const normalizedModelId = requestedModelId?.trim();
+  if (!normalizedModelId) {
     return {
       managed: true,
       candidates: providerMatches,
@@ -146,7 +208,7 @@ function getManagedScenarioCandidates(
 
   const exactModelMatches = providerMatches.filter((candidate) => {
     const candidateModelId = candidate.modelId?.trim();
-    return !candidateModelId || candidateModelId === preferredModelId;
+    return !candidateModelId || candidateModelId === normalizedModelId;
   });
 
   if (exactModelMatches.length === 0) {
@@ -159,24 +221,37 @@ function getManagedScenarioCandidates(
   };
 }
 
-function resolveCandidateModelId(
-  candidate: ProviderScenarioCandidate,
-  preferredModelId?: string,
-): string | null {
-  return candidate.modelId?.trim() || preferredModelId?.trim() || null;
+function getScenarioCandidatesForRoute(
+  candidates: ProviderScenarioCandidate[],
+  selectionMode: ScenarioSelectionMode,
+  requestedProviderId?: string | null,
+  requestedModelId?: string | null,
+): ManagedScenarioCandidates {
+  if (selectionMode === 'authoritative') {
+    return {
+      managed: candidates.length > 0,
+      candidates,
+    };
+  }
+
+  return getRequestedScenarioCandidates(candidates, requestedProviderId, requestedModelId);
+}
+
+function resolveCandidateModelId(candidate: ProviderScenarioCandidate): string | null {
+  return candidate.modelId?.trim() || null;
 }
 
 function createAuditMetadata(input: {
   profileId: string;
   taskBucket: ProviderScenarioTaskBucket;
-  routeId: VerificationScenarioRouteId;
+  routeId: ScenarioRouteId;
   selectedProviderId: string | null;
   selectedModelId: string | null;
   fallbackProviderId: string | null;
   fallbackModelId: string | null;
   validationStatus: ScenarioValidationStatus;
   attempts: ScenarioAttemptRecord[];
-  requestedProviderId: string;
+  requestedProviderId: string | null;
   requestedModelId: string | null;
 }): ScenarioAuditMetadata {
   return {
@@ -193,6 +268,105 @@ function createAuditMetadata(input: {
     requestedProviderId: input.requestedProviderId,
     requestedModelId: input.requestedModelId,
   };
+}
+
+function getProviderRegistryEntry(
+  family: ScenarioManagedFamily,
+  providerId: string,
+): ScenarioProviderRegistryEntry | null {
+  switch (family) {
+    case 'asr': {
+      const provider = ASR_PROVIDERS[providerId as keyof typeof ASR_PROVIDERS];
+      if (!provider) {
+        return null;
+      }
+      return {
+        providerId: provider.id,
+        requiresApiKey: provider.requiresApiKey,
+        defaultBaseUrl: provider.defaultBaseUrl,
+        clientOnly: provider.id === 'browser-native',
+        models: provider.models,
+      };
+    }
+    case 'tts': {
+      const provider = TTS_PROVIDERS[providerId as keyof typeof TTS_PROVIDERS];
+      if (!provider) {
+        return null;
+      }
+      return {
+        providerId: provider.id,
+        requiresApiKey: provider.requiresApiKey,
+        defaultBaseUrl: provider.defaultBaseUrl,
+        clientOnly: provider.id === 'browser-native-tts',
+        models: provider.models,
+        voices: provider.voices,
+      };
+    }
+    case 'image': {
+      const provider = IMAGE_PROVIDERS[providerId as ImageProviderId];
+      if (!provider) {
+        return null;
+      }
+      return {
+        providerId: provider.id,
+        requiresApiKey: provider.requiresApiKey,
+        defaultBaseUrl: provider.defaultBaseUrl,
+        models: provider.models,
+      };
+    }
+    case 'video': {
+      const provider = VIDEO_PROVIDERS[providerId as VideoProviderId];
+      if (!provider) {
+        return null;
+      }
+      return {
+        providerId: provider.id,
+        requiresApiKey: provider.requiresApiKey,
+        defaultBaseUrl: provider.defaultBaseUrl,
+        models: provider.models,
+      };
+    }
+    case 'webSearch': {
+      const provider = WEB_SEARCH_PROVIDERS[providerId as keyof typeof WEB_SEARCH_PROVIDERS];
+      if (!provider) {
+        return null;
+      }
+      return {
+        providerId: provider.id,
+        requiresApiKey: provider.requiresApiKey,
+        defaultBaseUrl: provider.defaultBaseUrl,
+      };
+    }
+  }
+}
+
+function validateResolvedProviderCandidate(
+  provider: ScenarioProviderRegistryEntry,
+  candidateModelId: string | null,
+  resolved: Awaited<ReturnType<typeof resolveGovernedProviderConfig>>,
+): string | null {
+  if (provider.clientOnly) {
+    return `provider "${provider.providerId}" is client-only and cannot be used on the server`;
+  }
+
+  if (provider.requiresApiKey && !resolved.apiKey) {
+    return `provider "${provider.providerId}" resolved without an API key`;
+  }
+
+  if (provider.models?.length) {
+    const selectedModelId = resolved.modelId ?? candidateModelId;
+    if (!selectedModelId) {
+      return `provider "${provider.providerId}" resolved without a model`;
+    }
+
+    if (!provider.models.some((model) => model.id === selectedModelId)) {
+      return `model "${selectedModelId}" is not registered for provider "${provider.providerId}"`;
+    }
+  } else if (candidateModelId) {
+    return `provider "${provider.providerId}" does not support explicit model selection`;
+  }
+
+  return null;
 }
 
 function getSceneCapabilityValidationError(
@@ -221,7 +395,6 @@ function getSceneCapabilityValidationError(
 async function tryResolveScenarioModelCandidate(input: {
   auth: AuthContext | null;
   candidate: ProviderScenarioCandidate;
-  preferredModelId?: string;
   apiKey?: string;
   baseUrl?: string;
   providerType?: ProviderType;
@@ -238,7 +411,7 @@ async function tryResolveScenarioModelCandidate(input: {
       modelId: string | null;
     }
 > {
-  const modelId = resolveCandidateModelId(input.candidate, input.preferredModelId);
+  const modelId = resolveCandidateModelId(input.candidate);
   if (!modelId) {
     return {
       ok: false,
@@ -281,18 +454,14 @@ async function tryResolveScenarioModelCandidate(input: {
   }
 }
 
-async function tryResolveScenarioProviderCandidate(input: {
-  auth: AuthContext | null;
-  family: 'image' | 'video';
-  candidate: ProviderScenarioCandidate;
-  preferredModelId?: string;
-  requestedSecret?: string;
-  requestedBaseUrl?: string;
-}): Promise<
+async function tryResolveScenarioProviderCandidate(
+  input: ResolveScenarioProviderCandidateInput,
+): Promise<
   | {
       ok: true;
       result: Awaited<ReturnType<typeof resolveGovernedProviderConfig>>;
-      modelId: string;
+      modelId: string | null;
+      provider: ScenarioProviderRegistryEntry;
     }
   | {
       ok: false;
@@ -301,10 +470,7 @@ async function tryResolveScenarioProviderCandidate(input: {
       modelId: string | null;
     }
 > {
-  const provider =
-    input.family === 'image'
-      ? IMAGE_PROVIDERS[input.candidate.providerId as ImageProviderId]
-      : VIDEO_PROVIDERS[input.candidate.providerId as VideoProviderId];
+  const provider = getProviderRegistryEntry(input.family, input.candidate.providerId);
   if (!provider) {
     return {
       ok: false,
@@ -313,21 +479,15 @@ async function tryResolveScenarioProviderCandidate(input: {
     };
   }
 
-  const modelId = resolveCandidateModelId(input.candidate, input.preferredModelId);
-  if (!modelId) {
-    return {
-      ok: false,
-      reason: `scenario candidate "${input.candidate.providerId}" is missing a concrete model`,
-      modelId: null,
-    };
-  }
-
-  if (!provider.models.some((model) => model.id === modelId)) {
-    return {
-      ok: false,
-      reason: `model "${modelId}" is not registered for provider "${input.candidate.providerId}"`,
-      modelId,
-    };
+  const candidateModelId = resolveCandidateModelId(input.candidate);
+  if (candidateModelId && provider.models?.length) {
+    if (!provider.models.some((model) => model.id === candidateModelId)) {
+      return {
+        ok: false,
+        reason: `model "${candidateModelId}" is not registered for provider "${input.candidate.providerId}"`,
+        modelId: candidateModelId,
+      };
+    }
   }
 
   try {
@@ -337,36 +497,58 @@ async function tryResolveScenarioProviderCandidate(input: {
       providerId: input.candidate.providerId,
       requestedSecret: input.requestedSecret,
       requestedBaseUrl: input.requestedBaseUrl,
-      requestedModel: modelId,
+      requestedModel: candidateModelId || undefined,
     });
 
-    if (!resolved.apiKey) {
+    const selectedModelId = provider.models?.length
+      ? (resolved.modelId ?? candidateModelId ?? null)
+      : null;
+    const baseValidationError = validateResolvedProviderCandidate(
+      provider,
+      candidateModelId,
+      resolved,
+    );
+    if (baseValidationError) {
       return {
         ok: false,
-        reason: `provider "${input.candidate.providerId}" resolved without an API key`,
-        modelId,
+        reason: baseValidationError,
+        modelId: selectedModelId,
       };
     }
 
-    if ((resolved.modelId ?? null) !== modelId) {
-      return {
-        ok: false,
-        reason: `governance resolved model "${resolved.modelId ?? 'none'}" instead of "${modelId}"`,
-        modelId,
-      };
+    if (input.validateResolvedCandidate) {
+      const customValidationError = await input.validateResolvedCandidate({
+        routeId: input.routeId,
+        taskBucket: input.taskBucket,
+        family: input.family,
+        candidate: input.candidate,
+        provider,
+        resolved,
+        selectedModelId,
+        requestedProviderId: input.requestedProviderId,
+        requestedModelId: input.requestedModelId,
+      });
+      if (customValidationError) {
+        return {
+          ok: false,
+          reason: customValidationError,
+          modelId: selectedModelId,
+        };
+      }
     }
 
     return {
       ok: true,
       result: resolved,
-      modelId,
+      modelId: selectedModelId,
+      provider,
     };
   } catch (error) {
     return {
       ok: false,
       reason: error instanceof Error ? error.message : String(error),
       error,
-      modelId,
+      modelId: candidateModelId,
     };
   }
 }
@@ -375,12 +557,16 @@ export async function resolveVerificationModelScenario(
   input: ResolveVerificationModelScenarioInput,
 ): Promise<ResolvedModel | null> {
   const profile = getProviderScenarioProfile();
-  if (!profile?.buckets[input.taskBucket]?.length) {
+  if (!profile) {
+    return null;
+  }
+
+  if (!profile.buckets[input.taskBucket]?.length) {
     return null;
   }
 
   const requested = parseModelString(input.requestedModelString);
-  const managed = getManagedScenarioCandidates(
+  const managed = getRequestedScenarioCandidates(
     profile.buckets[input.taskBucket] ?? [],
     requested.providerId,
     requested.modelId,
@@ -397,7 +583,6 @@ export async function resolveVerificationModelScenario(
     const attempt = await tryResolveScenarioModelCandidate({
       auth: input.auth,
       candidate,
-      preferredModelId: requested.modelId,
       apiKey: input.apiKey,
       baseUrl: input.baseUrl,
       providerType: input.providerType,
@@ -461,18 +646,26 @@ export async function resolveVerificationModelScenario(
   );
 }
 
-export async function resolveVerificationProviderScenario(
-  input: ResolveVerificationProviderScenarioInput,
+export async function resolveScenarioManagedProviderRoute(
+  input: ResolveScenarioManagedProviderRouteInput,
 ): Promise<ScenarioProviderSelection | null> {
   const profile = getProviderScenarioProfile();
-  if (!profile?.buckets[input.taskBucket]?.length) {
+  if (!profile) {
     return null;
   }
 
-  const managed = getManagedScenarioCandidates(
-    profile.buckets[input.taskBucket] ?? [],
-    input.providerId,
-    input.modelId,
+  const bucketCandidates = profile.buckets[input.taskBucket];
+  if (!bucketCandidates?.length) {
+    return null;
+  }
+
+  const requestedProviderId = input.requestedProviderId?.trim() || null;
+  const requestedModelId = input.requestedModelId?.trim() || null;
+  const managed = getScenarioCandidatesForRoute(
+    bucketCandidates,
+    input.selectionMode ?? 'authoritative',
+    requestedProviderId,
+    requestedModelId,
   );
   if (!managed.managed) {
     return null;
@@ -485,11 +678,15 @@ export async function resolveVerificationProviderScenario(
     const candidate = managed.candidates[index];
     const attempt = await tryResolveScenarioProviderCandidate({
       auth: input.auth,
+      routeId: input.routeId,
+      taskBucket: input.taskBucket,
       family: input.family,
       candidate,
-      preferredModelId: input.modelId,
       requestedSecret: input.requestedSecret,
       requestedBaseUrl: input.requestedBaseUrl,
+      validateResolvedCandidate: input.validateResolvedCandidate,
+      requestedProviderId,
+      requestedModelId,
     });
 
     if (attempt.ok) {
@@ -510,8 +707,8 @@ export async function resolveVerificationProviderScenario(
             status: 'selected',
           },
         ],
-        requestedProviderId: input.providerId,
-        requestedModelId: input.modelId ?? null,
+        requestedProviderId,
+        requestedModelId,
       });
       await appendScenarioAuditLog(input.auth, 'provider_scenario.route_selected', metadata);
 
@@ -543,8 +740,8 @@ export async function resolveVerificationProviderScenario(
     fallbackModelId: null,
     validationStatus: 'failed_closed',
     attempts,
-    requestedProviderId: input.providerId,
-    requestedModelId: input.modelId ?? null,
+    requestedProviderId,
+    requestedModelId,
   });
   await appendScenarioAuditLog(input.auth, 'provider_scenario.route_denied', failureMetadata);
 
@@ -555,4 +752,27 @@ export async function resolveVerificationProviderScenario(
   throw createScenarioResolutionError(
     `No validated ${input.taskBucket} scenario candidate is available for route "${input.routeId}".`,
   );
+}
+
+export async function resolveVerificationProviderScenario(input: {
+  auth: AuthContext | null;
+  routeId: Extract<ScenarioRouteId, 'verify-image-provider' | 'verify-video-provider'>;
+  taskBucket: ProviderScenarioTaskBucket;
+  family: Extract<ScenarioManagedFamily, 'image' | 'video'>;
+  providerId: ImageProviderId | VideoProviderId;
+  modelId?: string;
+  requestedSecret?: string;
+  requestedBaseUrl?: string;
+}) {
+  return resolveScenarioManagedProviderRoute({
+    auth: input.auth,
+    routeId: input.routeId,
+    taskBucket: input.taskBucket,
+    family: input.family,
+    requestedProviderId: input.providerId,
+    requestedModelId: input.modelId,
+    requestedSecret: input.requestedSecret,
+    requestedBaseUrl: input.requestedBaseUrl,
+    selectionMode: 'requested_provider',
+  });
 }
