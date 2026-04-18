@@ -244,7 +244,7 @@ pnpm build && pnpm start
 
 ### Vercel Deployment
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTHU-MAIC%2FOpenMAIC&envDescription=Configure%20at%20least%20one%20LLM%20provider%20API%20key%20(e.g.%20OPENAI_API_KEY%2C%20ANTHROPIC_API_KEY).%20All%20providers%20are%20optional.&envLink=https%3A%2F%2Fgithub.com%2FTHU-MAIC%2FOpenMAIC%2Fblob%2Fmain%2F.env.example&project-name=openmaic&framework=nextjs)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fspheng51%2FRAIC&envDescription=Configure%20production%20environment%20variables%20such%20as%20DATABASE_URL%2C%20RAIC_SECRET_ENCRYPTION_KEY%2C%20Google%20sign-in%20IDs%2C%20and%20at%20least%20one%20provider%20API%20key.%20All%20providers%20are%20optional.&envLink=https%3A%2F%2Fgithub.com%2Fspheng51%2FRAIC%2Fblob%2Fmain%2F.env.example&project-name=openmaic&framework=nextjs)
 
 #### Production domain setup (`open-raic.com`)
 
@@ -277,6 +277,19 @@ This repository is configured for Vercel-first releases.
    - `/api/server-providers` (public projection only; internal credentials remain server-side)
    - sign-in path
    - classroom join flow
+
+#### Public launch posture (`GitHub` + `Vercel`)
+
+- GitHub remains the release control plane.
+  Protect `main` and require `Ops Drift`, `MiroFish Contract Gate`, `Lint, Typecheck & Unit Tests`, and `E2E Tests` before merge.
+- Keep GitHub Actions CI-only in this release model.
+  Production deploys come from Vercel Git integration on green merges to `main`.
+- Require these Vercel production environment variables for the public cut:
+  `DATABASE_URL`, `RAIC_SECRET_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_ID`, at least one production provider key, and any MiroFish variables needed for the live surface.
+- Treat generic Vercel preview URLs as non-authoritative for teacher/admin auth unless you add a fixed staging domain, because Google JavaScript origins are exact-origin based.
+- Before each production merge, run:
+  `corepack pnpm run secrets:scan`, `corepack pnpm run ops:drift`, `corepack pnpm run check`, `corepack pnpm run build`, `corepack pnpm run test:mirofish:gate`, `corepack pnpm run test:mirofish:e2e`, `$env:CI='1'; corepack pnpm run test:e2e`, and `corepack pnpm run ops:verify`.
+- If a production deployment is bad, use Vercel rollback or promote rather than hotfixing directly on the server.
 
  Or manually:
 

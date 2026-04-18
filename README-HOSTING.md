@@ -12,8 +12,8 @@ This guide is a quick, practical README focused on **running locally** and **hos
 ### Setup
 
 ```bash
-git clone https://github.com/THU-MAIC/OpenMAIC.git
-cd OpenMAIC
+git clone https://github.com/spheng51/RAIC.git
+cd RAIC
 pnpm install
 cp .env.example .env.local
 ```
@@ -54,10 +54,37 @@ By default, Next.js serves on port `3000`.
 
 ## Option A: Vercel (fastest)
 
-1. Fork this repo.
-2. Import into Vercel.
+1. Import GitHub repo `spheng51/RAIC` into Vercel.
+2. Keep Git integration enabled so PRs receive preview deployments and merges to `main` deploy production.
 3. Set required environment variables from `.env.example` (at least one provider API key).
 4. Deploy.
+
+Public launch on `open-raic.com`:
+
+1. Keep GitHub as the source of truth and merge to `main` only through green PRs.
+2. Protect `main` and require `Ops Drift`, `MiroFish Contract Gate`, `Lint, Typecheck & Unit Tests`, and `E2E Tests`.
+3. Import GitHub repo `spheng51/RAIC` into Vercel with Git integration enabled.
+4. Set required public-production Vercel environment variables:
+   - `DATABASE_URL`
+   - `RAIC_SECRET_ENCRYPTION_KEY`
+   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_ID`
+   - at least one production LLM provider key
+   - any image/video/TTS/ASR/search provider keys needed for the public surface
+   - MiroFish variables if MiroFish is part of the live deployment
+5. Add `open-raic.com` as the production domain, with optional `www.open-raic.com` redirect only.
+6. In Google Cloud OAuth, authorize `https://open-raic.com` and `https://www.open-raic.com` only if that hostname will actually serve the app.
+7. Run the full local release gates on `main` before each production merge:
+   - `corepack pnpm run secrets:scan`
+   - `corepack pnpm run ops:drift`
+   - `corepack pnpm run check`
+   - `corepack pnpm run build`
+   - `corepack pnpm run test:mirofish:gate`
+   - `corepack pnpm run test:mirofish:e2e`
+   - `$env:CI='1'; corepack pnpm run test:e2e`
+   - `corepack pnpm run ops:verify`
+8. Merge to `main`, let Vercel deploy production automatically, then smoke-check `/`, `/studio`, `/admin`, and one classroom flow.
+9. Roll back with Vercel if production is unhealthy.
 
 Recommended when you want easiest CI/CD and global edge delivery.
 
@@ -94,22 +121,35 @@ Minimum for useful deployment:
 
 Recommended for managed org configuration:
 
+- `DATABASE_URL` (required for public production)
 - `RAIC_SECRET_ENCRYPTION_KEY` (enables encrypted org-managed provider secrets)
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_ID`
 
 Optional advanced parsing:
 
 - `PDF_MINERU_BASE_URL`
 - `PDF_MINERU_API_KEY` (if your MinerU endpoint requires auth)
 
+Optional production features:
+
+- `MIROFISH_BASE_URL`
+- `MIROFISH_API_BASE_URL`
+- `MIROFISH_API_KEY`
+- `MIROFISH_EMBED_SECRET`
+- `MIROFISH_MULTI_USER_ENABLED`
+
 ---
 
 ## 5) Basic Ops Checklist
 
 - Run behind HTTPS.
+- Keep generic Vercel preview URLs out of teacher/admin auth sign-off unless you add a fixed staging domain.
 - Restrict who can access admin surfaces.
 - Rotate API keys regularly.
 - Monitor logs and restart policy.
 - Keep dependencies updated (`pnpm up` on a regular schedule).
+- Keep secrets only in Vercel environment variables, not in repo files or `NEXT_PUBLIC_*`.
 
 ---
 

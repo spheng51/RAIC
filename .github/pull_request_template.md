@@ -42,6 +42,7 @@
 - [ ] CI passes (`pnpm check && pnpm lint && npx tsc --noEmit`)
 - [ ] Secret safety passed (`pnpm run secrets:scan`)
 - [ ] Manually tested locally
+- [ ] Vercel preview checked or not applicable
 - [ ] Screenshots / recordings attached (if UI changes)
 
 ## Checklist
@@ -51,8 +52,10 @@
 - [ ] I have added/updated documentation as needed
 - [ ] My changes do not introduce new warnings
 - [ ] I ran required local release gates (`pnpm run ops:drift` and `pnpm run ops:verify`)
+- [ ] This PR is safe for Vercel production auto-deploy after merge to `main`
 
 ## Operational Notes
 
 - [ ] This PR is single-purpose (one concern only).
 - [ ] This PR follows this repository's one-branch merge model and local scratch-branch workflow.
+- [ ] Production impact and rollback path are described when behavior changes.
