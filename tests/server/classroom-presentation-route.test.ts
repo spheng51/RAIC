@@ -362,4 +362,113 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     expect(json.error).toBe('Presentation control changed before the update was applied');
     expect(recordAuditEventMock).not.toHaveBeenCalled();
   });
+
+  it('preserves a newer surface when a concurrent status-only update commits', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        session: { id: 'teacher-session', kind: 'web', role: 'teacher' },
+        user: { id: 'teacher-1' },
+      },
+      source: 'web',
+    });
+    getClassroomPresentationSnapshotMock.mockResolvedValue({
+      sharedSimulation: {
+        provider: 'mirofish',
+        simulationId: 'sim-1',
+        reportId: 'report-1',
+        activeSurface: 'simulation',
+        controllerRole: 'teacher',
+        status: 'running',
+      },
+      reportAvailable: true,
+    });
+    canSessionControlPresentationMock.mockReturnValue(true);
+    updateClassroomMock.mockImplementation(async (_id, updater) =>
+      updater({
+        stage: {
+          sharedSimulation: {
+            provider: 'mirofish',
+            simulationId: 'sim-1',
+            reportId: 'report-1',
+            activeSurface: 'report',
+            controllerRole: 'teacher',
+            status: 'running',
+          },
+        },
+      }),
+    );
+
+    const { PATCH } = await import('@/app/api/classroom/[id]/presentation/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'completed' }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.sharedSimulation).toEqual(
+      expect.objectContaining({
+        activeSurface: 'report',
+        status: 'completed',
+      }),
+    );
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves a newer status when a concurrent surface-only update commits', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        session: { id: 'teacher-session', kind: 'web', role: 'teacher' },
+        user: { id: 'teacher-1' },
+      },
+      source: 'web',
+    });
+    getClassroomPresentationSnapshotMock.mockResolvedValue({
+      sharedSimulation: {
+        provider: 'mirofish',
+        simulationId: 'sim-1',
+        reportId: 'report-1',
+        activeSurface: 'lesson',
+        controllerRole: 'teacher',
+        status: 'running',
+      },
+      reportAvailable: true,
+    });
+    canSessionControlPresentationMock.mockReturnValue(true);
+    updateClassroomMock.mockImplementation(async (_id, updater) =>
+      updater({
+        stage: {
+          sharedSimulation: {
+            provider: 'mirofish',
+            simulationId: 'sim-1',
+            reportId: 'report-1',
+            activeSurface: 'lesson',
+            controllerRole: 'teacher',
+            status: 'completed',
+          },
+        },
+      }),
+    );
+
+    const { PATCH } = await import('@/app/api/classroom/[id]/presentation/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation', {
+        method: 'PATCH',
+        body: JSON.stringify({ activeSurface: 'report' }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.sharedSimulation).toEqual(
+      expect.objectContaining({
+        activeSurface: 'report',
+        status: 'completed',
+      }),
+    );
+  });
 });

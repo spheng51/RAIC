@@ -83,10 +83,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const body = (await request.json()) as PresentationBody;
-  const nextSurface = body.activeSurface ?? snapshot.sharedSimulation.activeSurface;
-  const nextStatus = body.status ?? snapshot.sharedSimulation.status;
+  const requestedSurface = body.activeSurface;
+  const requestedStatus = body.status;
 
-  if (!isPresentationSurface(nextSurface)) {
+  if (requestedSurface !== undefined && !isPresentationSurface(requestedSurface)) {
     return apiErrorWithRequestSession(
       request,
       API_ERROR_CODES.INVALID_REQUEST,
@@ -95,7 +95,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
-  if (!isSharedSimulationStatus(nextStatus)) {
+  if (requestedStatus !== undefined && !isSharedSimulationStatus(requestedStatus)) {
     return apiErrorWithRequestSession(
       request,
       API_ERROR_CODES.INVALID_REQUEST,
@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
-  if (nextSurface === 'report' && !snapshot.reportAvailable) {
+  if (requestedSurface === 'report' && !snapshot.reportAvailable) {
     return apiErrorWithRequestSession(
       request,
       API_ERROR_CODES.INVALID_REQUEST,
@@ -114,22 +114,36 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   let staleControlAttempt = false;
+  let missingReportDuringWrite = false;
+  let previousSurfaceAtWrite: PresentationSurface | null = null;
+  let previousStatusAtWrite: SharedSimulationStatus | null = null;
   const updated = await updateClassroom(id, (current) => {
-    if (!current.stage.sharedSimulation) {
+    const currentSharedSimulation = current.stage.sharedSimulation;
+    if (!currentSharedSimulation) {
       return current;
     }
 
-    if (!canSessionControlPresentation(current.stage.sharedSimulation, access.auth.session)) {
+    if (!canSessionControlPresentation(currentSharedSimulation, access.auth.session)) {
       staleControlAttempt = true;
       return current;
     }
+
+    const nextSurface = requestedSurface ?? currentSharedSimulation.activeSurface;
+    const nextStatus = requestedStatus ?? currentSharedSimulation.status;
+    if (nextSurface === 'report' && !currentSharedSimulation.reportId) {
+      missingReportDuringWrite = true;
+      return current;
+    }
+
+    previousSurfaceAtWrite = currentSharedSimulation.activeSurface;
+    previousStatusAtWrite = currentSharedSimulation.status;
 
     return {
       ...current,
       stage: {
         ...current.stage,
         sharedSimulation: {
-          ...current.stage.sharedSimulation,
+          ...currentSharedSimulation,
           activeSurface: nextSurface,
           status: nextStatus,
         },
@@ -153,6 +167,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  if (missingReportDuringWrite) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'No report is attached to this classroom',
+    );
+  }
+
   if (!updated?.stage.sharedSimulation) {
     return apiErrorWithRequestSession(
       request,
@@ -162,8 +185,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
-  const previousSurface = snapshot.sharedSimulation.activeSurface;
-  const previousStatus = snapshot.sharedSimulation.status;
+  const nextSurface = updated.stage.sharedSimulation.activeSurface;
+  const nextStatus = updated.stage.sharedSimulation.status;
+  const previousSurface = previousSurfaceAtWrite ?? snapshot.sharedSimulation.activeSurface;
+  const previousStatus = previousStatusAtWrite ?? snapshot.sharedSimulation.status;
   const auditAction =
     nextSurface !== previousSurface
       ? nextSurface === 'lesson' && nextStatus === 'error' && previousSurface !== 'lesson'
