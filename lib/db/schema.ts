@@ -1,6 +1,11 @@
 import 'server-only';
 
 import type { AIProviderDefinition, AIProviderFamily } from '@/lib/types/ai-governance';
+import type {
+  AdaptivePacingPreference,
+  BenchmarkArtifactStatus,
+  ClassroomRevisitIntent,
+} from '@/lib/types/classroom-intelligence';
 
 export type PlatformRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
 export type OrganizationKind = 'personal' | 'school';
@@ -116,6 +121,54 @@ export interface UserProviderOverrideRecord {
   updatedAt: string;
 }
 
+export interface ClassroomSessionContextRecord {
+  id: string;
+  classroomId: string;
+  organizationId: string | null;
+  userId: string | null;
+  requirementFingerprint: string;
+  requirementPreview: string;
+  language: string;
+  stageName: string;
+  lastCompletedSceneId: string | null;
+  lastCompletedSceneTitle: string | null;
+  completedSceneCount: number;
+  totalSceneCount: number;
+  masteryHints: string[];
+  revisitIntent: ClassroomRevisitIntent;
+  pacingPreference: AdaptivePacingPreference;
+  reflectionSummary: string | null;
+  confidenceScore: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassroomReflectionRecord {
+  id: string;
+  classroomId: string;
+  organizationId: string | null;
+  userId: string | null;
+  summary: string;
+  challengingAreas: string[];
+  confidenceScore: number | null;
+  revisitIntent: ClassroomRevisitIntent;
+  createdAt: string;
+}
+
+export interface BenchmarkArtifactRecord {
+  id: string;
+  scope: string;
+  source: string;
+  classroomId: string | null;
+  organizationId: string | null;
+  userId: string | null;
+  status: BenchmarkArtifactStatus;
+  metrics: Record<string, unknown>;
+  notes: string[];
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface PlatformStore {
   users: UserRecord[];
   organizations: OrganizationRecord[];
@@ -126,6 +179,9 @@ export interface PlatformStore {
   organizationAiPolicies: OrganizationAIPolicyRecord[];
   organizationProviderConfigs: OrganizationProviderConfigRecord[];
   userProviderOverrides: UserProviderOverrideRecord[];
+  classroomSessionContexts: ClassroomSessionContextRecord[];
+  classroomReflections: ClassroomReflectionRecord[];
+  benchmarkArtifacts: BenchmarkArtifactRecord[];
 }
 
 export const EMPTY_PLATFORM_STORE: PlatformStore = {
@@ -138,6 +194,9 @@ export const EMPTY_PLATFORM_STORE: PlatformStore = {
   organizationAiPolicies: [],
   organizationProviderConfigs: [],
   userProviderOverrides: [],
+  classroomSessionContexts: [],
+  classroomReflections: [],
+  benchmarkArtifacts: [],
 };
 
 export const PLATFORM_SCHEMA_SQL = [
@@ -247,6 +306,51 @@ export const PLATFORM_SCHEMA_SQL = [
     updated_at TIMESTAMPTZ NOT NULL,
     UNIQUE (organization_id, user_id, family, provider_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS classroom_session_contexts (
+    id TEXT PRIMARY KEY,
+    classroom_id TEXT NOT NULL,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    requirement_fingerprint TEXT NOT NULL,
+    requirement_preview TEXT NOT NULL,
+    language TEXT NOT NULL,
+    stage_name TEXT NOT NULL,
+    last_completed_scene_id TEXT,
+    last_completed_scene_title TEXT,
+    completed_scene_count INTEGER NOT NULL DEFAULT 0,
+    total_scene_count INTEGER NOT NULL DEFAULT 0,
+    mastery_hints JSONB NOT NULL DEFAULT '[]'::jsonb,
+    revisit_intent TEXT NOT NULL DEFAULT 'continue',
+    pacing_preference TEXT NOT NULL DEFAULT 'adaptive',
+    reflection_summary TEXT,
+    confidence_score INTEGER,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS classroom_reflections (
+    id TEXT PRIMARY KEY,
+    classroom_id TEXT NOT NULL,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    summary TEXT NOT NULL,
+    challenging_areas JSONB NOT NULL DEFAULT '[]'::jsonb,
+    confidence_score INTEGER,
+    revisit_intent TEXT NOT NULL DEFAULT 'continue',
+    created_at TIMESTAMPTZ NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS benchmark_artifacts (
+    id TEXT PRIMARY KEY,
+    scope TEXT NOT NULL,
+    source TEXT NOT NULL,
+    classroom_id TEXT,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    status TEXT NOT NULL,
+    metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    notes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_classroom_id ON sessions (classroom_id)`,
@@ -254,4 +358,8 @@ export const PLATFORM_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON memberships (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_org_provider_configs_org_family ON organization_provider_configs (organization_id, family)`,
   `CREATE INDEX IF NOT EXISTS idx_user_provider_overrides_org_user_family ON user_provider_overrides (organization_id, user_id, family)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_session_contexts_room_user ON classroom_session_contexts (classroom_id, user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_classroom_session_contexts_requirement ON classroom_session_contexts (organization_id, user_id, requirement_fingerprint, updated_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_classroom_reflections_classroom_created ON classroom_reflections (classroom_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_benchmark_artifacts_scope_created ON benchmark_artifacts (scope, created_at DESC)`,
 ];

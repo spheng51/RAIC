@@ -134,11 +134,19 @@ export function Stage({
   classroomSource,
   classroomNotice,
   homePath,
+  onSceneCompleted,
+  onSceneSelected,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
   classroomSource?: 'public-demo' | 'teacher-server' | null;
   classroomNotice?: string | null;
   homePath?: string;
+  onSceneCompleted?: (sceneId: string) => void;
+  onSceneSelected?: (input: {
+    fromSceneId: string | null;
+    toSceneId: string;
+    reason: 'manual' | 'auto' | 'pending';
+  }) => void;
 }) {
   const { t } = useI18n();
   const stage = useStageStore.use.stage();
@@ -971,6 +979,9 @@ export function Stage({
         // until scene transition (auto-play) or user restarts. Scene change
         // effect handles the reset.
         setPlaybackCompleted(true);
+        if (currentScene?.id) {
+          onSceneCompleted?.(currentScene.id);
+        }
 
         // End lecture session on playback complete
         if (lectureSessionIdRef.current) {
@@ -996,6 +1007,11 @@ export function Stage({
                 return;
               }
               autoStartRef.current = true;
+              onSceneSelected?.({
+                fromSceneId: curId,
+                toSceneId: allScenes[idx + 1].id,
+                reason: 'auto',
+              });
               stageState.setCurrentSceneId(allScenes[idx + 1].id);
             } else if (idx === allScenes.length - 1 && stageState.generatingOutlines.length > 0) {
               // Last scene exhausted but next is still generating — go to pending page
@@ -1008,6 +1024,11 @@ export function Stage({
                 return;
               }
               autoStartRef.current = true;
+              onSceneSelected?.({
+                fromSceneId: curId,
+                toSceneId: PENDING_SCENE_ID,
+                reason: 'pending',
+              });
               stageState.setCurrentSceneId(PENDING_SCENE_ID);
             }
           }, 1500);
@@ -1143,6 +1164,17 @@ export function Stage({
   );
 
   const isTopicActive = playbackView.isTopicActive;
+  const commitSceneSelection = useCallback(
+    (targetSceneId: string, reason: 'manual' | 'auto' | 'pending') => {
+      onSceneSelected?.({
+        fromSceneId: currentSceneId,
+        toSceneId: targetSceneId,
+        reason,
+      });
+      setCurrentSceneId(targetSceneId);
+    },
+    [currentSceneId, onSceneSelected, setCurrentSceneId],
+  );
 
   /**
    * Gated scene switch — if a topic is active, show AlertDialog before switching.
@@ -1155,10 +1187,10 @@ export function Stage({
         setPendingSceneId(targetSceneId);
         return false;
       }
-      setCurrentSceneId(targetSceneId);
+      commitSceneSelection(targetSceneId, 'manual');
       return true;
     },
-    [currentSceneId, isTopicActive, setCurrentSceneId],
+    [commitSceneSelection, currentSceneId, isTopicActive],
   );
 
   /** User confirmed scene switch via AlertDialog */
@@ -1166,9 +1198,9 @@ export function Stage({
     if (!pendingSceneId) return;
     chatAreaRef.current?.endActiveSession();
     doSessionCleanup();
-    setCurrentSceneId(pendingSceneId);
+    commitSceneSelection(pendingSceneId, 'manual');
     setPendingSceneId(null);
-  }, [pendingSceneId, setCurrentSceneId, doSessionCleanup]);
+  }, [commitSceneSelection, pendingSceneId, doSessionCleanup]);
 
   /** User cancelled scene switch via AlertDialog */
   const cancelSceneSwitch = useCallback(() => {
@@ -1239,9 +1271,9 @@ export function Stage({
       gatedSceneSwitch(scenes[currentIndex + 1].id);
     } else if (hasNextPending) {
       // On last real scene → advance to pending page
-      setCurrentSceneId(PENDING_SCENE_ID);
+      commitSceneSelection(PENDING_SCENE_ID, 'pending');
     }
-  }, [currentSceneId, gatedSceneSwitch, hasNextPending, isPendingScene, scenes, setCurrentSceneId]);
+  }, [commitSceneSelection, currentSceneId, gatedSceneSwitch, hasNextPending, isPendingScene, scenes]);
 
   const currentSceneIndex = isPendingScene
     ? scenes.length

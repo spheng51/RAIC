@@ -2,7 +2,15 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import {
+  assessBenchmarkEvidence,
+  evaluateBenchmarkSnapshot,
+  extractBenchmarkMetricValue,
+  isFixtureBenchmarkSnapshot,
+} from './lib/benchmark-evidence.mjs';
 
 const STALE_BRANCH_PATTERNS = [
   /palpha1/i,
@@ -26,6 +34,10 @@ const SECRET_SCANNERS = [
   { name: 'gitleaks', command: 'gitleaks detect --source . --no-git' },
   { name: 'detect-secrets', command: 'detect-secrets scan .' },
 ];
+
+const PERF_BUDGETS_PATH = path.join('ops', 'perf-budgets.json');
+const BENCHMARK_REPLAY_PATH = path.join('ops', 'benchmark-replay.json');
+const BENCHMARK_LIVE_SNAPSHOT_PATH = path.join('data', 'perf-results', 'latest.json');
 
 const SECRET_VALUE_INDICATORS = [
   /\bsk-[A-Za-z0-9]{20,}\b/g,
@@ -160,6 +172,14 @@ function runCommand(command, { env = {} } = {}) {
     });
   } catch {
     fail(`Command failed: ${command}`);
+  }
+}
+
+function readJsonFile(pathname) {
+  try {
+    return JSON.parse(readFileSync(pathname, 'utf8'));
+  } catch {
+    return null;
   }
 }
 
@@ -431,6 +451,79 @@ function checkDrift() {
   console.log('[ops-check] Drift checks passed.');
 }
 
+export {
+  assessBenchmarkEvidence,
+  evaluateBenchmarkSnapshot,
+  extractBenchmarkMetricValue,
+  isFixtureBenchmarkSnapshot,
+};
+
+function checkBenchmarkEvidence() {
+  const perfBudgets = readJsonFile(PERF_BUDGETS_PATH);
+  const replaySnapshot = readJsonFile(BENCHMARK_REPLAY_PATH);
+  const liveSnapshotExists = existsSync(BENCHMARK_LIVE_SNAPSHOT_PATH);
+  const liveSnapshot = liveSnapshotExists ? readJsonFile(BENCHMARK_LIVE_SNAPSHOT_PATH) : null;
+
+  const evidence = assessBenchmarkEvidence({
+    perfBudgets,
+    replaySnapshot,
+    liveSnapshot,
+    liveSnapshotExists,
+  });
+
+  if (!evidence.hasValidPerfBudgets) {
+    fail('Perf budget configuration is missing or invalid.', {
+      details: [`Expected metric targets in ${PERF_BUDGETS_PATH}`],
+    });
+  }
+
+  if (evidence.replayMissing) {
+    fail('Deterministic benchmark replay evidence is missing.', {
+      details: [`Expected replay snapshot at ${BENCHMARK_REPLAY_PATH}`],
+    });
+  }
+
+  if (evidence.replayFailures.length > 0) {
+    fail('Deterministic benchmark replay evidence failed perf budgets.', {
+      details: [`Evidence file: ${BENCHMARK_REPLAY_PATH}`, ...evidence.replayFailures],
+    });
+  }
+
+  console.log(`[ops-check] Deterministic benchmark replay passed using ${BENCHMARK_REPLAY_PATH}.`);
+
+  if (evidence.liveSnapshotMissing) {
+    fail('Current benchmark evidence is missing.', {
+      details: [
+        `Expected latest snapshot at ${BENCHMARK_LIVE_SNAPSHOT_PATH}`,
+        `Replay fixture at ${BENCHMARK_REPLAY_PATH} is baseline coverage only; capture current benchmark evidence before merge.`,
+      ],
+    });
+  }
+
+  if (evidence.liveSnapshotUnreadable) {
+    fail('Current benchmark evidence is unreadable.', {
+      details: [`Unable to parse ${BENCHMARK_LIVE_SNAPSHOT_PATH}`],
+    });
+  }
+
+  if (evidence.liveSnapshotFixture) {
+    fail('Current benchmark evidence points to a fixture snapshot.', {
+      details: [
+        `Evidence file: ${BENCHMARK_LIVE_SNAPSHOT_PATH}`,
+        `Fixture snapshots such as ${BENCHMARK_REPLAY_PATH} cannot satisfy the release gate.`,
+      ],
+    });
+  }
+
+  if (evidence.liveFailures.length > 0) {
+    fail('Current benchmark evidence failed perf budgets.', {
+      details: [`Evidence file: ${BENCHMARK_LIVE_SNAPSHOT_PATH}`, ...evidence.liveFailures],
+    });
+  }
+
+  console.log(`[ops-check] Live benchmark snapshot passed: ${BENCHMARK_LIVE_SNAPSHOT_PATH}`);
+}
+
 async function checkRemoteBacklog() {
   if (!options.strictRemoteBacklog) {
     console.log('[ops-check] Skipping GitHub backlog scan (enable with --strict-remote-backlog).');
@@ -522,6 +615,7 @@ function checkVerify() {
 
   checkDrift();
   checkSecretSafety();
+  checkBenchmarkEvidence();
 
   for (const gate of gates) {
     console.log(`[ops-check] Executing gate: ${gate.name}`);
@@ -531,22 +625,33 @@ function checkVerify() {
   console.log('[ops-check] All verification gates passed.');
 }
 
-if (options.mode === 'drift') {
-  checkDrift();
-  await checkRemoteBacklog();
-  process.exit(0);
+async function main() {
+  if (options.mode === 'drift') {
+    checkDrift();
+    await checkRemoteBacklog();
+    process.exit(0);
+  }
+
+  if (options.mode === 'verify') {
+    checkVerify();
+    await checkRemoteBacklog();
+    process.exit(0);
+  }
+
+  if (options.mode === 'secrets') {
+    checkDrift();
+    checkSecretSafety();
+    process.exit(0);
+  }
+
+  fail(`Unknown mode: ${options.mode}. Use \"drift\", \"verify\", or \"secrets\".`);
 }
 
-if (options.mode === 'verify') {
-  checkVerify();
-  await checkRemoteBacklog();
-  process.exit(0);
-}
+const isDirectExecution =
+  process.argv[1] != null &&
+  path.normalize(path.resolve(process.argv[1])).toLowerCase() ===
+    path.normalize(fileURLToPath(import.meta.url)).toLowerCase();
 
-if (options.mode === 'secrets') {
-  checkDrift();
-  checkSecretSafety();
-  process.exit(0);
+if (isDirectExecution) {
+  await main();
 }
-
-fail(`Unknown mode: ${options.mode}. Use \"drift\", \"verify\", or \"secrets\".`);

@@ -23,12 +23,33 @@ import {
   readClassroomLaunchContext,
   type ClassroomLaunchMode,
 } from '@/lib/utils/classroom-launch';
+import { Button } from '@/components/ui/button';
+import { SessionReflectionDialog } from '@/components/stage/session-reflection-dialog';
+import {
+  applyPersistedSessionContextFloor,
+  applySceneSelectionSignal,
+  buildSessionContextPayload,
+  hydrateSessionProgressState,
+  type PersistedSessionContextSnapshot,
+} from '@/lib/classroom/session-progress';
+import type { ClassroomRevisitIntent } from '@/lib/types/classroom-intelligence';
 
 const log = createLogger('Classroom');
 
 interface ClassroomErrorAction {
   readonly href: string;
   readonly label: string;
+}
+
+function isPersistedSessionContextSnapshot(
+  value: unknown,
+): value is PersistedSessionContextSnapshot {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as PersistedSessionContextSnapshot).completedSceneCount === 'number' &&
+    typeof (value as PersistedSessionContextSnapshot).totalSceneCount === 'number'
+  );
 }
 
 export default function ClassroomDetailPage() {
@@ -38,14 +59,21 @@ export default function ClassroomDetailPage() {
   const { t } = useI18n();
 
   const { loadFromStorage } = useStageStore();
+  const stage = useStageStore.use.stage();
+  const scenes = useStageStore.use.scenes();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorAction, setErrorAction] = useState<ClassroomErrorAction | null>(null);
   const [classroomSource, setClassroomSource] = useState<ClassroomLaunchMode | null>(null);
+  const [reflectionOpen, setReflectionOpen] = useState(false);
 
   const generationStartedRef = useRef(false);
   const retryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastSessionContextPayloadRef = useRef<string | null>(null);
+  const persistedSessionContextRef = useRef<PersistedSessionContextSnapshot | null>(null);
+  const completedSceneIdsRef = useRef<Set<string>>(new Set());
+  const revisitIntentRef = useRef<ClassroomRevisitIntent>('continue');
 
   const { generateRemaining, retrySingleOutline, stop } = useSceneGenerator({
     onComplete: () => {
@@ -111,6 +139,59 @@ export default function ClassroomDetailPage() {
       };
     },
     [t],
+  );
+
+  const hydratePersistedSessionContext = useCallback(
+    async (input: { stageName: string; language?: string | null; scenes: typeof scenes }) => {
+      try {
+        const response = await fetch(
+          `/api/classroom/${encodeURIComponent(classroomId)}/session-context`,
+          {
+            cache: 'no-store',
+          },
+        );
+
+        if (!response.ok) {
+          if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
+            log.warn('Failed to load persisted session context:', response.status);
+          }
+          return;
+        }
+
+        const body = (await response.json().catch(() => null)) as
+          | { context?: unknown }
+          | null;
+        if (!isPersistedSessionContextSnapshot(body?.context)) {
+          return;
+        }
+
+        const persistedContext = body.context;
+        const hydratedState = hydrateSessionProgressState({
+          scenes: input.scenes,
+          context: persistedContext,
+        });
+
+        completedSceneIdsRef.current = hydratedState.completedSceneIds;
+        revisitIntentRef.current = hydratedState.revisitIntent;
+        persistedSessionContextRef.current = persistedContext;
+        lastSessionContextPayloadRef.current = JSON.stringify(
+          applyPersistedSessionContextFloor({
+            payload: buildSessionContextPayload({
+              stageName: input.stageName,
+              language: input.language ?? 'en-US',
+              scenes: input.scenes,
+              completedSceneIds: hydratedState.completedSceneIds,
+              revisitIntent: hydratedState.revisitIntent,
+            }),
+            persistedContext,
+            scenes: input.scenes,
+          }),
+        );
+      } catch (sessionContextError) {
+        log.warn('Failed to hydrate classroom session context:', sessionContextError);
+      }
+    },
+    [classroomId],
   );
 
   const loadClassroom = useCallback(async () => {
@@ -247,6 +328,17 @@ export default function ClassroomDetailPage() {
           );
       }
 
+      if (resolvedSource === 'teacher-server') {
+        const loadedStageState = useStageStore.getState();
+        if (loadedStageState.stage && loadedStageState.scenes.length > 0) {
+          await hydratePersistedSessionContext({
+            stageName: loadedStageState.stage.name,
+            language: loadedStageState.stage.language ?? 'en-US',
+            scenes: loadedStageState.scenes,
+          });
+        }
+      }
+
       setClassroomSource(resolvedSource);
       setErrorAction(null);
       clearClassroomLaunchContext(classroomId);
@@ -264,7 +356,7 @@ export default function ClassroomDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [buildClassroomErrorState, classroomId, loadFromStorage, t]);
+  }, [buildClassroomErrorState, classroomId, hydratePersistedSessionContext, loadFromStorage, t]);
 
   const handleRetry = useCallback(() => {
     setError(null);
@@ -273,6 +365,133 @@ export default function ClassroomDetailPage() {
     void loadClassroom();
   }, [loadClassroom]);
 
+  const postSessionContext = useCallback(
+    (
+      overrides: Partial<{
+        completedSceneCount: number;
+        totalSceneCount: number;
+        lastCompletedSceneId: string | null;
+        lastCompletedSceneTitle: string | null;
+        revisitIntent: ClassroomRevisitIntent;
+      }> = {},
+    ) => {
+      if (loading || error || classroomSource !== 'teacher-server' || !stage || scenes.length === 0) {
+        return;
+      }
+
+      const orderedScenes = [...scenes].sort((a, b) => a.order - b.order);
+      const payload = applyPersistedSessionContextFloor({
+        payload: buildSessionContextPayload({
+          stageName: stage.name,
+          language: stage.language ?? 'en-US',
+          scenes: orderedScenes,
+          completedSceneIds: completedSceneIdsRef.current,
+          revisitIntent: revisitIntentRef.current,
+          overrides,
+        }),
+        persistedContext: persistedSessionContextRef.current,
+        scenes: orderedScenes,
+      });
+
+      const payloadKey = JSON.stringify(payload);
+      if (lastSessionContextPayloadRef.current === payloadKey) {
+        return;
+      }
+
+      void fetch(`/api/classroom/${encodeURIComponent(classroomId)}/session-context`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: payloadKey,
+      })
+        .then((response) => {
+          if (response.ok) {
+            persistedSessionContextRef.current = {
+              completedSceneCount: payload.completedSceneCount,
+              totalSceneCount: payload.totalSceneCount,
+              lastCompletedSceneId: payload.lastCompletedSceneId,
+              lastCompletedSceneTitle: payload.lastCompletedSceneTitle,
+              revisitIntent: payload.revisitIntent,
+            };
+            lastSessionContextPayloadRef.current = payloadKey;
+          }
+        })
+        .catch(() => undefined);
+    },
+    [classroomId, classroomSource, error, loading, scenes, stage],
+  );
+
+  const handleSceneCompleted = useCallback(
+    (sceneId: string) => {
+      const scene = scenes.find((entry) => entry.id === sceneId);
+      if (!scene) {
+        return;
+      }
+
+      completedSceneIdsRef.current = new Set(completedSceneIdsRef.current).add(sceneId);
+      postSessionContext();
+    },
+    [postSessionContext, scenes],
+  );
+
+  const handleSceneSelected = useCallback(
+    ({
+      fromSceneId,
+      toSceneId,
+      reason,
+    }: {
+      fromSceneId: string | null;
+      toSceneId: string;
+      reason: 'manual' | 'auto' | 'pending';
+    }) => {
+      if (reason !== 'manual' || classroomSource !== 'teacher-server') {
+        return;
+      }
+
+      const nextState = applySceneSelectionSignal({
+        scenes,
+        completedSceneIds: completedSceneIdsRef.current,
+        revisitIntent: revisitIntentRef.current,
+        fromSceneId,
+        toSceneId,
+        reason,
+      });
+
+      if (!nextState.shouldPost) {
+        return;
+      }
+
+      completedSceneIdsRef.current = nextState.completedSceneIds;
+      revisitIntentRef.current = nextState.revisitIntent;
+      postSessionContext(
+        nextState.revisitIntent === 'revisit' ? { revisitIntent: 'revisit' } : undefined,
+      );
+    },
+    [classroomSource, postSessionContext, scenes],
+  );
+
+  const handleReflectionSaved = useCallback(
+    (input: {
+      context?: {
+        revisitIntent?: ClassroomRevisitIntent;
+      } | null;
+    }) => {
+      if (input.context?.revisitIntent) {
+        revisitIntentRef.current = input.context.revisitIntent;
+        if (persistedSessionContextRef.current) {
+          persistedSessionContextRef.current = {
+            ...persistedSessionContextRef.current,
+            revisitIntent: input.context.revisitIntent,
+          };
+        }
+      }
+      lastSessionContextPayloadRef.current = null;
+    },
+    [],
+  );
+
   useEffect(() => {
     // Reset loading state on course switch to unmount Stage during transition,
     // preventing stale data from syncing back to the new course
@@ -280,7 +499,12 @@ export default function ClassroomDetailPage() {
     setError(null);
     setErrorAction(null);
     setClassroomSource(null);
+    setReflectionOpen(false);
     generationStartedRef.current = false;
+    lastSessionContextPayloadRef.current = null;
+    persistedSessionContextRef.current = null;
+    completedSceneIdsRef.current = new Set();
+    revisitIntentRef.current = 'continue';
 
     // Clear previous classroom's media tasks to prevent cross-classroom contamination.
     // Placeholder IDs (gen_img_1, gen_vid_1) are not globally unique across stages,
@@ -394,12 +618,29 @@ export default function ClassroomDetailPage() {
               </div>
             </div>
           ) : (
-            <Stage
-              onRetryOutline={retrySingleOutline}
-              classroomSource={classroomSource}
-              classroomNotice={classroomNotice}
-              homePath={homePath}
-            />
+            <div className="relative flex-1">
+              {classroomSource === 'teacher-server' ? (
+                <div className="absolute right-4 top-4 z-30">
+                  <Button size="sm" variant="secondary" onClick={() => setReflectionOpen(true)}>
+                    Session Reflection
+                  </Button>
+                </div>
+              ) : null}
+              <Stage
+                onRetryOutline={retrySingleOutline}
+                classroomSource={classroomSource}
+                classroomNotice={classroomNotice}
+                homePath={homePath}
+                onSceneCompleted={handleSceneCompleted}
+                onSceneSelected={handleSceneSelected}
+              />
+              <SessionReflectionDialog
+                classroomId={classroomId}
+                open={reflectionOpen}
+                onOpenChange={setReflectionOpen}
+                onSaved={handleReflectionSaved}
+              />
+            </div>
           )}
         </div>
       </MediaStageProvider>

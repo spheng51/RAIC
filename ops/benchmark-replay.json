@@ -1,0 +1,37 @@
+{
+  "latestArtifactId": "ops-replay-fixture-2026-04-17",
+  "createdAt": "2026-04-17T00:00:00.000Z",
+  "scope": "ops-verify-replay",
+  "source": "ops-check-fixture",
+  "status": "pass",
+  "metrics": {
+    "firstMeaningfulPaintMs": {
+      "value": 2140,
+      "threshold": 2500,
+      "status": "pass"
+    },
+    "classroomStartToFirstSceneMs": {
+      "value": 7420,
+      "threshold": 8000,
+      "status": "pass"
+    },
+    "providerRoundtripP95Ms": {
+      "value": 2310,
+      "threshold": 3500,
+      "status": "pass"
+    },
+    "classroomReuseReconnectMs": {
+      "value": 1890,
+      "threshold": 2500,
+      "status": "pass"
+    }
+  },
+  "notes": [
+    "Deterministic replay evidence for ops:verify.",
+    "Kept in-repo so verification remains stable in clean worktrees without /data snapshots."
+  ],
+  "metadata": {
+    "fixture": true,
+    "owner": "ops-check"
+  }
+}

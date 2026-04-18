@@ -47,6 +47,15 @@ function normalizePlatformStore(value: unknown): PlatformStore {
   const userProviderOverrides = Array.isArray(value.userProviderOverrides)
     ? value.userProviderOverrides
     : [];
+  const classroomSessionContexts = Array.isArray(value.classroomSessionContexts)
+    ? value.classroomSessionContexts
+    : [];
+  const classroomReflections = Array.isArray(value.classroomReflections)
+    ? value.classroomReflections
+    : [];
+  const benchmarkArtifacts = Array.isArray(value.benchmarkArtifacts)
+    ? value.benchmarkArtifacts
+    : [];
 
   return {
     users,
@@ -58,6 +67,9 @@ function normalizePlatformStore(value: unknown): PlatformStore {
     organizationAiPolicies,
     organizationProviderConfigs,
     userProviderOverrides,
+    classroomSessionContexts,
+    classroomReflections,
+    benchmarkArtifacts,
   } as PlatformStore;
 }
 
