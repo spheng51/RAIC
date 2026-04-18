@@ -11,6 +11,7 @@ import type {
 import type { SceneOutline } from '@/lib/types/generation';
 import type { UIMessage } from 'ai';
 import { createLogger } from '@/lib/logger';
+import { LOCALSTORAGE_KEY_DISCARDED_DB } from '@/configs/storage';
 
 const log = createLogger('Database');
 
@@ -177,6 +178,23 @@ export function mediaFileKey(stageId: string, elementId: string): string {
 const DATABASE_NAME = 'RAIC-Database';
 const _DATABASE_VERSION = 8;
 
+function updateDiscardedDatabaseMarker(nextValue: string | null): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    if (nextValue) {
+      localStorage.setItem(LOCALSTORAGE_KEY_DISCARDED_DB, nextValue);
+      return;
+    }
+
+    localStorage.removeItem(LOCALSTORAGE_KEY_DISCARDED_DB);
+  } catch (error) {
+    log.warn('Failed to update discarded database marker', error);
+  }
+}
+
 /**
  * RAIC Database Instance
  */
@@ -326,7 +344,8 @@ export async function initDatabase(): Promise<void> {
     await db.open();
     // Request persistent storage to prevent browser from evicting IndexedDB
     // under storage pressure (large media blobs can trigger LRU cleanup)
-    void navigator.storage?.persist?.();
+    void globalThis.navigator?.storage?.persist?.();
+    updateDiscardedDatabaseMarker(null);
     log.info('Database initialized successfully');
   } catch (error) {
     log.error('Failed to initialize database:', error);
@@ -339,8 +358,14 @@ export async function initDatabase(): Promise<void> {
  * Use with caution: deletes all data
  */
 export async function clearDatabase(): Promise<void> {
-  await db.delete();
-  log.info('Database cleared');
+  updateDiscardedDatabaseMarker(DATABASE_NAME);
+  try {
+    await db.delete();
+    log.info('Database cleared');
+  } catch (error) {
+    updateDiscardedDatabaseMarker(null);
+    throw error;
+  }
 }
 
 /**

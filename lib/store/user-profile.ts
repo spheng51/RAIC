@@ -9,6 +9,16 @@ import { persist } from 'zustand/middleware';
 /** Predefined avatar options */
 export const AVATAR_OPTIONS = [
   '/avatars/user.png',
+  '/avatars/teacher-kids.png',
+  '/avatars/assist-kids.png',
+  '/avatars/clown-kids.png',
+  '/avatars/curious-kids.png',
+  '/avatars/note-taker-kids.png',
+  '/avatars/thinker-kids.png',
+  '/avatars/librarian.png',
+  '/avatars/principal.png',
+  '/avatars/coach.png',
+  '/avatars/counselor.png',
   '/avatars/teacher-2.png',
   '/avatars/assist-2.png',
   '/avatars/clown-2.png',

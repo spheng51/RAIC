@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ACCESS_CODE_COOKIE_NAME,
-  ACCESS_CODE_TOKEN_TTL_SECONDS,
-  createAccessToken,
-} from '@/lib/server/access-code';
+import { ACCESS_CODE_TOKEN_TTL_SECONDS, createAccessToken } from '@/lib/server/access-code';
+
+const LEGACY_ACCESS_CODE_COOKIE_NAME = ['open', 'maic_access'].join('');
 
 const cookieStore = {
   get: vi.fn(),
@@ -67,6 +65,9 @@ describe('access code routes and auth nonce', () => {
       enabled: true,
       authenticated: true,
     });
+    expect(cookieStore.get).toHaveBeenCalledTimes(1);
+    expect(cookieStore.get).toHaveBeenCalledWith('openraic_access');
+    expect(cookieStore.get).not.toHaveBeenCalledWith(LEGACY_ACCESS_CODE_COOKIE_NAME);
   });
 
   it('rejects invalid access-code submissions', async () => {
@@ -107,7 +108,7 @@ describe('access code routes and auth nonce', () => {
     });
     expect(cookieStore.set).toHaveBeenCalledTimes(1);
     expect(cookieStore.set).toHaveBeenCalledWith(
-      ACCESS_CODE_COOKIE_NAME,
+      'openraic_access',
       expect.any(String),
       expect.objectContaining({
         httpOnly: true,

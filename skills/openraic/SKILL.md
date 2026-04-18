@@ -35,7 +35,6 @@ If present, read defaults from `~/.openclaw/openclaw.json` under:
       "openraic": {
         "enabled": true,
         "config": {
-          "accessCode": "sk-xxx",
           "repoDir": "/path/to/RAIC",
           "url": "http://localhost:3000"
         }
@@ -45,7 +44,6 @@ If present, read defaults from `~/.openclaw/openclaw.json` under:
 }
 ```
 
-- If `accessCode` is present, default to hosted mode and skip the mode-selection prompt.
 - Use `repoDir` and `url` only as defaults for local mode.
 - Still confirm before acting.
 
@@ -53,14 +51,12 @@ If present, read defaults from `~/.openclaw/openclaw.json` under:
 
 ### 0. Choose Mode
 
-First check skill config for `accessCode`. If present, announce that a stored access code was found and proceed directly to hosted mode (load [references/hosted-mode.md](references/hosted-mode.md), skip phases 1-4). Do not ask the user to paste the code again.
+Ask the user how they want to use Open-RAIC:
 
-If no `accessCode` is in config, ask the user how they want to use Open-RAIC:
+1. **Run locally with the OpenClaw skill** (recommended) - Clone the repo, configure provider keys, and run on the user's machine.
+2. **Use the hosted web app directly** - Open `https://open-raic.com` in a browser. Hosted OpenClaw generation is not supported in this cutover.
 
-1. **Use hosted Open-RAIC** (recommended for quick start) - Requires an access code from `https://open-raic.com`. No local setup needed.
-2. **Run locally** - Clone the repo, configure provider keys, and run on your machine.
-
-If the user chooses hosted mode, load [references/hosted-mode.md](references/hosted-mode.md) and skip phases 1-4.
+If the user chooses the hosted web app, load [references/hosted-mode.md](references/hosted-mode.md) and stop there.
 If the user chooses local mode, proceed to phase 1 as usual.
 
 ### 1. Clone Or Reuse Existing Repo

@@ -68,6 +68,10 @@ next-env.d.ts
 # generated data
 /data
 /logs
+/.codex-run/
+/.codex-dev*.log
+/.codex-*.log
+/.codex-*.png
 
 # docs
 /docs

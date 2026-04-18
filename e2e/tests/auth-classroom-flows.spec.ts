@@ -13,6 +13,8 @@ import {
 } from './support/ai-governance';
 
 const CLASSROOM_COOKIE_NAME = 'raic_classroom_access';
+const ACCESS_CODE_COOKIE_NAME = 'openraic_access';
+const LEGACY_ACCESS_CODE_COOKIE_NAME = ['open', 'maic_access'].join('');
 const SESSION_COOKIE_NAME = 'raic_session';
 
 test.describe.configure({ mode: 'serial' });
@@ -45,6 +47,32 @@ test.beforeEach(async () => {
 
 test.afterAll(async () => {
   await resetRaicData();
+});
+
+test('fresh access-code login writes the renamed access cookie', async ({ page }) => {
+  test.skip(!process.env.ACCESS_CODE, 'Set ACCESS_CODE to enable access-code browser coverage.');
+
+  await page.goto(`${APP_BASE_URL}/`);
+  await expect(page.getByRole('heading', { name: 'Enter access code' })).toBeVisible();
+
+  await page.getByPlaceholder('Access code').fill(process.env.ACCESS_CODE!);
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Enter access code' })).toBeHidden();
+  await expect
+    .poll(async () => {
+      const cookies = await page.context().cookies(APP_BASE_URL);
+      return {
+        hasNewCookie: cookies.some(
+          (cookie) => cookie.name === ACCESS_CODE_COOKIE_NAME && cookie.value.length > 0,
+        ),
+        hasOldCookie: cookies.some((cookie) => cookie.name === LEGACY_ACCESS_CODE_COOKIE_NAME),
+      };
+    })
+    .toEqual({
+      hasNewCookie: true,
+      hasOldCookie: false,
+    });
 });
 
 test('protected routes redirect unauthenticated users and authenticated users skip sign-in', async ({

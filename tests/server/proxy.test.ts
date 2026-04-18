@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/constants';
-import { ACCESS_CODE_COOKIE_NAME, createAccessToken } from '@/lib/server/access-code';
+import { createAccessToken } from '@/lib/server/access-code';
+
+const LEGACY_ACCESS_CODE_COOKIE_NAME = ['open', 'maic_access'].join('');
 
 const resolveSessionFromTokenMock = vi.fn();
 
@@ -93,11 +95,32 @@ describe('proxy auth refresh', () => {
     const response = await proxy(
       new NextRequest('http://localhost/api/chat', {
         headers: {
-          cookie: `${ACCESS_CODE_COOKIE_NAME}=${accessToken}`,
+          cookie: `openraic_access=${accessToken}`,
         },
       }),
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it('rejects protected api routes when only the legacy access-code cookie is present', async () => {
+    vi.stubEnv('ACCESS_CODE', 'secret-code');
+
+    const { proxy } = await import('../../proxy');
+    const accessToken = createAccessToken('secret-code');
+    const response = await proxy(
+      new NextRequest('http://localhost/api/chat', {
+        headers: {
+          cookie: `${LEGACY_ACCESS_CODE_COOKIE_NAME}=${accessToken}`,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Access code required',
+    });
   });
 });

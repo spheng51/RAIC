@@ -16,8 +16,11 @@ We currently provide security updates for the latest major release and the activ
 
 If you discover a security vulnerability in Open-RAIC, **please do not create a public GitHub issue.** Publicly disclosing a vulnerability can put other users and self-hosted instances at risk.
 
-Instead, please report it privately using one of the following methods:
-**GitHub Private Vulnerability Reporting:** Go to the [Security tab](https://github.com/spheng51/RAIC/security) of the repository, click on "Advisories", and select "Report a vulnerability".
+Instead, please report it privately using the RAIC Discord community and ask a maintainer for a private security handoff before sharing technical details:
+
+- [Discord Community](https://discord.gg/PtZaaTbH)
+
+RAIC GitHub private vulnerability reporting is not currently enabled on `spheng51/RAIC`, so do not rely on the GitHub Security tab for private intake.
 
 
 **What to include in your report:**

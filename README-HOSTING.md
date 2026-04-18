@@ -6,10 +6,12 @@ This guide is a quick, practical README focused on **running locally** and **hos
 
 The legacy pre-cutover deployment path is retired. Production and staging deployment docs should now target the `spheng51/RAIC` repository and `open-raic.com` hostnames only.
 
-- Old cookies are invalid after the cutover. Users must sign in again.
-- Old browser state is ignored on RAIC hosts. Do not rely on carried-over local storage, cached settings, or pre-cutover tabs.
+- The access-code cookie name is now `openraic_access`. Deployments using `ACCESS_CODE` should expect a fresh site-level prompt after the cutover.
+- The browser database name is now `RAIC-Database`, and the discarded-db marker is now `RAIC_DISCARDED_DB`.
+- Same-origin browser state is not wiped automatically. Before validating a cutover on the same origin, clear cookies, IndexedDB, localStorage, and sessionStorage manually.
 - Docker users must recreate the old volume or migrate it manually before bringing up the renamed stack. No automatic volume rename or import is provided.
-- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Legacy pre-cutover skill installs are not treated as compatible.
+- If `DATABASE_URL` is unset, copy the repo-local `data/` directory forward from the old checkout or move the deployment to Postgres before starting RAIC.
+- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Hosted OpenClaw generation is not supported in this cutover.
 
 ## 1) Run Locally
 
@@ -115,7 +117,7 @@ Recommended for self-hosting on a VPS or internal server.
 ## Option C: Traditional VM / Bare Metal
 
 1. Install Node.js + pnpm.
-2. Clone repo and configure `.env.local`.
+2. Clone repo, copy the previous `data/` directory forward if `DATABASE_URL` is unset, and configure `.env.local`.
 3. Run `pnpm build && pnpm start`.
 4. Put Nginx/Caddy in front for TLS and reverse proxy.
 5. Use a process manager (systemd/pm2) for uptime.
@@ -156,14 +158,15 @@ Optional production features:
 
 - Run behind HTTPS.
 - Use RAIC hostnames only in OAuth config, smoke tests, and support runbooks. Do not keep any legacy pre-cutover domains live during the hard cutover.
-- Expect fresh browser sessions after the cutover. Old cookies are invalid and old browser state is intentionally ignored.
+- Before same-origin smoke tests, manually clear cookies, IndexedDB, localStorage, and sessionStorage so stale browser state does not contaminate the cutover validation.
+- Expect the `openraic_access` cookie, `RAIC-Database`, and `RAIC_DISCARDED_DB` keys to replace their pre-cutover names.
 - Keep generic Vercel preview URLs out of teacher/admin auth sign-off unless you add a fixed staging domain.
 - Restrict who can access admin surfaces.
 - Rotate API keys regularly.
 - Monitor logs and restart policy.
 - Keep dependencies updated (`pnpm up` on a regular schedule).
 - Keep secrets only in Vercel environment variables, not in repo files or `NEXT_PUBLIC_*`.
-- Reinstall or reconfigure the renamed `openraic` OpenClaw skill anywhere classroom launches depend on chat-side automation.
+- Reinstall or reconfigure the renamed `openraic` OpenClaw skill anywhere classroom launches depend on chat-side automation. Use the hosted web UI directly until a machine-usable hosted auth flow is added for the skill.
 
 ---
 

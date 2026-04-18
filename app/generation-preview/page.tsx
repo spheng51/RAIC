@@ -595,48 +595,48 @@ function GenerationPreviewContent() {
         try {
           const allAvatars = [
             {
-              path: '/avatars/teacher.png',
-              desc: 'Male teacher with glasses, holding a book, green background',
+              path: '/avatars/teacher-kids.png',
+              desc: 'Heroic male teacher with glasses, tablet, blue-and-yellow comic burst background',
             },
             {
               path: '/avatars/teacher-2.png',
               desc: 'Female teacher with long dark hair, blue traditional outfit, gentle expression',
             },
             {
-              path: '/avatars/assist.png',
-              desc: 'Young female assistant with glasses, pink background, friendly smile',
+              path: '/avatars/assist-kids.png',
+              desc: 'Helpful female assistant with glasses, notebook and stylus, mint-and-coral support vibe',
             },
             {
               path: '/avatars/assist-2.png',
               desc: 'Young female in orange top and purple overalls, cheerful and approachable',
             },
             {
-              path: '/avatars/clown.png',
-              desc: 'Energetic girl with glasses pointing up, green shirt, lively and fun',
+              path: '/avatars/clown-kids.png',
+              desc: 'Playful curly-haired girl with glasses, silly gesture, orange-and-sky-blue fun energy',
             },
             {
               path: '/avatars/clown-2.png',
               desc: 'Playful girl with curly hair doing rock gesture, blue shirt, humorous vibe',
             },
             {
-              path: '/avatars/curious.png',
-              desc: 'Surprised boy with glasses, hand on cheek, curious expression',
+              path: '/avatars/curious-kids.png',
+              desc: 'Wide-eyed boy with glasses and a book, lime-and-magenta question-mark background',
             },
             {
               path: '/avatars/curious-2.png',
               desc: 'Boy with backpack holding a book and question mark bubble, inquisitive',
             },
             {
-              path: '/avatars/note-taker.png',
-              desc: 'Studious boy with glasses, blue shirt, calm and organized',
+              path: '/avatars/note-taker-kids.png',
+              desc: 'Organized boy with glasses writing in a notebook, cyan-and-amber checklist background',
             },
             {
               path: '/avatars/note-taker-2.png',
               desc: 'Active boy with yellow backpack waving, blue outfit, enthusiastic learner',
             },
             {
-              path: '/avatars/thinker.png',
-              desc: 'Thoughtful girl with hand on chin, purple background, contemplative',
+              path: '/avatars/thinker-kids.png',
+              desc: 'Thoughtful girl with glasses and an open book, deep-indigo-and-coral idea orbit background',
             },
             {
               path: '/avatars/thinker-2.png',

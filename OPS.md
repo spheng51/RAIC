@@ -88,10 +88,12 @@ The rename cutover is not a compatibility rollout. Operators should treat it as 
 
 - Use `spheng51/RAIC` in deployment tickets, Vercel project mappings, mirrors, and operator handoff notes. Retire legacy repo names instead of aliasing them in release docs.
 - Use RAIC hostnames only in smoke plans and auth/OAuth examples. Legacy pre-cutover hostnames should not remain in deployment-facing instructions.
-- Old cookies are invalid after cutover. Start smoke tests from a fresh sign-in and treat any pre-cutover session token as unusable.
-- Old browser state is ignored by design. Local storage, cached tabs, and other browser-carried state from before the rename are not supported inputs to post-cutover validation.
+- The access-code cookie is now `openraic_access`. Start `ACCESS_CODE` smoke tests from a fresh prompt and treat any pre-cutover access-code token as unusable.
+- The browser database and discarded-db marker are now `RAIC-Database` and `RAIC_DISCARDED_DB`.
+- Same-origin browser state is not cleared automatically. Before post-cutover validation, clear cookies, IndexedDB, localStorage, and sessionStorage explicitly.
 - Docker/self-hosted operators must recreate legacy volumes or migrate the data manually before starting the renamed stack. The release does not rename or import old volumes automatically.
-- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Do not assume the old pre-cutover skill registration or config will be discovered automatically.
+- If `DATABASE_URL` is unset, copy the repo-local `data/` directory forward from the old checkout or migrate to Postgres before starting the renamed stack.
+- OpenClaw users must reinstall or reconfigure the renamed `openraic` skill. Hosted OpenClaw generation remains unsupported until the server exposes a machine-usable hosted auth flow.
 
 ## Drift prevention after each push
 

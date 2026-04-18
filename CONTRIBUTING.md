@@ -8,19 +8,19 @@ Thank you for your interest in contributing to Open-RAIC! This guide will help y
 | --- | --- |
 | **Bug fix** | Open a PR directly (link the issue if one exists) |
 | **Extending existing features** (e.g. adding a new model provider, new TTS engine) | Open a PR directly |
-| **New feature or architecture change** | Start a [GitHub Discussion](https://github.com/spheng51/RAIC/discussions) or ask in [Discord](https://discord.gg/uJRzqXuC) **before** opening a PR |
-| **Design / UI change** | Discuss in a GitHub Discussion or Discord first — include mockups or screenshots |
+| **New feature or architecture change** | Start in [Discord](https://discord.gg/PtZaaTbH) **before** opening a PR |
+| **Design / UI change** | Discuss in Discord first — include mockups or screenshots |
 | **Refactor-only PR** | Not accepted unless a maintainer explicitly requests it |
 | **Documentation** | Open a PR directly |
-| **Question** | Ask in [Discord](https://discord.gg/uJRzqXuC) |
+| **Question** | Ask in [Discord](https://discord.gg/PtZaaTbH) |
 
-## Claiming Issues
+## Coordination While GitHub Intake Is Offline
 
-To avoid duplicate effort, please **comment on an issue** to claim it before you start working. A maintainer will assign you.
+The `spheng51/RAIC` fork does not currently expose GitHub Issues, Discussions, or Security Advisories. Until those RAIC-owned GitHub surfaces are enabled, use [Discord](https://discord.gg/PtZaaTbH) for bug reports, feature discussion, design review, and maintainer coordination.
 
-- If **no PR or meaningful update** (WIP commit, progress comment) appears within **1 day**, the issue may be reassigned to someone else.
-- If you see an issue already assigned, reach out to the assignee first to coordinate — you may be able to collaborate or split the work.
-- If you can no longer work on a claimed issue, please leave a comment so others can pick it up.
+- For bounded bug fixes and documentation changes, open a PR directly.
+- For larger features, architecture changes, or UI work, coordinate in Discord before writing code.
+- If two contributors want the same write scope, coordinate in Discord first rather than racing parallel PRs.
 
 ## Prerequisites
 
@@ -107,7 +107,6 @@ If you have not completed local verification, keep your PR in **Draft** status. 
 
 ### PR Guidelines
 
-- **Every PR must link to an issue** — use `Closes #123` or `Fixes #456` in the PR description. If no issue exists yet, create one first. PRs without a linked issue will not be reviewed.
 - **Keep PRs focused** — one concern per PR; do not mix unrelated changes
 - **Describe what and why** — fill out the [PR template](.github/pull_request_template.md)
 - **Include screenshots** — for UI changes, show before/after
@@ -161,7 +160,7 @@ Open-RAIC/
 
 ## Reporting Bugs
 
-Use the [Bug Report](https://github.com/spheng51/RAIC/issues/new?template=bug_report.yml) issue template. Include:
+Until RAIC GitHub issues are enabled, report bugs in [Discord](https://discord.gg/PtZaaTbH). Include:
 
 - Steps to reproduce
 - Expected vs. actual behavior
@@ -170,11 +169,11 @@ Use the [Bug Report](https://github.com/spheng51/RAIC/issues/new?template=bug_re
 
 ## Requesting Features
 
-Use the [Feature Request](https://github.com/spheng51/RAIC/issues/new?template=feature_request.yml) issue template. For larger features, please open a [Discussion](https://github.com/spheng51/RAIC/discussions) first.
+Until RAIC GitHub issues and discussions are enabled, use [Discord](https://discord.gg/PtZaaTbH) for feature requests and architecture discussion.
 
 ## Security Vulnerabilities
 
-Please report security vulnerabilities through [GitHub Security Advisories](https://github.com/spheng51/RAIC/security/advisories/new). **Do not** open a public issue for security vulnerabilities.
+Follow [SECURITY.md](SECURITY.md) for private vulnerability reporting. **Do not** open a public issue or post vulnerability details in a public Discord channel.
 
 ## License
 

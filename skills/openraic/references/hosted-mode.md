@@ -1,45 +1,20 @@
-# Hosted Mode
+# Hosted Web App
 
-Use this when the user has an access code from `https://open-raic.com` and wants to skip local setup.
+Hosted Open-RAIC is available at `https://open-raic.com`, but this OpenClaw skill must not call the hosted generation API directly in the current cutover.
 
-## Access Code Setup
+## Why The Skill Cannot Use Hosted Generation Yet
 
-1. Read `accessCode` from skill config (`~/.openclaw/openclaw.json` -> `skills.entries.openraic.config.accessCode`).
-2. If found, use it directly. Do not ask the user to paste the code into chat.
-3. If not found, tell the user to add their access code to the config file:
+- Hosted access currently depends on the browser-set `openraic_access` cookie and the normal teacher web session flow.
+- `GET /api/health` is allowlisted and cannot prove that an access code is valid for generation.
+- The classroom-generation submission and polling routes require the browser/session flow and will return auth errors if the skill calls them directly.
 
-   ```
-   Edit ~/.openclaw/openclaw.json and set skills.entries.openraic.config.accessCode to your access code (starts with sk-).
-   ```
+## What To Tell The User
 
-   Wait for the user to confirm before continuing. Do not ask them to paste the code in chat.
+1. If they want hosted Open-RAIC, tell them to open `https://open-raic.com` in a browser and finish sign-in or access-code entry there.
+2. If they want OpenClaw to drive generation, switch them to local mode and continue with the self-hosted flow.
 
-4. Verify connectivity: `GET https://open-raic.com/api/health` with `Authorization: Bearer <access-code>`
-   - On success: confirm connection and proceed to generation.
-   - On failure (`401`): access code is invalid. Ask the user to check or regenerate it at `https://open-raic.com` and update the config file.
-   - On failure (network): suggest checking network access or trying local mode.
+## Do Not Do
 
-## Generating A Classroom
-
-Follow the same generation flow as [generate-flow.md](generate-flow.md) with these differences:
-
-- **Base URL**: `https://open-raic.com` (hardcoded, not configurable)
-- **Authorization**: Include header `Authorization: Bearer <access-code>` on all API requests
-- **Classroom URL**: `https://open-raic.com/classroom/{id}`
-
-### Feature Detection In Hosted Mode
-
-Before generating, query `GET https://open-raic.com/api/health` (with auth header) to check `capabilities`. Automatically include optional feature flags (`enableWebSearch`, `enableImageGeneration`, etc.) based on what the server supports. Do not send new fields if the server does not return `capabilities` (older version). This keeps the skill forward-compatible with the hosted deployment.
-
-## Quota
-
-- 10 generations per day, independent of web UI quota
-- If generation returns `403` with `Daily quota exhausted`, inform the user of the daily limit and that it resets at midnight.
-
-## Error Handling
-
-| HTTP Status | Meaning | Action |
-|-------------|---------|--------|
-| 401 | Invalid access code | Ask the user to check their code or generate a new one at `https://open-raic.com` |
-| 403 | Quota exhausted | Inform the user of the daily limit and suggest trying tomorrow |
-| 500 | Server error | Suggest retrying later or switching to local mode |
+- Do not ask the user to paste an access code into chat.
+- Do not send `Authorization: Bearer <access-code>` to hosted Open-RAIC.
+- Do not call hosted generation or polling routes from the skill.

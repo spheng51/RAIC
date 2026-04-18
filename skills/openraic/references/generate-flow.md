@@ -8,9 +8,7 @@
 - Provider keys are configured.
 - For self-hosted deployments, set `APP_BASE_URL` so Open-RAIC returns trusted absolute `url` / `pollUrl` links.
 
-> **Hosted mode**: If using hosted Open-RAIC (`https://open-raic.com`), all preconditions (repo, startup, provider keys) are already satisfied.
-> Include `Authorization: Bearer <access-code>` on all requests below.
-> See [hosted-mode.md](hosted-mode.md) for details.
+> Hosted OpenClaw generation is not supported in this cutover. If the user wants the hosted product, send them to `https://open-raic.com` in a browser. If they want OpenClaw-driven generation, use local mode.
 
 ## Requirement-Only Generation
 
