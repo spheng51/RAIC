@@ -113,8 +113,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  let staleControlAttempt = false;
   const updated = await updateClassroom(id, (current) => {
     if (!current.stage.sharedSimulation) {
+      return current;
+    }
+
+    if (!canSessionControlPresentation(current.stage.sharedSimulation, access.auth.session)) {
+      staleControlAttempt = true;
       return current;
     }
 
@@ -130,6 +136,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       },
     };
   });
+
+  if (staleControlAttempt) {
+    log.warn('Presentation update dropped after controller changed', {
+      classroomId: id,
+      actorSessionId: access.auth.session.id,
+      actorUserId: access.auth.user.id,
+      actorKind: access.source,
+      result: 'stale_control',
+    });
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'Presentation control changed before the update was applied',
+    );
+  }
 
   if (!updated?.stage.sharedSimulation) {
     return apiErrorWithRequestSession(

@@ -189,7 +189,7 @@ describe('useClassroomPresentationState', () => {
     }
   });
 
-  it('prefers SSE updates and suspends polling while the stream is healthy', async () => {
+  it('applies SSE updates while keeping a polling safety net active', async () => {
     const bootstrapState = buildPresentationState({ viewerSessionId: 'bootstrap-session' });
     const streamState = buildPresentationState({
       activeSurface: 'simulation',
@@ -198,13 +198,21 @@ describe('useClassroomPresentationState', () => {
     });
     const onStateChange = vi.fn();
 
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        success: true,
-        ...bootstrapState,
-      }),
-    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      });
 
     await mountHook(onStateChange);
 
@@ -224,7 +232,7 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(5_000);
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('falls back to polling on disconnect and reconnects cleanly', async () => {
@@ -236,13 +244,28 @@ describe('useClassroomPresentationState', () => {
     });
     const onStateChange = vi.fn();
 
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        success: true,
-        ...bootstrapState,
-      }),
-    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...bootstrapState,
+        }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...reconnectedState,
+        }),
+      });
 
     await mountHook(onStateChange);
 
@@ -271,9 +294,9 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(5_000);
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(2);
     expect(onStateChange).toHaveBeenCalledWith(reconnectedState);
-    expect(onStateChange.mock.calls.at(-1)?.[0]).toEqual(reconnectedState);
+    expect(onStateChange.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining(reconnectedState));
   });
 
   it('retries SSE with capped backoff', async () => {

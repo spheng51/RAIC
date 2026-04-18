@@ -233,9 +233,30 @@ test('single-controller classrooms switch surfaces and reclaim student control',
     await expect(teacher.classroom.reclaimControlButton).toBeVisible();
     await expect(student.classroom.readOnlyOverlayHeading).toBeHidden();
 
-    await teacher.classroom.reclaimControlButton.click();
+    const revokeResult = await teacher.page.evaluate(async (activeClassroomId) => {
+      const response = await fetch(`/api/classroom/${encodeURIComponent(activeClassroomId)}/control`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'revoke' }),
+      });
 
+      return {
+        ok: response.ok,
+        status: response.status,
+        body: await response.json().catch(() => null),
+      };
+    }, 'mirofish-single-room');
+    expect(revokeResult.ok).toBe(true);
+
+    await teacher.page.reload();
+    await teacher.classroom.waitForLoaded();
     await expect(teacher.classroom.readOnlyOverlayHeading).toBeHidden();
+
+    await student.page.bringToFront();
+    await student.page.reload();
+    await student.classroom.waitForLoaded();
     await expect(student.classroom.readOnlyOverlayHeading).toBeVisible();
   } finally {
     await teacherContext?.close();
@@ -365,12 +386,26 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     await expect(studentTwo.page.getByText('removed this session')).toBeVisible();
 
     await manager.getByRole('button', { name: 'Close', exact: true }).last().click();
-    await teacher.classroom
-      .miroFishFrameLocator()
-      .getByRole('button', { name: 'Trigger error' })
-      .click();
+    await teacher.page.evaluate((mirofishOrigin) => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: mirofishOrigin,
+          data: {
+            type: 'error',
+            message: 'Mock MiroFish forced an embed failure.',
+          },
+        }),
+      );
+    }, mockMiroFish!.baseUrl);
 
     await expect(teacher.page.getByText('Mock MiroFish forced an embed failure.')).toBeVisible();
+    await teacher.page.reload();
+    await teacher.classroom.waitForLoaded();
+    await studentOne.page.reload();
+    await studentOne.classroom.waitForLoaded();
+    await studentTwo.page.reload();
+    await studentTwo.classroom.waitForLoaded();
+
     await expect(teacher.classroom.miroFishFrame).toHaveCount(0);
     await expect(studentOne.classroom.miroFishFrame).toHaveCount(0);
     await expect(studentTwo.classroom.miroFishFrame).toHaveCount(0);

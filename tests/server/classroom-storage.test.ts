@@ -149,4 +149,46 @@ describe('classroom-storage helpers', () => {
     await expect(fs.readFile(filePath, 'utf-8')).resolves.toContain('"ok": true');
     expect(rename).toHaveBeenCalledTimes(2);
   });
+
+  it('serializes concurrent classroom updates against the latest persisted state', async () => {
+    const { persistClassroom, readClassroom, updateClassroom } = await import(
+      '@/lib/server/classroom-storage'
+    );
+
+    await persistClassroom(
+      {
+        id: 'room-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        stage: {
+          id: 'room-1',
+          name: 'Base',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        scenes: [],
+      },
+      'http://localhost:3000',
+    );
+
+    await Promise.all([
+      updateClassroom('room-1', (current) => ({
+        ...current,
+        stage: {
+          ...current.stage,
+          name: `${current.stage.name}-A`,
+        },
+      })),
+      updateClassroom('room-1', (current) => ({
+        ...current,
+        stage: {
+          ...current.stage,
+          name: `${current.stage.name}-B`,
+        },
+      })),
+    ]);
+
+    const stored = await readClassroom('room-1');
+    expect(stored?.stage.name).toMatch(/^Base-(A-B|B-A)$/);
+  });
 });

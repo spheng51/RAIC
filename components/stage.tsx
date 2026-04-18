@@ -39,6 +39,7 @@ import {
   getSharedSimulationInteractionReason,
   getControllerDisplayName,
   hasSharedSimulationReport,
+  mergePresentationStateSharedSimulation,
   preserveStageSharedSimulation,
 } from '@/lib/utils/classroom-presentation';
 import {
@@ -583,6 +584,7 @@ export function Stage({
       const json = (await response.json().catch(() => null)) as {
         success?: boolean;
         error?: string;
+        sharedSimulation?: SharedSimulation;
       } | null;
       const errorMessage = json && 'error' in json ? json.error : undefined;
 
@@ -590,10 +592,18 @@ export function Stage({
         throw new Error(errorMessage || 'Failed to grant control.');
       }
 
+      if (json.sharedSimulation) {
+        syncPresentationState(
+          presentationState
+            ? mergePresentationStateSharedSimulation(presentationState, json.sharedSimulation)
+            : null,
+        );
+      }
+
       await refreshPresentationState(true);
       toast.success('Student control granted.');
     },
-    [refreshPresentationState, stage?.id],
+    [presentationState, refreshPresentationState, stage?.id, syncPresentationState],
   );
 
   const handleRevokeMiroFishControl = useCallback(async () => {
@@ -613,6 +623,7 @@ export function Stage({
     const json = (await response.json().catch(() => null)) as {
       success?: boolean;
       error?: string;
+      sharedSimulation?: SharedSimulation;
     } | null;
     const errorMessage = json && 'error' in json ? json.error : undefined;
 
@@ -620,9 +631,17 @@ export function Stage({
       throw new Error(errorMessage || 'Failed to return control to the teacher.');
     }
 
+    if (json.sharedSimulation) {
+      syncPresentationState(
+        presentationState
+          ? mergePresentationStateSharedSimulation(presentationState, json.sharedSimulation)
+          : null,
+      );
+    }
+
     await refreshPresentationState(true);
     toast.success('Teacher control restored.');
-  }, [refreshPresentationState, stage?.id]);
+  }, [presentationState, refreshPresentationState, stage?.id, syncPresentationState]);
 
   const handleMiroFishCollaborationAction = useCallback(
     async (input: { action: ClassroomCollaborationAction; targetSessionId?: string }) => {

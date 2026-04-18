@@ -1,4 +1,9 @@
-import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
+import type {
+  ClassroomPresentationParticipant,
+  ClassroomPresentationRole,
+  ClassroomPresentationStatePayload,
+  ClassroomPresentationViewerKind,
+} from '@/lib/types/classroom-presentation';
 import type {
   PresentationSurface,
   SharedSimulation,
@@ -181,6 +186,78 @@ export function preserveStageSharedSimulation(
   return {
     ...stage,
     sharedSimulation,
+  };
+}
+
+function canViewerControlPresentation(
+  sharedSimulation: SharedSimulation | null | undefined,
+  viewer: {
+    id: string;
+    kind: ClassroomPresentationViewerKind;
+    role: ClassroomPresentationRole;
+  },
+): boolean {
+  if (getSharedSimulationCollaborationMode(sharedSimulation) === 'multi-user') {
+    return viewer.kind === 'web' && viewer.role !== 'student';
+  }
+
+  if (viewer.kind === 'web' && viewer.role !== 'student') {
+    return true;
+  }
+
+  return (
+    !!sharedSimulation &&
+    hasStudentControlLease(sharedSimulation) &&
+    sharedSimulation.controllerSessionId === viewer.id
+  );
+}
+
+function doesViewerOwnSimulationControl(
+  sharedSimulation: SharedSimulation | null | undefined,
+  viewer: {
+    id: string;
+    kind: ClassroomPresentationViewerKind;
+    role: ClassroomPresentationRole;
+  },
+): boolean {
+  return canSessionInteractWithSharedSimulation(sharedSimulation, viewer);
+}
+
+export function mergePresentationStateSharedSimulation(
+  previousState: ClassroomPresentationStatePayload,
+  nextSharedSimulation: SharedSimulation,
+): ClassroomPresentationStatePayload {
+  const preservedRunUrl =
+    previousState.sharedSimulation?.runUrl ?? previousState.runUrl ?? nextSharedSimulation.runUrl;
+  const preservedReportUrl =
+    previousState.sharedSimulation?.reportUrl ??
+    previousState.reportUrl ??
+    nextSharedSimulation.reportUrl ??
+    null;
+  const mergedSharedSimulation: SharedSimulation = {
+    ...nextSharedSimulation,
+    runUrl: preservedRunUrl,
+    reportUrl: preservedReportUrl ?? undefined,
+  };
+  const viewer = {
+    id: previousState.viewerSessionId,
+    kind: previousState.viewerKind,
+    role: previousState.viewerRole,
+  };
+
+  return {
+    ...previousState,
+    activeSurface: mergedSharedSimulation.activeSurface,
+    controllerSessionId: mergedSharedSimulation.controllerSessionId ?? null,
+    controllerRole: mergedSharedSimulation.controllerRole,
+    controlLeaseExpiresAt: mergedSharedSimulation.controlLeaseExpiresAt ?? null,
+    simulationStatus: mergedSharedSimulation.status,
+    reportAvailable: hasSharedSimulationReport(mergedSharedSimulation),
+    sharedSimulation: mergedSharedSimulation,
+    runUrl: preservedRunUrl,
+    reportUrl: preservedReportUrl,
+    viewerCanControlPresentation: canViewerControlPresentation(mergedSharedSimulation, viewer),
+    viewerHasSimulationControl: doesViewerOwnSimulationControl(mergedSharedSimulation, viewer),
   };
 }
 

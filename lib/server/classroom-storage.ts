@@ -9,9 +9,36 @@ export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jo
 const ATOMIC_WRITE_RETRY_CODES = new Set(['EACCES', 'EPERM', 'ENOENT']);
 const ATOMIC_WRITE_MAX_ATTEMPTS = 4;
 const ATOMIC_WRITE_RETRY_MS = 25;
+const classroomWriteLocks = new Map<string, Promise<void>>();
 
 async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true });
+}
+
+async function withClassroomWriteLock<T>(classroomId: string, operation: () => Promise<T>): Promise<T> {
+  const previous = classroomWriteLocks.get(classroomId) ?? Promise.resolve();
+  let releaseCurrent!: () => void;
+  const current = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  classroomWriteLocks.set(
+    classroomId,
+    previous.then(
+      () => current,
+      () => current,
+    ),
+  );
+
+  await previous.catch(() => undefined);
+
+  try {
+    return await operation();
+  } finally {
+    releaseCurrent();
+    if (classroomWriteLocks.get(classroomId) === current) {
+      classroomWriteLocks.delete(classroomId);
+    }
+  }
 }
 
 export async function ensureClassroomsDir() {
@@ -155,7 +182,9 @@ export async function persistClassroom(
     createdAt: new Date().toISOString(),
   };
 
-  await writePersistedClassroomData(classroomData);
+  await withClassroomWriteLock(data.id, async () => {
+    await writePersistedClassroomData(classroomData);
+  });
 
   return {
     ...classroomData,
@@ -167,24 +196,26 @@ export async function updateClassroom(
   id: string,
   updater: (current: PersistedClassroomData) => PersistedClassroomData,
 ): Promise<PersistedClassroomData | null> {
-  const existing = await readClassroom(id);
-  if (!existing) {
-    return null;
-  }
+  return withClassroomWriteLock(id, async () => {
+    const existing = await readClassroom(id);
+    if (!existing) {
+      return null;
+    }
 
-  const next = updater(existing);
-  const preservedStage = preserveStageSharedSimulation(
-    next.stage,
-    next.stage.sharedSimulation ?? existing.stage.sharedSimulation ?? null,
-  );
-  const normalizedNext = normalizePersistedClassroomData(
-    preservedStage === next.stage
-      ? next
-      : {
-          ...next,
-          stage: preservedStage,
-        },
-  );
-  await writePersistedClassroomData(normalizedNext);
-  return normalizedNext;
+    const next = updater(existing);
+    const preservedStage = preserveStageSharedSimulation(
+      next.stage,
+      next.stage.sharedSimulation ?? existing.stage.sharedSimulation ?? null,
+    );
+    const normalizedNext = normalizePersistedClassroomData(
+      preservedStage === next.stage
+        ? next
+        : {
+            ...next,
+            stage: preservedStage,
+          },
+    );
+    await writePersistedClassroomData(normalizedNext);
+    return normalizedNext;
+  });
 }
