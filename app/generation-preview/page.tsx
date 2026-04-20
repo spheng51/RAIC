@@ -29,7 +29,12 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { createLogger } from '@/lib/logger';
 import { buildGenerationPreviewAgentProfilesRequest } from './agent-profile-avatar-request';
-import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
+import {
+  type GenerationSessionState,
+  ALL_STEPS,
+  getActiveSteps,
+  resolveCompletedTeacherServerJob,
+} from './types';
 import { StepVisualizer } from './components/visualizers';
 import {
   clearClassroomLaunchContext,
@@ -42,15 +47,35 @@ const log = createLogger('GenerationPreview');
 
 interface ClassroomGenerationJobResponse {
   readonly jobId: string;
-  readonly status: 'pending' | 'running' | 'succeeded' | 'failed';
+  readonly status: 'queued' | 'pending' | 'running' | 'succeeded' | 'failed';
   readonly step?: string;
   readonly message?: string;
   readonly pollUrl: string;
   readonly pollIntervalMs?: number;
+  readonly scenesFailed?: number;
+  readonly attempt?: number;
+  readonly maxAttempts?: number;
+  readonly canRetry?: boolean;
+  readonly completionStatus?: 'complete' | 'partial' | 'failed' | null;
+  readonly warnings?: ReadonlyArray<{ readonly message?: string | null } | string> | null;
+  readonly sceneOutcomes?: Array<{
+    readonly index: number;
+    readonly title: string;
+    readonly status: 'generated' | 'failed';
+    readonly stage: 'content' | 'actions' | 'create';
+    readonly attempts: number;
+    readonly retryable: boolean;
+    readonly code: string;
+    readonly message: string;
+    readonly sceneId?: string;
+  }> | null;
   readonly result?: {
     readonly id: string;
     readonly url: string;
     readonly scenesCount?: number;
+    readonly totalScenes?: number;
+    readonly completionStatus?: 'complete' | 'partial' | 'failed' | null;
+    readonly warnings?: ReadonlyArray<{ readonly message?: string | null } | string> | null;
   } | null;
   readonly error?: string | null;
   readonly details?: string | null;
@@ -295,13 +320,21 @@ function GenerationPreviewContent() {
         setCurrentStepIndex(getServerStepIndex(currentSession, pollData.step));
 
         if (pollData.done) {
-          if (pollData.status === 'succeeded' && pollData.result?.id && pollData.result.url) {
-            const destination = new URL(pollData.result.url, window.location.origin);
+          const completedJob = resolveCompletedTeacherServerJob({
+            status: pollData.status === 'succeeded' ? 'succeeded' : 'failed',
+            result: pollData.result ?? null,
+            error: pollData.error ?? null,
+            details: pollData.details ?? null,
+          });
+          if (pollData.status === 'succeeded') {
+            const destination = new URL(completedJob.classroomUrl, window.location.origin);
             clearClassroomLaunchContext();
             writeClassroomLaunchContext({
-              classroomId: pollData.result.id,
+              classroomId: completedJob.classroomId,
               launchMode: 'teacher-server',
               homePath: currentSession.homePath ?? getHomePathForLaunchMode('teacher-server'),
+              generationCompletionStatus: completedJob.completionStatus,
+              generationWarnings: completedJob.warnings,
             });
             sessionStorage.removeItem('generationParams');
             sessionStorage.removeItem('generationSession');

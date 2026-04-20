@@ -277,7 +277,8 @@
     "delete": "Delete",
     "rename": "Rename",
     "renamePlaceholder": "Enter classroom name",
-    "renameFailed": "Failed to rename classroom"
+    "renameFailed": "Failed to rename classroom",
+    "partialGenerationWarning": "Classroom opened with {{count}} generation warnings."
   },
   "upload": {
     "pdfSizeLimit": "Supports PDF files up to 50MB",
