@@ -28,7 +28,7 @@ export async function resolveModel(params: {
   userId?: string | null;
   mode?: 'interactive' | 'background';
 }): Promise<ResolvedModel> {
-  const requestedModelString = params.modelString || process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+  const requestedModelString = params.modelString || process.env.DEFAULT_MODEL || 'gpt-5.4-mini';
   const { providerId, modelId } = parseModelString(requestedModelString);
 
   if (params.baseUrl && process.env.NODE_ENV === 'production') {

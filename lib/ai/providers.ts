@@ -62,6 +62,54 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/openai.svg',
     models: [
       {
+        id: 'gpt-5.4',
+        name: 'GPT-5.4',
+        contextWindow: 1000000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
+      {
+        id: 'gpt-5.4-mini',
+        name: 'GPT-5.4 mini',
+        contextWindow: 400000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
+      {
+        id: 'gpt-5.4-nano',
+        name: 'GPT-5.4 nano',
+        contextWindow: 400000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
+      {
         id: 'gpt-5.2',
         name: 'GPT-5.2',
         contextWindow: 400000,
@@ -111,7 +159,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
       },
       {
         id: 'gpt-5-mini',
-        name: 'GPT-5-mini',
+        name: 'GPT-5 mini',
         contextWindow: 128000,
         outputWindow: 4096,
         capabilities: {
@@ -127,7 +175,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
       },
       {
         id: 'gpt-5-nano',
-        name: 'GPT-5-nano',
+        name: 'GPT-5 nano',
         contextWindow: 128000,
         outputWindow: 4096,
         capabilities: {
@@ -142,27 +190,26 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
         },
       },
       {
-        id: 'gpt-4o',
-        name: 'GPT-4o',
-        contextWindow: 128000,
-        outputWindow: 4096,
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        contextWindow: 1047576,
+        outputWindow: 32768,
         capabilities: { streaming: true, tools: true, vision: true },
       },
       {
-        id: 'gpt-4o-mini',
-        name: 'GPT-4o-mini',
-        contextWindow: 128000,
-        outputWindow: 4096,
+        id: 'gpt-4.1-mini',
+        name: 'GPT-4.1 mini',
+        contextWindow: 1047576,
+        outputWindow: 32768,
         capabilities: { streaming: true, tools: true, vision: true },
       },
       {
-        id: 'gpt-4-turbo',
-        name: 'GPT-4-turbo',
-        contextWindow: 128000,
-        outputWindow: 4096,
+        id: 'gpt-4.1-nano',
+        name: 'GPT-4.1 nano',
+        contextWindow: 1047576,
+        outputWindow: 32768,
         capabilities: { streaming: true, tools: true, vision: true },
       },
-
       {
         id: 'o4-mini',
         name: 'o4-mini',
@@ -226,6 +273,27 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
             defaultEnabled: true,
           },
         },
+      },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        contextWindow: 128000,
+        outputWindow: 4096,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o mini',
+        contextWindow: 128000,
+        outputWindow: 4096,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
+        id: 'gpt-4-turbo',
+        name: 'GPT-4 Turbo',
+        contextWindow: 128000,
+        outputWindow: 4096,
+        capabilities: { streaming: true, tools: true, vision: true },
       },
     ],
   },
