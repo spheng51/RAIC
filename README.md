@@ -289,6 +289,9 @@ This repository is configured for Vercel-first releases.
   Production deploys come from Vercel Git integration on green merges to `main`.
 - Require these Vercel production environment variables for the public cut:
   `DATABASE_URL`, `RAIC_SECRET_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_ID`, at least one production provider key, and any MiroFish variables needed for the live surface.
+- Hosted teacher/admin auth depends on a working `DATABASE_URL`. If it is unset, the JSON fallback only writes to temporary serverless runtime storage and auth/session state is not durable.
+- Async classroom generation is currently a best-effort background kickoff, not a durable queue. `after()` starts the job outside the request flow, but the per-process in-memory runner map is not cross-instance durable.
+- On hosted serverless runtimes without durable backing storage, classroom job files fall back to temporary runtime storage. Long-running generation should be treated as resilient only on self-hosted Node or a deployment with durable DB/filesystem backing.
 - Treat generic Vercel preview URLs as non-authoritative for teacher/admin auth unless you add a fixed staging domain, because Google JavaScript origins are exact-origin based.
 - Before each production merge, run:
   `corepack pnpm run secrets:scan`, `corepack pnpm run ops:drift`, `corepack pnpm run check`, `corepack pnpm run build`, `corepack pnpm run test:mirofish:gate`, `corepack pnpm run test:mirofish:e2e`, `$env:CI='1'; corepack pnpm run test:e2e`, and `corepack pnpm run ops:verify`.

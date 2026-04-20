@@ -8,6 +8,11 @@ import type {
   GenerateClassroomInput,
   GenerateClassroomResult,
 } from '@/lib/server/classroom-generation';
+import type {
+  GenerationCompletionStatus,
+  GenerationWarning,
+  SceneOutcome,
+} from '@/lib/types/generation';
 import {
   CLASSROOM_JOBS_DIR,
   ensureClassroomJobsDir,
@@ -24,6 +29,7 @@ export interface ClassroomGenerationJobOwner {
 
 export interface ClassroomGenerationJob {
   id: string;
+  requestKey?: string;
   status: ClassroomGenerationJobStatus;
   step: ClassroomGenerationStep | 'queued' | 'failed';
   progress: number;
@@ -33,6 +39,9 @@ export interface ClassroomGenerationJob {
   owner: ClassroomGenerationJobOwner;
   startedAt?: string;
   completedAt?: string;
+  attempt?: number;
+  maxAttempts?: number;
+  canRetry?: boolean;
   inputSummary: {
     requirementPreview: string;
     language: string;
@@ -41,11 +50,19 @@ export interface ClassroomGenerationJob {
     pdfImageCount: number;
   };
   scenesGenerated: number;
+  scenesFailed?: number;
   totalScenes?: number;
+  completionStatus?: GenerationCompletionStatus;
+  warnings?: GenerationWarning[];
+  sceneOutcomes?: SceneOutcome[];
   result?: {
     classroomId: string;
     url: string;
     scenesCount: number;
+    totalScenes: number;
+    completionStatus: Exclude<GenerationCompletionStatus, 'failed'>;
+    warnings: GenerationWarning[];
+    sceneOutcomes: SceneOutcome[];
   };
   error?: string;
 }
@@ -96,6 +113,8 @@ function markStaleIfNeeded(job: ClassroomGenerationJob): ClassroomGenerationJob 
       status: 'failed',
       step: 'failed',
       message: 'Job appears stale (no progress update for 30 minutes)',
+      completionStatus: 'failed',
+      canRetry: true,
       error: 'Stale job: process may have restarted during generation',
       completedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -112,10 +131,12 @@ export async function createClassroomGenerationJob(
   jobId: string,
   input: GenerateClassroomInput,
   owner: ClassroomGenerationJobOwner,
+  requestKey?: string,
 ): Promise<ClassroomGenerationJob> {
   const now = new Date().toISOString();
   const job: ClassroomGenerationJob = {
     id: jobId,
+    ...(requestKey ? { requestKey } : {}),
     status: 'queued',
     step: 'queued',
     progress: 0,
@@ -123,6 +144,9 @@ export async function createClassroomGenerationJob(
     createdAt: now,
     updatedAt: now,
     owner,
+    attempt: 1,
+    maxAttempts: 1,
+    canRetry: false,
     inputSummary: buildInputSummary(input),
     scenesGenerated: 0,
   };
@@ -130,6 +154,17 @@ export async function createClassroomGenerationJob(
   await ensureClassroomJobsDir();
   await writeJsonFileAtomic(jobFilePath(jobId), job);
   return job;
+}
+
+function classroomGenerationJobOwnerMatches(
+  job: ClassroomGenerationJob,
+  owner: ClassroomGenerationJobOwner,
+): boolean {
+  return (
+    job.owner.organizationId === owner.organizationId &&
+    job.owner.userId === owner.userId &&
+    job.owner.actorRole === owner.actorRole
+  );
 }
 
 export async function readClassroomGenerationJob(
@@ -145,6 +180,43 @@ export async function readClassroomGenerationJob(
     }
     throw error;
   }
+}
+
+export async function findClassroomGenerationJobByRequestKey(
+  requestKey: string,
+  owner: ClassroomGenerationJobOwner,
+): Promise<ClassroomGenerationJob | null> {
+  if (!requestKey) {
+    return null;
+  }
+
+  await ensureClassroomJobsDir();
+  const entries = await fs.readdir(CLASSROOM_JOBS_DIR, { withFileTypes: true });
+  const matchingJobs = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map(async (entry) => {
+        const jobId = entry.name.replace(/\.json$/i, '');
+        const job = await readClassroomGenerationJob(jobId);
+        if (
+          !job ||
+          job.requestKey !== requestKey ||
+          job.status === 'failed' ||
+          !classroomGenerationJobOwnerMatches(job, owner)
+        ) {
+          return null;
+        }
+        return job;
+      }),
+  );
+
+  return (
+    matchingJobs
+      .filter((job): job is ClassroomGenerationJob => job !== null)
+      .sort(
+        (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+      )[0] ?? null
+  );
 }
 
 export async function updateClassroomGenerationJob(
@@ -200,7 +272,9 @@ export async function updateClassroomGenerationJobProgress(
     progress: progress.progress,
     message: progress.message,
     scenesGenerated: progress.scenesGenerated,
+    scenesFailed: progress.scenesFailed,
     totalScenes: progress.totalScenes,
+    warnings: progress.warnings,
   });
 }
 
@@ -215,10 +289,20 @@ export async function markClassroomGenerationJobSucceeded(
     message: 'Classroom generation completed',
     completedAt: new Date().toISOString(),
     scenesGenerated: result.scenesCount,
+    scenesFailed: result.sceneOutcomes.filter((outcome) => outcome.status === 'failed').length,
+    totalScenes: result.totalScenes,
+    completionStatus: result.completionStatus,
+    warnings: result.warnings,
+    sceneOutcomes: result.sceneOutcomes,
+    canRetry: false,
     result: {
       classroomId: result.id,
       url: result.url,
       scenesCount: result.scenesCount,
+      totalScenes: result.totalScenes,
+      completionStatus: result.completionStatus,
+      warnings: result.warnings,
+      sceneOutcomes: result.sceneOutcomes,
     },
   });
 }
@@ -232,6 +316,8 @@ export async function markClassroomGenerationJobFailed(
     step: 'failed',
     message: 'Classroom generation failed',
     completedAt: new Date().toISOString(),
+    completionStatus: 'failed',
+    canRetry: true,
     error,
   });
 }

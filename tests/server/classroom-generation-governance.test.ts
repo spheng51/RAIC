@@ -91,6 +91,7 @@ describe('classroom generation governance wiring', () => {
         userId: 'teacher-1',
         actorRole: 'teacher',
       },
+      undefined,
     );
     expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
       'job-123',

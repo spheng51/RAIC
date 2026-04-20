@@ -66,12 +66,23 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       pollUrl,
       pollIntervalMs: 5000,
       scenesGenerated: job.scenesGenerated,
+      scenesFailed: job.scenesFailed ?? 0,
       totalScenes: job.totalScenes,
+      attempt: job.attempt ?? 1,
+      maxAttempts: job.maxAttempts ?? 1,
+      canRetry: job.canRetry ?? false,
+      completionStatus: job.completionStatus ?? job.result?.completionStatus ?? null,
+      warnings: job.warnings ?? [],
+      sceneOutcomes: job.sceneOutcomes ?? [],
       result: job.result
         ? {
             id: job.result.classroomId,
             url: job.result.url,
             scenesCount: job.result.scenesCount,
+            totalScenes: job.result.totalScenes,
+            completionStatus: job.result.completionStatus,
+            warnings: job.result.warnings,
+            sceneOutcomes: job.result.sceneOutcomes,
           }
         : null,
       error: job.error,

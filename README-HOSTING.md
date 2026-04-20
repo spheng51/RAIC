@@ -84,6 +84,9 @@ Public launch on `open-raic.com`:
    - any image/video/TTS/ASR/search provider keys needed for the public surface
    - MiroFish variables if MiroFish is part of the live deployment
    - Keep the live Google sign-in IDs in `Production`; leave generic preview URLs out of teacher/admin auth unless you add a fixed staging domain with its own exact authorized origin.
+- Hosted teacher and admin auth require a working `DATABASE_URL`. Without it, the JSON fallback only writes to temporary runtime storage and web identity/session state is not durable.
+- Async classroom generation is currently kicked off with `after()` as a background follow-up, but that is not a durable worker queue. Treat the request `maxDuration` budget as request-scoped only, not as a guarantee for the classroom job lifetime.
+- The classroom job runner currently uses per-process in-memory dedupe plus job files on the configured data root. On hosted serverless runtimes without durable backing storage, long classroom jobs remain best-effort and may be interrupted on restarts or cold starts.
 5. Add `open-raic.com` as the production domain, with optional `www.open-raic.com` redirect only.
 6. In Google Cloud OAuth, authorize `https://open-raic.com` and `https://www.open-raic.com` only if that hostname will actually serve the app.
    For local development, also authorize `http://localhost:3000` and `http://localhost:3005`.
@@ -97,7 +100,16 @@ Public launch on `open-raic.com`:
    - `corepack pnpm run test:mirofish:e2e`
    - `$env:CI='1'; corepack pnpm run test:e2e`
    - `corepack pnpm run ops:verify`
-8. Merge to `main`, let Vercel deploy production automatically, then smoke-check `/`, `/studio`, `/admin`, and one classroom flow.
+8. Merge to `main`, let Vercel deploy production automatically, then smoke-check the auth and governed surfaces before declaring the release healthy:
+   - Signed out: `/studio` redirects to `/sign-in?next=%2Fstudio`
+   - Signed out: `/admin` redirects to `/sign-in?next=%2Fadmin`
+   - Signed in as teacher: `/sign-in` lands on `/studio`
+   - Signed in as teacher with `next=/admin`: the flow ends on `/unauthorized`, not the admin console
+   - Signed in as org admin: `/sign-in` lands on `/admin`
+   - Signed in as org admin: `/admin` loads and can save org AI config
+   - Signed in as teacher: Studio settings show governed provider state without exposing org secrets
+   - Sign-out clears the web session and classroom cookies
+   - One classroom flow still works end to end
 9. Roll back with Vercel if production is unhealthy.
 
 Recommended when you want easiest CI/CD and global edge delivery.
@@ -164,6 +176,7 @@ Optional production features:
 - Before same-origin smoke tests, manually clear cookies, IndexedDB, localStorage, and sessionStorage so stale browser state does not contaminate the cutover validation.
 - Expect the `openraic_access` cookie, `RAIC-Database`, and `RAIC_DISCARDED_DB` keys to replace their pre-cutover names.
 - Keep generic Vercel preview URLs out of teacher/admin auth sign-off unless you add a fixed staging domain.
+- Treat auth smoke checks as release blockers for admin/settings work. Do not sign off a deploy until the signed-out redirect, teacher unauthorized path, org-admin landing path, and sign-out cookie clearing have all been verified on the exact deployed origin.
 - Restrict who can access admin surfaces.
 - Rotate API keys regularly.
 - Monitor logs and restart policy.

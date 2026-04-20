@@ -277,7 +277,8 @@
     "delete": "删除",
     "rename": "重命名",
     "renamePlaceholder": "输入课堂名称",
-    "renameFailed": "重命名失败"
+    "renameFailed": "重命名失败",
+    "partialGenerationWarning": "课堂已打开，但存在 {{count}} 条生成警告。"
   },
   "upload": {
     "pdfSizeLimit": "支持最大50MB的PDF文件",

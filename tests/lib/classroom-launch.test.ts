@@ -27,6 +27,8 @@ describe('classroom launch helpers', () => {
       classroomId: 'room-123',
       launchMode: 'teacher-server',
       homePath: '/studio',
+      generationCompletionStatus: 'complete',
+      generationWarnings: undefined,
     });
   });
 

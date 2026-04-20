@@ -5,8 +5,53 @@ import type {
   UserRequirements,
   PdfImage,
   ImageMapping,
+  GenerationCompletionStatus,
 } from '@/lib/types/generation';
 import type { ClassroomLaunchMode } from '@/lib/utils/classroom-launch';
+
+export interface ClassroomGenerationPollResult {
+  readonly id: string;
+  readonly url: string;
+  readonly scenesCount?: number;
+  readonly totalScenes?: number;
+  readonly completionStatus?: GenerationCompletionStatus | null;
+  readonly warnings?: ReadonlyArray<string | { readonly message?: string | null }> | null;
+}
+
+export interface CompletedTeacherServerJob {
+  readonly status: 'succeeded' | 'failed';
+  readonly result?: ClassroomGenerationPollResult | null;
+  readonly error?: string | null;
+  readonly details?: string | null;
+}
+
+export function resolveCompletedTeacherServerJob(job: CompletedTeacherServerJob): {
+  classroomId: string;
+  classroomUrl: string;
+  completionStatus: 'complete' | 'partial';
+  warnings: string[];
+} {
+  if (job.status !== 'succeeded' || !job.result?.id || !job.result.url) {
+    throw new Error(job.details || job.error || 'Failed to generate classroom');
+  }
+
+  return {
+    classroomId: job.result.id,
+    classroomUrl: job.result.url,
+    completionStatus: job.result.completionStatus === 'partial' ? 'partial' : 'complete',
+    warnings: Array.isArray(job.result.warnings)
+      ? job.result.warnings
+          .map((warning) =>
+            typeof warning === 'string'
+              ? warning
+              : typeof warning?.message === 'string'
+                ? warning.message
+                : null,
+          )
+          .filter((warning): warning is string => typeof warning === 'string' && warning.length > 0)
+      : [],
+  };
+}
 
 // Session state stored in sessionStorage
 export interface GenerationSessionState {

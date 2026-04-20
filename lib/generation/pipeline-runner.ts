@@ -65,8 +65,14 @@ export async function runGenerationPipeline(
     });
 
     const scenesResult = await generateFullScenes(session.sceneOutlines, store, aiCall, callbacks);
-    if (!scenesResult.success) {
+    if (!scenesResult.success || !scenesResult.data) {
       throw new Error(scenesResult.error || 'Failed to generate scenes');
+    }
+    if (
+      scenesResult.data.completionStatus === 'failed' ||
+      scenesResult.data.generatedScenes === 0
+    ) {
+      throw new Error('Failed to generate scenes');
     }
     callbacks?.onStageComplete?.(2, scenesResult.data);
 
@@ -77,7 +83,7 @@ export async function runGenerationPipeline(
       overallProgress: 100,
       stageProgress: 100,
       statusMessage: '生成完成！',
-      scenesGenerated: scenesResult.data?.length || 0,
+      scenesGenerated: scenesResult.data.generatedScenes,
       totalScenes: session.sceneOutlines.length,
     };
 

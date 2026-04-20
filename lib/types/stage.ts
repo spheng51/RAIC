@@ -2,6 +2,7 @@
 import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
+import type { GenerationCompletionStatus, GenerationWarning } from '@/lib/types/generation';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
@@ -70,6 +71,8 @@ export interface Stage {
     color: string;
     priority: number;
   }>;
+  generationCompletionStatus?: Exclude<GenerationCompletionStatus, 'failed'>;
+  generationWarnings?: GenerationWarning[];
   sharedSimulation?: SharedSimulation;
 }
 
