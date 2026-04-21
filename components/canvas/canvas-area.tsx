@@ -95,10 +95,14 @@ export function CanvasArea({
     currentScene?.type === 'slide' &&
     !isLiveSession &&
     !isPendingScene;
+  const slidePlaybackInteractive =
+    showControls && isLessonSurface && !isLiveSession && currentScene?.type === 'slide';
+  const slidePlaybackLabel =
+    engineState === 'playing' ? t('roundtable.pause') : t('roundtable.play');
 
   const handleSlideClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!showControls || !isLessonSurface || isLiveSession || currentScene?.type !== 'slide') {
+      if (!slidePlaybackInteractive) {
         return;
       }
       // Don't trigger page play/pause when clicking inside a video element's visual area.
@@ -119,7 +123,21 @@ export function CanvasArea({
       }
       onPlayPause();
     },
-    [showControls, isLessonSurface, isLiveSession, onPlayPause, currentScene?.type],
+    [slidePlaybackInteractive, onPlayPause],
+  );
+
+  const handleSlideKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!slidePlaybackInteractive) {
+        return;
+      }
+
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onPlayPause();
+      }
+    },
+    [slidePlaybackInteractive, onPlayPause],
   );
 
   return (
@@ -136,16 +154,17 @@ export function CanvasArea({
         <div
           className={cn(
             'aspect-[16/9] h-full max-h-full max-w-full bg-white dark:bg-gray-800 shadow-2xl rounded-lg overflow-hidden relative transition-all duration-700',
-            showControls &&
-              isLessonSurface &&
-              !isLiveSession &&
-              currentScene?.type === 'slide' &&
-              'cursor-pointer',
+            slidePlaybackInteractive &&
+              'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2',
             isLessonSurface && currentScene?.type === 'interactive'
               ? 'shadow-blue-200/50 dark:shadow-blue-900/50 ring-1 ring-blue-900/5 dark:ring-blue-500/10'
               : 'shadow-gray-200/50 dark:shadow-gray-800/50 ring-1 ring-gray-950/5 dark:ring-white/5',
           )}
           onClick={handleSlideClick}
+          onKeyDown={handleSlideKeyDown}
+          role={slidePlaybackInteractive ? 'button' : undefined}
+          tabIndex={slidePlaybackInteractive ? 0 : undefined}
+          aria-label={slidePlaybackInteractive ? slidePlaybackLabel : undefined}
         >
           {/* Whiteboard Layer */}
           <div className="absolute inset-0 z-[110] pointer-events-none">

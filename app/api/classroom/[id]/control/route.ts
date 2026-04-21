@@ -6,6 +6,10 @@ import {
   resetSharedSimulationControl,
 } from '@/lib/server/classroom-presentation';
 import {
+  buildClassroomRoomEventActor,
+  recordClassroomRoomEvent,
+} from '@/lib/server/classroom-room-events';
+import {
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
@@ -182,6 +186,29 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     controllerRole: nextSharedSimulation.controllerRole,
     result: body.action === 'grant' ? 'granted' : 'revoked',
   });
+
+  if (updated.roomVersion !== snapshot.classroom.roomVersion) {
+    await recordClassroomRoomEvent({
+      classroomId: id,
+      roomVersion: updated.roomVersion,
+      kind: 'control.updated',
+      actor: buildClassroomRoomEventActor({
+        sessionId: auth.session.id,
+        userId: auth.user.id,
+        role: auth.session.role,
+        kind: 'web',
+      }),
+      metadata: {
+        action: body.action,
+        targetSessionId: targetSessionId ?? null,
+        leaseMinutes: body.action === 'grant' ? requestedLeaseMinutes : null,
+        nextControllerSessionId: nextSharedSimulation.controllerSessionId ?? null,
+        controllerRole: nextSharedSimulation.controllerRole,
+        simulationId: nextSharedSimulation.simulationId,
+        reportId: nextSharedSimulation.reportId ?? null,
+      },
+    });
+  }
 
   return apiSuccessWithRequestSession(request, {
     sharedSimulation: nextSharedSimulation,

@@ -6,6 +6,7 @@ import type {
   SharedSimulationCollaborationMode,
   SharedSimulationCollaborationState,
 } from '@/lib/types/stage';
+import type { RoomVersion } from '@/lib/types/live-classroom';
 
 export type ClassroomCollaborationAction =
   | 'freeze'
@@ -36,6 +37,7 @@ export interface ClassroomCollaborationParticipant {
 }
 
 export interface ClassroomCollaborationStatePayload {
+  roomVersion?: RoomVersion;
   collaborationMode: SharedSimulationCollaborationMode;
   collaborationState: SharedSimulationCollaborationState;
   allowStudentInteraction: boolean;

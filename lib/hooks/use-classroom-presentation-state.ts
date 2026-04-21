@@ -101,6 +101,13 @@ export function useClassroomPresentationState({
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let eventSource: EventSource | null = null;
 
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
     const startPolling = () => {
       if (disposed || pollTimer) {
         return;
@@ -140,6 +147,7 @@ export function useClassroomPresentationState({
 
       source.addEventListener('open', () => {
         retryIndex = 0;
+        stopPolling();
       });
 
       source.addEventListener('presentation-state', (event) => {
@@ -148,16 +156,19 @@ export function useClassroomPresentationState({
           const payload = JSON.parse(message.data) as ClassroomPresentationStatePayload;
           applyIfChanged(payload);
           retryIndex = 0;
+          stopPolling();
         } catch {
           // Ignore malformed events and let polling recover if needed.
         }
       });
 
-      source.addEventListener('heartbeat', () => undefined);
+      source.addEventListener('heartbeat', () => {
+        stopPolling();
+      });
 
       source.onerror = () => {
         closeEventSource();
-        void refreshPresentationState(true);
+        startPolling();
 
         if (disposed || retryTimer) {
           return;
@@ -172,16 +183,13 @@ export function useClassroomPresentationState({
       };
     };
 
-    startPolling();
+    void refreshPresentationState(true);
     connectEventSource();
 
     return () => {
       disposed = true;
       clearRetryTimer();
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
+      stopPolling();
       closeEventSource();
     };
   }, [classroomId, enabled, onStateChange, refreshPresentationState]);

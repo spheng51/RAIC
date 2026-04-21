@@ -5,6 +5,10 @@ import {
   getClassroomPresentationSnapshot,
 } from '@/lib/server/classroom-presentation';
 import {
+  buildClassroomRoomEventActor,
+  recordClassroomRoomEvent,
+} from '@/lib/server/classroom-room-events';
+import {
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
@@ -234,6 +238,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           ? 'surface_changed'
           : 'status_updated',
   });
+
+  if (updated.roomVersion !== snapshot.classroom.roomVersion) {
+    await recordClassroomRoomEvent({
+      classroomId: id,
+      roomVersion: updated.roomVersion,
+      kind: 'presentation.updated',
+      actor: buildClassroomRoomEventActor({
+        sessionId: access.auth.session.id,
+        userId: access.auth.user.id,
+        role: access.auth.session.role,
+        kind: access.source,
+      }),
+      metadata: {
+        previousSurface,
+        activeSurface: nextSurface,
+        previousStatus,
+        status: nextStatus,
+        simulationId: updated.stage.sharedSimulation.simulationId,
+        reportId: updated.stage.sharedSimulation.reportId ?? null,
+      },
+    });
+  }
 
   return apiSuccessWithRequestSession(request, {
     sharedSimulation: updated.stage.sharedSimulation,

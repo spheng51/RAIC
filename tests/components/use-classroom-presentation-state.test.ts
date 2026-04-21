@@ -189,7 +189,7 @@ describe('useClassroomPresentationState', () => {
     }
   });
 
-  it('applies SSE updates while keeping a polling safety net active', async () => {
+  it('applies SSE updates and suspends polling while the stream is healthy', async () => {
     const bootstrapState = buildPresentationState({ viewerSessionId: 'bootstrap-session' });
     const streamState = buildPresentationState({
       activeSurface: 'simulation',
@@ -232,7 +232,7 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(5_000);
     });
 
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+    expect(fetchMock.mock.calls.length).toBe(1);
   });
 
   it('falls back to polling on disconnect and reconnects cleanly', async () => {
@@ -294,7 +294,7 @@ describe('useClassroomPresentationState', () => {
       vi.advanceTimersByTime(5_000);
     });
 
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(2);
+    expect(fetchMock.mock.calls.length).toBe(2);
     expect(onStateChange).toHaveBeenCalledWith(reconnectedState);
     expect(onStateChange.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining(reconnectedState));
   });

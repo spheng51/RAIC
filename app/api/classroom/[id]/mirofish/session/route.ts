@@ -12,6 +12,10 @@ import {
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
 import {
+  buildClassroomRoomEventActor,
+  recordClassroomRoomEvent,
+} from '@/lib/server/classroom-room-events';
+import {
   isMiroFishMultiUserEnabled,
   issueMiroFishParticipantToken,
   type MiroFishParticipantCapability,
@@ -96,6 +100,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   let sharedSimulation = snapshot.sharedSimulation;
+  let roomVersion = snapshot.classroom.roomVersion;
   if (
     forceNew ||
     !sharedSimulation.mirofishSessionId ||
@@ -136,6 +141,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     sharedSimulation = updated.stage.sharedSimulation;
+    roomVersion = updated.roomVersion;
   }
 
   const capabilities: MiroFishParticipantCapability[] = ['view'];
@@ -180,6 +186,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     capabilities,
     result: forceNew ? 'reset' : 'issued',
   });
+
+  if (roomVersion !== snapshot.classroom.roomVersion) {
+    await recordClassroomRoomEvent({
+      classroomId: id,
+      roomVersion,
+      kind: 'mirofish.session.updated',
+      actor: buildClassroomRoomEventActor({
+        sessionId: access.auth.session.id,
+        userId: access.auth.user.id,
+        role: access.auth.session.role,
+        kind: access.source,
+      }),
+      metadata: {
+        forceNew,
+        mirofishSessionId,
+        collaborationState: sharedSimulation.collaborationState,
+        participantCount: sharedSimulation.participantCount ?? snapshot.participants.length,
+        simulationId: sharedSimulation.simulationId,
+        reportId: sharedSimulation.reportId ?? null,
+      },
+    });
+  }
 
   return apiSuccessWithRequestSession(request, {
     mirofishSessionId,

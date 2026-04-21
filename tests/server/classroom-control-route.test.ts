@@ -7,6 +7,7 @@ const getClassroomPresentationSnapshotMock = vi.fn();
 const resetSharedSimulationControlMock = vi.fn();
 const updateClassroomMock = vi.fn();
 const recordAuditEventMock = vi.fn();
+const recordClassroomRoomEventMock = vi.fn();
 
 vi.mock('@/lib/auth/authorize', () => ({
   requireRequestRole: requireRequestRoleMock,
@@ -33,6 +34,11 @@ vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  buildClassroomRoomEventActor: (input: unknown) => input,
+  recordClassroomRoomEvent: recordClassroomRoomEventMock,
+}));
+
 describe('PATCH /api/classroom/[id]/control', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -57,6 +63,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
     resetSharedSimulationControlMock.mockReset();
     updateClassroomMock.mockReset();
     recordAuditEventMock.mockReset();
+    recordClassroomRoomEventMock.mockReset();
   });
 
   afterEach(() => {
@@ -124,6 +131,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
       user: { id: 'teacher-1' },
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -154,6 +162,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
       user: { id: 'teacher-1' },
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -165,6 +174,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
     });
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -198,6 +208,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
       user: { id: 'teacher-1' },
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -218,6 +229,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
     });
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -258,6 +270,13 @@ describe('PATCH /api/classroom/[id]/control', () => {
         }),
       }),
     );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'control.updated',
+      }),
+    );
     expect(json.sharedSimulation).toEqual(
       expect.objectContaining({
         controllerRole: 'teacher',
@@ -279,6 +298,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
       user: { id: 'teacher-1' },
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -300,6 +320,7 @@ describe('PATCH /api/classroom/[id]/control', () => {
     });
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -340,6 +361,13 @@ describe('PATCH /api/classroom/[id]/control', () => {
           nextControllerSessionId: 'student-session',
           controllerRole: 'student',
         }),
+      }),
+    );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'control.updated',
       }),
     );
     expect(json.sharedSimulation).toEqual(

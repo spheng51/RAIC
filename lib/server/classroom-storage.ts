@@ -107,6 +107,7 @@ export interface PersistedClassroomData {
   id: string;
   ownerUserId: string | null;
   organizationId: string | null;
+  roomVersion: number;
   stage: Stage;
   scenes: Scene[];
   createdAt: string;
@@ -124,6 +125,11 @@ function normalizePersistedClassroomData(
     ...value,
     ownerUserId: typeof value.ownerUserId === 'string' ? value.ownerUserId : null,
     organizationId: typeof value.organizationId === 'string' ? value.organizationId : null,
+    roomVersion:
+      typeof (value as { roomVersion?: unknown }).roomVersion === 'number' &&
+      Number.isFinite((value as { roomVersion?: number }).roomVersion)
+        ? Math.max(0, Math.floor((value as { roomVersion?: number }).roomVersion ?? 0))
+        : 0,
     stage: preserveStageSharedSimulation(value.stage, value.stage.sharedSimulation ?? null),
   };
 }
@@ -167,6 +173,17 @@ async function writePersistedClassroomData(data: PersistedClassroomData) {
   await writeJsonFileAtomic(filePath, data);
 }
 
+function buildClassroomComparablePayload(data: PersistedClassroomData) {
+  return JSON.stringify({
+    ownerUserId: data.ownerUserId,
+    organizationId: data.organizationId,
+    roomVersion: data.roomVersion,
+    stage: data.stage,
+    scenes: data.scenes,
+    createdAt: data.createdAt,
+  });
+}
+
 export async function persistClassroom(
   data: {
     id: string;
@@ -181,6 +198,7 @@ export async function persistClassroom(
     id: data.id,
     ownerUserId: data.ownerUserId ?? null,
     organizationId: data.organizationId ?? null,
+    roomVersion: 0,
     stage: preserveStageSharedSimulation(data.stage, data.stage.sharedSimulation),
     scenes: data.scenes,
     createdAt: new Date().toISOString(),
@@ -219,7 +237,22 @@ export async function updateClassroom(
             stage: preservedStage,
           },
     );
-    await writePersistedClassroomData(normalizedNext);
-    return normalizedNext;
+    const nextRoomVersion =
+      buildClassroomComparablePayload({
+        ...existing,
+        roomVersion: existing.roomVersion,
+      }) ===
+      buildClassroomComparablePayload({
+        ...normalizedNext,
+        roomVersion: existing.roomVersion,
+      })
+        ? existing.roomVersion
+        : existing.roomVersion + 1;
+    const finalNext = {
+      ...normalizedNext,
+      roomVersion: nextRoomVersion,
+    };
+    await writePersistedClassroomData(finalNext);
+    return finalNext;
   });
 }

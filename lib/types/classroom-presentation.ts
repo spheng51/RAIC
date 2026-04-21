@@ -3,6 +3,7 @@ import type {
   SharedSimulation,
   SharedSimulationStatus,
 } from '@/lib/types/stage';
+import type { RoomVersion } from '@/lib/types/live-classroom';
 
 export type ClassroomPresentationRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
 export type ClassroomPresentationViewerKind = 'web' | 'classroom';
@@ -17,6 +18,7 @@ export interface ClassroomPresentationParticipant {
 }
 
 export interface ClassroomPresentationStatePayload {
+  roomVersion?: RoomVersion;
   activeSurface: PresentationSurface;
   controllerSessionId: string | null;
   controllerRole: 'teacher' | 'student';

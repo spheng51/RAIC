@@ -6,18 +6,34 @@ import {
   getClassroomCollaborationSnapshot,
 } from '@/lib/server/classroom-collaboration';
 import {
+  listClassroomRoomEventsSince,
+  subscribeToClassroomRoomEvents,
+} from '@/lib/server/classroom-room-events';
+import {
   apiErrorWithRequestSession,
   API_ERROR_CODES,
   withRequestWebSession,
 } from '@/lib/server/api-response';
 import { isValidClassroomId } from '@/lib/server/classroom-storage';
+import type { ClassroomRoomEventKind } from '@/lib/types/live-classroom';
 
 export const dynamic = 'force-dynamic';
 
 const encoder = new TextEncoder();
+const FALLBACK_POLL_INTERVAL_MS = 5_000;
+const COLLABORATION_EVENT_KINDS = new Set<ClassroomRoomEventKind>([
+  'presentation.updated',
+  'collaboration.updated',
+  'control.updated',
+  'mirofish.attached',
+  'mirofish.session.updated',
+]);
 
-function encodeEvent(name: string, payload: unknown) {
-  return encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
+function encodeEvent(name: string, payload: unknown, id?: string) {
+  const lines = id
+    ? [`id: ${id}`, `event: ${name}`, `data: ${JSON.stringify(payload)}`]
+    : [`event: ${name}`, `data: ${JSON.stringify(payload)}`];
+  return encoder.encode(`${lines.join('\n')}\n\n`);
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -51,16 +67,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     access.auth.session,
   );
   const initialFingerprint = getClassroomCollaborationFingerprint(initialPayload);
+  const lastEventId = request.headers.get('last-event-id') ?? request.headers.get('Last-Event-ID');
+  const pendingRoomEvents = await listClassroomRoomEventsSince(id, lastEventId);
+  const latestRelevantRoomEventId =
+    pendingRoomEvents
+      .filter((event) => COLLABORATION_EVENT_KINDS.has(event.kind))
+      .at(-1)?.eventId ?? undefined;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
       let fingerprint = initialFingerprint;
       let snapshotPollInFlight = false;
+      let unsubscribeFromRoomEvents: (() => void) | null = null;
       let snapshotInterval: ReturnType<typeof setInterval> | null = null;
       let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
       const cleanup = () => {
+        if (unsubscribeFromRoomEvents) {
+          unsubscribeFromRoomEvents();
+          unsubscribeFromRoomEvents = null;
+        }
         if (snapshotInterval) {
           clearInterval(snapshotInterval);
           snapshotInterval = null;
@@ -85,7 +112,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       };
 
-      const emitCollaborationState = async () => {
+      const emitCollaborationState = async (eventId?: string) => {
         if (closed || snapshotPollInFlight) {
           return;
         }
@@ -108,7 +135,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
 
           fingerprint = nextFingerprint;
-          controller.enqueue(encodeEvent('collaboration-state', nextPayload));
+          controller.enqueue(encodeEvent('collaboration-state', nextPayload, eventId));
         } catch {
           closeStream();
         } finally {
@@ -116,7 +143,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       };
 
-      controller.enqueue(encodeEvent('collaboration-state', initialPayload));
+      controller.enqueue(
+        encodeEvent('collaboration-state', initialPayload, latestRelevantRoomEventId),
+      );
       heartbeatInterval = setInterval(() => {
         if (closed) {
           return;
@@ -128,9 +157,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }),
         );
       }, 20_000);
+      unsubscribeFromRoomEvents = subscribeToClassroomRoomEvents(id, (event) => {
+        if (!COLLABORATION_EVENT_KINDS.has(event.kind)) {
+          return;
+        }
+
+        void emitCollaborationState(event.eventId);
+      });
       snapshotInterval = setInterval(() => {
         void emitCollaborationState();
-      }, 1_000);
+      }, FALLBACK_POLL_INTERVAL_MS);
 
       request.signal.addEventListener('abort', closeStream, { once: true });
     },

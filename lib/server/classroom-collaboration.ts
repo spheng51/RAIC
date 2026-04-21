@@ -5,7 +5,6 @@ import { listRecentClassroomSessions } from '@/lib/db/repositories/sessions';
 import { findUserById } from '@/lib/db/repositories/users';
 import {
   readClassroom,
-  updateClassroom,
   type PersistedClassroomData,
 } from '@/lib/server/classroom-storage';
 import { isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
@@ -22,7 +21,6 @@ import {
   getSharedSimulationRemovedSessionIds,
   getStageSharedSimulation,
   normalizeSharedSimulationState,
-  preserveStageSharedSimulation,
 } from '@/lib/utils/classroom-presentation';
 
 export interface ClassroomCollaborationSnapshot {
@@ -70,13 +68,13 @@ async function listClassroomCollaborationParticipants(
 export async function getClassroomCollaborationSnapshot(
   classroomId: string,
 ): Promise<ClassroomCollaborationSnapshot | null> {
-  let classroom = await readClassroom(classroomId);
+  const classroom = await readClassroom(classroomId);
   if (!classroom) {
     return null;
   }
 
-  let sharedSimulation = getStageSharedSimulation(classroom.stage);
-  let participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
+  const sharedSimulation = getStageSharedSimulation(classroom.stage);
+  const participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
   let nextSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
     participants.map((participant) => participant.sessionId),
@@ -95,26 +93,9 @@ export async function getClassroomCollaborationSnapshot(
     };
   }
 
-  if (sharedSimulation !== nextSharedSimulation) {
-    const updated = await updateClassroom(classroomId, (current) => ({
-      ...current,
-      stage: preserveStageSharedSimulation(current.stage, nextSharedSimulation),
-    }));
-
-    if (updated) {
-      classroom = updated;
-      sharedSimulation = getStageSharedSimulation(updated.stage);
-      participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
-    } else {
-      sharedSimulation = nextSharedSimulation;
-    }
-  } else {
-    sharedSimulation = nextSharedSimulation;
-  }
-
   return {
     classroom,
-    sharedSimulation,
+    sharedSimulation: nextSharedSimulation,
     participants,
   };
 }
@@ -130,6 +111,7 @@ export function buildClassroomCollaborationStatePayload(
   );
 
   return {
+    roomVersion: snapshot.classroom.roomVersion,
     collaborationMode,
     collaborationState: getSharedSimulationCollaborationState(snapshot.sharedSimulation),
     allowStudentInteraction: snapshot.sharedSimulation?.allowStudentInteraction !== false,

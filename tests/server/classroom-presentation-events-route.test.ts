@@ -5,6 +5,8 @@ const requireClassroomAccessMock = vi.fn();
 const getClassroomPresentationSnapshotMock = vi.fn();
 const buildClassroomPresentationStatePayloadMock = vi.fn();
 const getClassroomPresentationFingerprintMock = vi.fn();
+const listClassroomRoomEventsSinceMock = vi.fn();
+const subscribeToClassroomRoomEventsMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -16,6 +18,11 @@ vi.mock('@/lib/server/classroom-presentation', () => ({
   getClassroomPresentationFingerprint: getClassroomPresentationFingerprintMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  listClassroomRoomEventsSince: listClassroomRoomEventsSinceMock,
+  subscribeToClassroomRoomEvents: subscribeToClassroomRoomEventsMock,
+}));
+
 describe('GET /api/classroom/[id]/presentation-events', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -23,6 +30,10 @@ describe('GET /api/classroom/[id]/presentation-events', () => {
     getClassroomPresentationSnapshotMock.mockReset();
     buildClassroomPresentationStatePayloadMock.mockReset();
     getClassroomPresentationFingerprintMock.mockReset();
+    listClassroomRoomEventsSinceMock.mockReset();
+    subscribeToClassroomRoomEventsMock.mockReset();
+    listClassroomRoomEventsSinceMock.mockResolvedValue([]);
+    subscribeToClassroomRoomEventsMock.mockReturnValue(() => undefined);
   });
 
   afterEach(() => {
@@ -182,5 +193,71 @@ describe('GET /api/classroom/[id]/presentation-events', () => {
 
     expect(response.status).toBe(404);
     expect(json.error).toBe('Classroom not found');
+  });
+
+  it('replays the latest relevant room event id on the initial SSE payload', async () => {
+    const abortController = new AbortController();
+    const payload = {
+      activeSurface: 'simulation',
+      controllerSessionId: null,
+      controllerRole: 'teacher',
+      controlLeaseExpiresAt: null,
+      simulationStatus: 'running',
+      reportAvailable: true,
+      sharedSimulation: null,
+      runUrl: 'https://mirofish.example/run',
+      reportUrl: 'https://mirofish.example/report',
+      viewerSessionId: 'teacher-session',
+      viewerRole: 'teacher',
+      viewerKind: 'web',
+      viewerCanManageSimulation: true,
+      viewerCanControlPresentation: true,
+      viewerHasSimulationControl: true,
+      participants: [],
+    };
+
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        session: { id: 'teacher-session', kind: 'web', role: 'teacher' },
+        user: { id: 'teacher-1' },
+      },
+      source: 'web',
+    });
+    getClassroomPresentationSnapshotMock.mockResolvedValue({ id: 'snapshot-1' });
+    buildClassroomPresentationStatePayloadMock.mockReturnValue(payload);
+    getClassroomPresentationFingerprintMock.mockReturnValue('fp-1');
+    listClassroomRoomEventsSinceMock.mockResolvedValue([
+      {
+        eventId: 'evt-1',
+        kind: 'control.updated',
+      },
+      {
+        eventId: 'evt-2',
+        kind: 'presentation.updated',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/classroom/[id]/presentation-events/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/presentation-events', {
+        headers: {
+          'Last-Event-ID': 'evt-0',
+        },
+        signal: abortController.signal,
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    const reader = response.body?.getReader();
+    expect(reader).toBeTruthy();
+    const firstChunk = await reader!.read();
+    const text = new TextDecoder().decode(firstChunk.value);
+
+    expect(listClassroomRoomEventsSinceMock).toHaveBeenCalledWith('room-1', 'evt-0');
+    expect(text).toContain('id: evt-2');
+    expect(text).toContain('event: presentation-state');
+
+    abortController.abort();
+    await reader!.cancel();
   });
 });
