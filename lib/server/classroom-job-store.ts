@@ -84,6 +84,7 @@ function buildInputSummary(input: GenerateClassroomInput): ClassroomGenerationJo
 
 /** Simple per-job mutex to serialize read-modify-write on the same job file. */
 const jobLocks = new Map<string, Promise<void>>();
+const requestKeyLocks = new Map<string, Promise<void>>();
 
 async function withJobLock<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
   const prev = jobLocks.get(jobId) ?? Promise.resolve();
@@ -98,6 +99,39 @@ async function withJobLock<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
   } finally {
     resolve!();
     if (jobLocks.get(jobId) === next) jobLocks.delete(jobId);
+  }
+}
+
+function buildRequestKeyLockId(
+  requestKey: string,
+  owner: ClassroomGenerationJobOwner,
+): string {
+  return [
+    owner.organizationId ?? 'no-org',
+    owner.userId ?? 'no-user',
+    owner.actorRole ?? 'no-role',
+    requestKey,
+  ].join('::');
+}
+
+async function withRequestKeyLock<T>(
+  requestKey: string,
+  owner: ClassroomGenerationJobOwner,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const lockId = buildRequestKeyLockId(requestKey, owner);
+  const prev = requestKeyLocks.get(lockId) ?? Promise.resolve();
+  let resolve: () => void;
+  const next = new Promise<void>((r) => {
+    resolve = r;
+  });
+  requestKeyLocks.set(lockId, next);
+  try {
+    await prev;
+    return await fn();
+  } finally {
+    resolve!();
+    if (requestKeyLocks.get(lockId) === next) requestKeyLocks.delete(lockId);
   }
 }
 
@@ -154,6 +188,32 @@ export async function createClassroomGenerationJob(
   await ensureClassroomJobsDir();
   await writeJsonFileAtomic(jobFilePath(jobId), job);
   return job;
+}
+
+export async function createOrReuseClassroomGenerationJob(
+  jobId: string,
+  input: GenerateClassroomInput,
+  owner: ClassroomGenerationJobOwner,
+  requestKey?: string,
+): Promise<{ existing: boolean; job: ClassroomGenerationJob }> {
+  if (!requestKey) {
+    return {
+      existing: false,
+      job: await createClassroomGenerationJob(jobId, input, owner),
+    };
+  }
+
+  return withRequestKeyLock(requestKey, owner, async () => {
+    const existingJob = await findClassroomGenerationJobByRequestKey(requestKey, owner);
+    if (existingJob) {
+      return { existing: true, job: existingJob };
+    }
+
+    return {
+      existing: false,
+      job: await createClassroomGenerationJob(jobId, input, owner, requestKey),
+    };
+  });
 }
 
 function classroomGenerationJobOwnerMatches(

@@ -8,8 +8,8 @@ import {
 import { type GenerateClassroomInput } from '@/lib/server/classroom-generation';
 import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
 import {
+  createOrReuseClassroomGenerationJob,
   createClassroomGenerationJob,
-  findClassroomGenerationJobByRequestKey,
 } from '@/lib/server/classroom-job-store';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
@@ -90,15 +90,17 @@ export async function POST(req: NextRequest) {
       userId: auth.user.id,
       actorRole: auth.session.role,
     };
-    const existingJob = body.requestKey
-      ? await findClassroomGenerationJobByRequestKey(body.requestKey, owner)
-      : null;
-    const jobId = existingJob?.id ?? nanoid(10);
-    const job =
-      existingJob ?? (await createClassroomGenerationJob(jobId, body, owner, body.requestKey));
+    const generatedJobId = nanoid(10);
+    const { existing, job } = body.requestKey
+      ? await createOrReuseClassroomGenerationJob(generatedJobId, body, owner, body.requestKey)
+      : {
+          existing: false,
+          job: await createClassroomGenerationJob(generatedJobId, body, owner),
+        };
+    const jobId = job.id;
     const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
 
-    if (!existingJob || existingJob.status === 'queued' || existingJob.status === 'running') {
+    if (!existing || job.status === 'queued' || job.status === 'running') {
       after(() =>
         runClassroomGenerationJob(jobId, body, baseUrl, {
           organizationId: auth.organization?.id ?? null,

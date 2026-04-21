@@ -7,7 +7,7 @@ const { afterMock } = vi.hoisted(() => ({
 
 const buildRequestOriginMock = vi.fn();
 const createClassroomGenerationJobMock = vi.fn();
-const findClassroomGenerationJobByRequestKeyMock = vi.fn();
+const createOrReuseClassroomGenerationJobMock = vi.fn();
 const nanoidMock = vi.fn();
 const requireRequestRoleMock = vi.fn();
 const runClassroomGenerationJobMock = vi.fn();
@@ -33,8 +33,8 @@ vi.mock('@/lib/server/classroom-job-runner', () => ({
 }));
 
 vi.mock('@/lib/server/classroom-job-store', () => ({
+  createOrReuseClassroomGenerationJob: createOrReuseClassroomGenerationJobMock,
   createClassroomGenerationJob: createClassroomGenerationJobMock,
-  findClassroomGenerationJobByRequestKey: findClassroomGenerationJobByRequestKeyMock,
 }));
 
 vi.mock('@/lib/server/classroom-storage', () => ({
@@ -61,8 +61,8 @@ describe('POST /api/generate-classroom', () => {
     vi.resetModules();
     afterMock.mockReset();
     buildRequestOriginMock.mockReset();
+    createOrReuseClassroomGenerationJobMock.mockReset();
     createClassroomGenerationJobMock.mockReset();
-    findClassroomGenerationJobByRequestKeyMock.mockReset();
     nanoidMock.mockReset();
     requireRequestRoleMock.mockReset();
     runClassroomGenerationJobMock.mockReset();
@@ -71,8 +71,17 @@ describe('POST /api/generate-classroom', () => {
       void callback();
     });
     buildRequestOriginMock.mockReturnValue('http://localhost:3000');
-    findClassroomGenerationJobByRequestKeyMock.mockResolvedValue(null);
+    createOrReuseClassroomGenerationJobMock.mockImplementation(async (jobId: string) => ({
+      existing: false,
+      job: {
+        id: jobId,
+        status: 'pending',
+        step: 'initializing',
+        message: 'Queued',
+      },
+    }));
     createClassroomGenerationJobMock.mockResolvedValue({
+      id: 'job-123456',
       status: 'pending',
       step: 'initializing',
       message: 'Queued',
@@ -139,7 +148,6 @@ describe('POST /api/generate-classroom', () => {
         organizationId: 'org-1',
         userId: 'teacher-1',
       },
-      undefined,
     );
     expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
       'job-123456',
@@ -155,11 +163,14 @@ describe('POST /api/generate-classroom', () => {
   });
 
   it('reuses an existing job for the same request key', async () => {
-    findClassroomGenerationJobByRequestKeyMock.mockResolvedValue({
-      id: 'job-existing',
-      status: 'running',
-      step: 'generating_outlines',
-      message: 'Still working',
+    createOrReuseClassroomGenerationJobMock.mockResolvedValue({
+      existing: true,
+      job: {
+        id: 'job-existing',
+        status: 'running',
+        step: 'generating_outlines',
+        message: 'Still working',
+      },
     });
 
     const { POST } = await import('@/app/api/generate-classroom/route');
@@ -184,11 +195,19 @@ describe('POST /api/generate-classroom', () => {
       pollUrl: 'http://localhost:3000/api/generate-classroom/job-existing',
       pollIntervalMs: 5000,
     });
-    expect(findClassroomGenerationJobByRequestKeyMock).toHaveBeenCalledWith('session-123', {
-      actorRole: 'teacher',
-      organizationId: 'org-1',
-      userId: 'teacher-1',
-    });
+    expect(createOrReuseClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a renewable energy classroom',
+        requestKey: 'session-123',
+      }),
+      {
+        actorRole: 'teacher',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+      'session-123',
+    );
     expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
     expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
       'job-existing',
@@ -205,11 +224,14 @@ describe('POST /api/generate-classroom', () => {
   });
 
   it('returns a completed job without scheduling a rerun', async () => {
-    findClassroomGenerationJobByRequestKeyMock.mockResolvedValue({
-      id: 'job-complete',
-      status: 'succeeded',
-      step: 'completed',
-      message: 'Done',
+    createOrReuseClassroomGenerationJobMock.mockResolvedValue({
+      existing: true,
+      job: {
+        id: 'job-complete',
+        status: 'succeeded',
+        step: 'completed',
+        message: 'Done',
+      },
     });
 
     const { POST } = await import('@/app/api/generate-classroom/route');

@@ -1,15 +1,18 @@
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-async function importJobStore(tempDir: string) {
+async function importJobStore(tempDir: string, options?: { writeDelayMs?: number }) {
   vi.doMock('@/lib/server/classroom-storage', () => ({
     CLASSROOM_JOBS_DIR: tempDir,
     ensureClassroomJobsDir: async () => {
       await mkdir(tempDir, { recursive: true });
     },
     writeJsonFileAtomic: async (filePath: string, data: unknown) => {
+      if (options?.writeDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.writeDelayMs));
+      }
       await mkdir(path.dirname(filePath), { recursive: true });
       await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
     },
@@ -62,6 +65,42 @@ describe('classroom generation job store', () => {
       await store.markClassroomGenerationJobFailed('job-2', 'boom');
       job = await store.findClassroomGenerationJobByRequestKey('request-1', owner);
       expect(job?.id).toBe('job-1');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('serializes request-key create-or-reuse so concurrent calls return one job', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir, { writeDelayMs: 20 });
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+
+      const [left, right] = await Promise.all([
+        store.createOrReuseClassroomGenerationJob(
+          'job-1',
+          { requirement: 'Teach gravity' },
+          owner,
+          'request-1',
+        ),
+        store.createOrReuseClassroomGenerationJob(
+          'job-2',
+          { requirement: 'Teach gravity' },
+          owner,
+          'request-1',
+        ),
+      ]);
+
+      expect(left.job.id).toBe('job-1');
+      expect(right.job.id).toBe('job-1');
+      expect([left.existing, right.existing].sort()).toEqual([false, true]);
+
+      const files = await readdir(tempDir);
+      expect(files.filter((file) => file.endsWith('.json'))).toHaveLength(1);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
