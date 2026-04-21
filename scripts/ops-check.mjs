@@ -435,7 +435,7 @@ function checkDrift() {
   const expectedRemoteRefs = new Set(['origin/main', 'origin/HEAD']);
   const unexpectedRemote = remoteBranches.filter((name) => !expectedRemoteRefs.has(name));
 
-  if (options.ci && options.mode === 'drift') {
+  if (options.ci) {
     console.log(
       '[ops-check] CI mode active: skipping strict remote ref gating to allow ephemeral runner refs.',
     );
