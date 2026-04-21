@@ -21,14 +21,15 @@ export default async function SignInPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const params = await searchParams;
-  const redirectTo = sanitizePostAuthRedirectPath(params.next) ?? '/studio';
+  const requestedRedirectTo = sanitizePostAuthRedirectPath(params.next);
+  const redirectTo = requestedRedirectTo ?? '/studio';
   const auth = await getCurrentAuth();
   if (auth) {
-    redirect(resolvePostAuthRedirectPath(auth.session.role, redirectTo));
+    redirect(resolvePostAuthRedirectPath(auth.session.role, requestedRedirectTo));
   }
 
   const isAdminIntent = redirectTo === '/admin' || redirectTo.startsWith('/admin?');
-  const showsReturnHint = redirectTo !== '/studio';
+  const showsReturnHint = requestedRedirectTo !== null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.05),_transparent)] px-6 py-12">
