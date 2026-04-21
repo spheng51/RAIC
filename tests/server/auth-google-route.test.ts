@@ -14,10 +14,6 @@ vi.mock('@/lib/auth/google', () => ({
   verifyGoogleIdToken: verifyGoogleIdTokenMock,
 }));
 
-vi.mock('@/lib/auth/authorize', () => ({
-  getDefaultLandingPath: (role: string) => (role === 'org_admin' ? '/admin' : '/studio'),
-}));
-
 vi.mock('@/lib/db/repositories/users', () => ({
   upsertGoogleUser: upsertGoogleUserMock,
 }));
@@ -150,5 +146,99 @@ describe('POST /api/auth/google', () => {
     expect(sessionCookie?.value).toBe('session-token');
     expect(new Date(sessionCookie?.expires ?? 0).toISOString()).toBe(absoluteExpiresAt);
     expect(response.cookies.get(AUTH_NONCE_COOKIE_NAME)?.value).toBe('');
+  });
+
+  it('preserves a safe redirect target after sign-in', async () => {
+    verifyGoogleIdTokenMock.mockResolvedValue({
+      googleSub: 'google-sub-1',
+      email: 'admin@example.com',
+      displayName: 'Admin',
+      avatarUrl: null,
+    });
+    upsertGoogleUserMock.mockResolvedValue({
+      id: 'user-1',
+      email: 'admin@example.com',
+    });
+    findOrCreatePersonalOrganizationMock.mockResolvedValue({
+      id: 'org-1',
+      name: 'Admin workspace',
+    });
+    ensureMembershipMock.mockResolvedValue({
+      role: 'org_admin',
+    });
+    createWebSessionMock.mockResolvedValue({
+      token: 'session-token',
+      session: {
+        id: 'session-1',
+        expiresAt: '2026-04-12T17:23:29.000Z',
+        absoluteExpiresAt: '2026-04-13T17:23:29.000Z',
+      },
+    });
+    listMembershipsForUserMock.mockResolvedValue([{ id: 'membership-1' }]);
+
+    const { POST } = await import('@/app/api/auth/google/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/auth/google', {
+        method: 'POST',
+        headers: {
+          cookie: `${AUTH_NONCE_COOKIE_NAME}=nonce-123`,
+        },
+        body: JSON.stringify({
+          credential: 'credential-token',
+          redirectTo: '/admin?tab=providers',
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.redirectTo).toBe('/admin?tab=providers');
+  });
+
+  it('drops unsafe redirect targets and falls back to the default landing path', async () => {
+    verifyGoogleIdTokenMock.mockResolvedValue({
+      googleSub: 'google-sub-1',
+      email: 'teacher@example.com',
+      displayName: 'Teacher',
+      avatarUrl: null,
+    });
+    upsertGoogleUserMock.mockResolvedValue({
+      id: 'user-1',
+      email: 'teacher@example.com',
+    });
+    findOrCreatePersonalOrganizationMock.mockResolvedValue({
+      id: 'org-1',
+      name: 'Teacher workspace',
+    });
+    ensureMembershipMock.mockResolvedValue({
+      role: 'teacher',
+    });
+    createWebSessionMock.mockResolvedValue({
+      token: 'session-token',
+      session: {
+        id: 'session-1',
+        expiresAt: '2026-04-12T17:23:29.000Z',
+        absoluteExpiresAt: '2026-04-13T17:23:29.000Z',
+      },
+    });
+    listMembershipsForUserMock.mockResolvedValue([{ id: 'membership-1' }]);
+
+    const { POST } = await import('@/app/api/auth/google/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/auth/google', {
+        method: 'POST',
+        headers: {
+          cookie: `${AUTH_NONCE_COOKIE_NAME}=nonce-123`,
+        },
+        body: JSON.stringify({
+          credential: 'credential-token',
+          redirectTo: '//evil.example.com',
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.redirectTo).toBe('/studio');
   });
 });

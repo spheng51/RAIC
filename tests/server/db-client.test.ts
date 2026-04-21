@@ -27,6 +27,7 @@ function setMockPostgresClient(client: MockPostgresExecutor) {
 
 const originalCwd = process.cwd();
 let testRoot = '';
+let hostedTempRoot = '';
 
 describe('db client persistence helpers', () => {
   beforeEach(() => {
@@ -38,6 +39,7 @@ describe('db client persistence helpers', () => {
       '.vitest-tmp',
       `db-client-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
+    hostedTempRoot = path.join(testRoot, '.hosted-tmp');
     vi.spyOn(process, 'cwd').mockReturnValue(testRoot);
   });
 
@@ -45,6 +47,10 @@ describe('db client persistence helpers', () => {
     vi.unstubAllEnvs();
     resetDbGlobals();
     vi.restoreAllMocks();
+    await fs.rm(hostedTempRoot, {
+      recursive: true,
+      force: true,
+    });
     await fs.rm(testRoot, {
       recursive: true,
       force: true,
@@ -74,6 +80,45 @@ describe('db client persistence helpers', () => {
     const store = await readPlatformStore();
     expect(store.users).toHaveLength(1);
     expect(store.users[0]?.id).toBe('user-1');
+  });
+
+  it('writes JSON fallback state into the hosted temp data root on serverless runtimes', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    vi.stubEnv('VERCEL', '1');
+    vi.stubEnv('TMP', hostedTempRoot);
+    vi.stubEnv('TEMP', hostedTempRoot);
+
+    const { getPersistenceMode, readPlatformStore, updatePlatformStore } =
+      await import('@/lib/db/client');
+
+    expect(await getPersistenceMode()).toBe('json');
+
+    await updatePlatformStore((store) => {
+      store.users.push({
+        id: 'user-hosted',
+        googleSub: null,
+        email: 'hosted@example.com',
+        displayName: 'Hosted',
+        avatarUrl: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: null,
+      });
+    });
+
+    const hostedStorePath = path.join(
+      hostedTempRoot,
+      'openraic-data',
+      'platform',
+      'platform-store.json',
+    );
+    const repoStorePath = path.join(testRoot, 'data', 'platform', 'platform-store.json');
+
+    await expect(fs.readFile(hostedStorePath, 'utf-8')).resolves.toContain('"user-hosted"');
+    await expect(fs.readFile(repoStorePath, 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const store = await readPlatformStore();
+    expect(store.users[0]?.id).toBe('user-hosted');
   });
 
   it('retries transient JSON read lock errors', async () => {

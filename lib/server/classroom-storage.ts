@@ -3,9 +3,10 @@ import path from 'path';
 import type { NextRequest } from 'next/server';
 import type { Scene, Stage } from '@/lib/types/stage';
 import { preserveStageSharedSimulation } from '@/lib/utils/classroom-presentation';
+import { getDataPath } from '@/lib/server/data-root';
 
-export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
-export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
+export const CLASSROOMS_DIR = getDataPath('classrooms');
+export const CLASSROOM_JOBS_DIR = getDataPath('classroom-jobs');
 const ATOMIC_WRITE_RETRY_CODES = new Set(['EACCES', 'EPERM', 'ENOENT']);
 const ATOMIC_WRITE_MAX_ATTEMPTS = 4;
 const ATOMIC_WRITE_RETRY_MS = 25;
