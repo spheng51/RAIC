@@ -58,7 +58,11 @@ const PLACEHOLDER_VALUE_RE =
   /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
 function normalizeArgv(argv) {
-  const args = { mode: null, ci: false, strictRemoteBacklog: false };
+  const args = {
+    mode: null,
+    ci: process.env.GITHUB_ACTIONS === 'true',
+    strictRemoteBacklog: false,
+  };
   let seenMode = false;
 
   for (const arg of argv) {
