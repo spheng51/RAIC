@@ -79,13 +79,11 @@ export function canSessionManageSimulation(session: SessionRecord): boolean {
   return session.kind === 'web' && session.role !== 'student';
 }
 
-async function listClassroomPresentationParticipants(
-  classroomId: string,
+function buildClassroomPresentationParticipants(
+  sessions: SessionRecord[],
+  users: Awaited<ReturnType<typeof findUserById>>[],
   sharedSimulation: SharedSimulation | null,
-): Promise<ClassroomPresentationParticipant[]> {
-  const sessions = await listRecentClassroomSessions(classroomId);
-  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
-
+): ClassroomPresentationParticipant[] {
   return sessions.map((session, index) => ({
     sessionId: session.id,
     userId: session.userId,
@@ -108,10 +106,16 @@ export async function getClassroomPresentationSnapshot(
   }
 
   const sharedSimulation = getStageSharedSimulation(classroom.stage);
-  const participants = await listClassroomPresentationParticipants(classroomId, sharedSimulation);
+  const sessions = await listRecentClassroomSessions(classroomId);
+  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
   const normalizedSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
-    participants.map((participant) => participant.sessionId),
+    sessions.map((session) => session.id),
+  );
+  const participants = buildClassroomPresentationParticipants(
+    sessions,
+    users,
+    normalizedSharedSimulation,
   );
 
   const runUrl = hasAttachedSharedSimulation(normalizedSharedSimulation)

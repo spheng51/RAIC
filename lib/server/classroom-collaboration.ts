@@ -33,12 +33,11 @@ export function canSessionModerateCollaboration(session: SessionRecord) {
   return session.kind === 'web' && session.role !== 'student';
 }
 
-async function listClassroomCollaborationParticipants(
-  classroomId: string,
+function buildClassroomCollaborationParticipants(
+  sessions: SessionRecord[],
+  users: Awaited<ReturnType<typeof findUserById>>[],
   sharedSimulation: SharedSimulation | null,
-): Promise<ClassroomCollaborationParticipant[]> {
-  const sessions = await listRecentClassroomSessions(classroomId);
-  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
+): ClassroomCollaborationParticipant[] {
   const removedSessionIds = new Set(getSharedSimulationRemovedSessionIds(sharedSimulation));
   const collaborationState = getSharedSimulationCollaborationState(sharedSimulation);
   const allowStudentInteraction = sharedSimulation?.allowStudentInteraction !== false;
@@ -74,11 +73,13 @@ export async function getClassroomCollaborationSnapshot(
   }
 
   const sharedSimulation = getStageSharedSimulation(classroom.stage);
-  const participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
+  const sessions = await listRecentClassroomSessions(classroomId);
+  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
   let nextSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
-    participants.map((participant) => participant.sessionId),
+    sessions.map((session) => session.id),
   );
+  const participants = buildClassroomCollaborationParticipants(sessions, users, nextSharedSimulation);
 
   if (
     nextSharedSimulation &&
