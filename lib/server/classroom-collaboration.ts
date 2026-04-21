@@ -81,19 +81,6 @@ export async function getClassroomCollaborationSnapshot(
   );
   const participants = buildClassroomCollaborationParticipants(sessions, users, nextSharedSimulation);
 
-  if (
-    nextSharedSimulation &&
-    getSharedSimulationCollaborationMode(nextSharedSimulation) === 'multi-user' &&
-    (nextSharedSimulation.participantCount !== participants.length ||
-      !nextSharedSimulation.lastCollaborationSyncAt)
-  ) {
-    nextSharedSimulation = {
-      ...nextSharedSimulation,
-      participantCount: participants.length,
-      lastCollaborationSyncAt: new Date().toISOString(),
-    };
-  }
-
   return {
     classroom,
     sharedSimulation: nextSharedSimulation,
