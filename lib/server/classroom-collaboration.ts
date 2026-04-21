@@ -3,10 +3,7 @@ import 'server-only';
 import type { SessionRecord } from '@/lib/db/schema';
 import { listRecentClassroomSessions } from '@/lib/db/repositories/sessions';
 import { findUserById } from '@/lib/db/repositories/users';
-import {
-  readClassroom,
-  type PersistedClassroomData,
-} from '@/lib/server/classroom-storage';
+import { readClassroom, type PersistedClassroomData } from '@/lib/server/classroom-storage';
 import { isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
 import type {
   ClassroomCollaborationParticipant,
@@ -79,7 +76,11 @@ export async function getClassroomCollaborationSnapshot(
     sharedSimulation,
     sessions.map((session) => session.id),
   );
-  const participants = buildClassroomCollaborationParticipants(sessions, users, nextSharedSimulation);
+  const participants = buildClassroomCollaborationParticipants(
+    sessions,
+    users,
+    nextSharedSimulation,
+  );
 
   return {
     classroom,
