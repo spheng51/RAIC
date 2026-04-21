@@ -72,7 +72,7 @@ export async function getClassroomCollaborationSnapshot(
   const sharedSimulation = getStageSharedSimulation(classroom.stage);
   const sessions = await listRecentClassroomSessions(classroomId);
   const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
-  let nextSharedSimulation = normalizeSharedSimulationState(
+  const nextSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
     sessions.map((session) => session.id),
   );
@@ -81,19 +81,6 @@ export async function getClassroomCollaborationSnapshot(
     users,
     nextSharedSimulation,
   );
-
-  if (
-    nextSharedSimulation &&
-    getSharedSimulationCollaborationMode(nextSharedSimulation) === 'multi-user' &&
-    (nextSharedSimulation.participantCount !== participants.length ||
-      !nextSharedSimulation.lastCollaborationSyncAt)
-  ) {
-    nextSharedSimulation = {
-      ...nextSharedSimulation,
-      participantCount: participants.length,
-      lastCollaborationSyncAt: new Date().toISOString(),
-    };
-  }
 
   return {
     classroom,
