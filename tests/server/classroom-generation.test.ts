@@ -8,7 +8,7 @@ const persistClassroomMock = vi.fn();
 const resolveModelMock = vi.fn();
 
 vi.mock('@/lib/generation/outline-generator', () => ({
-  applyOutlineFallbacks: <T,>(outline: T) => outline,
+  applyOutlineFallbacks: <T>(outline: T) => outline,
   generateSceneOutlinesFromRequirements: generateSceneOutlinesFromRequirementsMock,
 }));
 
@@ -115,60 +115,74 @@ describe('generateClassroom', () => {
       ],
     });
 
-    executeScenesWithPolicyMock.mockImplementation(async ({ items }: { items: Array<{ outline: { title: string; order: number }; index: number; context: { api: { scene: { create: (input: unknown) => { success: boolean; data: string | null } } } } }> }) => {
-      const created = items[0].context.api.scene.create({
-        type: 'quiz',
-        title: items[0].outline.title,
-        order: items[0].outline.order,
-        content: {
+    executeScenesWithPolicyMock.mockImplementation(
+      async ({
+        items,
+      }: {
+        items: Array<{
+          outline: { title: string; order: number };
+          index: number;
+          context: {
+            api: {
+              scene: { create: (input: unknown) => { success: boolean; data: string | null } };
+            };
+          };
+        }>;
+      }) => {
+        const created = items[0].context.api.scene.create({
           type: 'quiz',
-          questions: [],
-        },
-        actions: [],
-      });
+          title: items[0].outline.title,
+          order: items[0].outline.order,
+          content: {
+            type: 'quiz',
+            questions: [],
+          },
+          actions: [],
+        });
 
-      return {
-        sceneIds: created.data ? [created.data] : [],
-        totalScenes: items.length,
-        generatedScenes: created.success && created.data ? 1 : 0,
-        failedScenes: 1,
-        completionStatus: 'partial',
-        warnings: [
-          {
-            stage: 'scene',
-            code: 'content_empty',
-            message: 'Scene content generation returned no content',
-            sceneIndex: 1,
-            sceneTitle: 'Scene 2',
-            retryable: false,
-            attempts: 1,
-          },
-        ],
-        sceneOutcomes: [
-          {
-            index: 0,
-            title: 'Scene 1',
-            status: 'generated',
-            stage: 'create',
-            sceneId: created.data ?? undefined,
-            attempts: 1,
-            retryable: false,
-            code: 'scene_generated',
-            message: 'ok',
-          },
-          {
-            index: 1,
-            title: 'Scene 2',
-            status: 'failed',
-            stage: 'content',
-            attempts: 1,
-            retryable: false,
-            code: 'content_empty',
-            message: 'Scene content generation returned no content',
-          },
-        ],
-      };
-    });
+        return {
+          sceneIds: created.data ? [created.data] : [],
+          totalScenes: items.length,
+          generatedScenes: created.success && created.data ? 1 : 0,
+          failedScenes: 1,
+          completionStatus: 'partial',
+          warnings: [
+            {
+              stage: 'scene',
+              code: 'content_empty',
+              message: 'Scene content generation returned no content',
+              sceneIndex: 1,
+              sceneTitle: 'Scene 2',
+              retryable: false,
+              attempts: 1,
+            },
+          ],
+          sceneOutcomes: [
+            {
+              index: 0,
+              title: 'Scene 1',
+              status: 'generated',
+              stage: 'create',
+              sceneId: created.data ?? undefined,
+              attempts: 1,
+              retryable: false,
+              code: 'scene_generated',
+              message: 'ok',
+            },
+            {
+              index: 1,
+              title: 'Scene 2',
+              status: 'failed',
+              stage: 'content',
+              attempts: 1,
+              retryable: false,
+              code: 'content_empty',
+              message: 'Scene content generation returned no content',
+            },
+          ],
+        };
+      },
+    );
 
     generateMediaForClassroomMock.mockResolvedValue({
       mediaMap: {},

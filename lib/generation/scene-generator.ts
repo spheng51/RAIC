@@ -106,10 +106,18 @@ function classifySceneFailure(error: unknown): {
   if (/\b429\b|rate limit|too many requests/.test(haystack)) {
     return { code: 'rate_limit', message, retryable: true };
   }
-  if (/\b408\b|\b502\b|\b503\b|\b504\b|timeout|timed out|overloaded|temporarily unavailable/.test(haystack)) {
+  if (
+    /\b408\b|\b502\b|\b503\b|\b504\b|timeout|timed out|overloaded|temporarily unavailable/.test(
+      haystack,
+    )
+  ) {
     return { code: 'timeout', message, retryable: true };
   }
-  if (/econnreset|etimedout|econnrefused|enotfound|eai_again|network|socket|fetch failed|connect timeout/.test(haystack)) {
+  if (
+    /econnreset|etimedout|econnrefused|enotfound|eai_again|network|socket|fetch failed|connect timeout/.test(
+      haystack,
+    )
+  ) {
     return { code: 'network_error', message, retryable: true };
   }
   if (/service unavailable|internal server error|bad gateway|gateway timeout/.test(haystack)) {
@@ -163,7 +171,8 @@ export async function generateFullScenes(
     onProgress: async (progress) => {
       callbacks?.onProgress?.({
         currentStage: 3,
-        overallProgress: 66 + Math.floor((progress.completedScenes / Math.max(totalScenes, 1)) * 34),
+        overallProgress:
+          66 + Math.floor((progress.completedScenes / Math.max(totalScenes, 1)) * 34),
         stageProgress: Math.floor((progress.completedScenes / Math.max(totalScenes, 1)) * 100),
         statusMessage:
           progress.failedScenes > 0

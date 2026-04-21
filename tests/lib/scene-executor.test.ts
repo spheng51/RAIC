@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { executeScenesWithPolicy } from '@/lib/generation/scene-executor';
 import type { SceneOutcome } from '@/lib/types/generation';
 
-function buildOutcome(
-  index: number,
-  overrides?: Partial<SceneOutcome>,
-): SceneOutcome {
+function buildOutcome(index: number, overrides?: Partial<SceneOutcome>): SceneOutcome {
   return {
     index,
     title: `Scene ${index + 1}`,

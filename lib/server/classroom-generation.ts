@@ -6,9 +6,7 @@ import {
   applyOutlineFallbacks,
   generateSceneOutlinesFromRequirements,
 } from '@/lib/generation/outline-generator';
-import {
-  generateSingleSceneOutcome,
-} from '@/lib/generation/scene-generator';
+import { generateSingleSceneOutcome } from '@/lib/generation/scene-generator';
 import { executeScenesWithPolicy } from '@/lib/generation/scene-executor';
 import type { AICallFn } from '@/lib/generation/pipeline-types';
 import type { AgentInfo } from '@/lib/generation/pipeline-types';

@@ -54,9 +54,12 @@ describe('GET /api/generate-classroom/[jobId]', () => {
     );
 
     const { GET } = await import('@/app/api/generate-classroom/[jobId]/route');
-    const response = await GET(new NextRequest('http://localhost:3000/api/generate-classroom/job-1'), {
-      params: Promise.resolve({ jobId: 'job-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/generate-classroom/job-1'),
+      {
+        params: Promise.resolve({ jobId: 'job-1' }),
+      },
+    );
 
     expect(response.status).toBe(401);
   });
@@ -65,9 +68,12 @@ describe('GET /api/generate-classroom/[jobId]', () => {
     readClassroomGenerationJobMock.mockResolvedValue(null);
 
     const { GET } = await import('@/app/api/generate-classroom/[jobId]/route');
-    const response = await GET(new NextRequest('http://localhost:3000/api/generate-classroom/job-1'), {
-      params: Promise.resolve({ jobId: 'job-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/generate-classroom/job-1'),
+      {
+        params: Promise.resolve({ jobId: 'job-1' }),
+      },
+    );
     const body = await response.json();
 
     expect(response.status).toBe(404);
@@ -100,9 +106,12 @@ describe('GET /api/generate-classroom/[jobId]', () => {
     canAccessClassroomGenerationJobMock.mockReturnValue(false);
 
     const { GET } = await import('@/app/api/generate-classroom/[jobId]/route');
-    const response = await GET(new NextRequest('http://localhost:3000/api/generate-classroom/job-1'), {
-      params: Promise.resolve({ jobId: 'job-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/generate-classroom/job-1'),
+      {
+        params: Promise.resolve({ jobId: 'job-1' }),
+      },
+    );
 
     expect(response.status).toBe(403);
   });
@@ -203,9 +212,12 @@ describe('GET /api/generate-classroom/[jobId]', () => {
     });
 
     const { GET } = await import('@/app/api/generate-classroom/[jobId]/route');
-    const response = await GET(new NextRequest('http://localhost:3000/api/generate-classroom/job-1'), {
-      params: Promise.resolve({ jobId: 'job-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/generate-classroom/job-1'),
+      {
+        params: Promise.resolve({ jobId: 'job-1' }),
+      },
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);

@@ -510,9 +510,9 @@ export function Stage({
         setMiroFishAuthoringAvailable(
           Boolean(
             response.ok &&
-              json?.success &&
-              json.readiness?.mirofish?.authoringEnabled &&
-              json.readiness?.mirofish?.authoringReady,
+            json?.success &&
+            json.readiness?.mirofish?.authoringEnabled &&
+            json.readiness?.mirofish?.authoringReady,
           ),
         );
       } catch {
@@ -656,13 +656,16 @@ export function Stage({
         throw new Error('Classroom is not ready');
       }
 
-      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/mirofish/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(stage.id)}/mirofish/create`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(input),
         },
-        body: JSON.stringify(input),
-      });
+      );
       const json = (await response.json().catch(() => null)) as {
         success?: boolean;
         error?: string;

@@ -71,9 +71,8 @@ describe('runGenerationPipeline', () => {
       },
     });
 
-    const { createGenerationSession, runGenerationPipeline } = await import(
-      '@/lib/generation/pipeline-runner'
-    );
+    const { createGenerationSession, runGenerationPipeline } =
+      await import('@/lib/generation/pipeline-runner');
 
     const session = createGenerationSession({
       requirement: 'Teach gravity',

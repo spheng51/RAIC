@@ -101,7 +101,9 @@ describe('classroom generation job store', () => {
       expect([left.existing, right.existing].sort()).toEqual([false, true]);
 
       const files = await readdir(tempDir);
-      expect(files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-'))).toHaveLength(1);
+      expect(
+        files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-')),
+      ).toHaveLength(1);
       expect(files.some((file) => file.startsWith('.request-key-'))).toBe(true);
     } finally {
       await rm(tempDir, { recursive: true, force: true });

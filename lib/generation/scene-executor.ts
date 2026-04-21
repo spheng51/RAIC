@@ -133,7 +133,9 @@ function shouldRetrySceneOutcome(outcome: SceneOutcome, policy: SceneExecutionPo
 function getRetryDelayMs(policy: SceneExecutionPolicy, attempt: number): number {
   const fallbackDelay =
     policy.retryDelaysMs[policy.retryDelaysMs.length - 1] ??
-    DEFAULT_SCENE_EXECUTION_POLICY.retryDelaysMs[DEFAULT_SCENE_EXECUTION_POLICY.retryDelaysMs.length - 1];
+    DEFAULT_SCENE_EXECUTION_POLICY.retryDelaysMs[
+      DEFAULT_SCENE_EXECUTION_POLICY.retryDelaysMs.length - 1
+    ];
   return policy.retryDelaysMs[attempt - 1] ?? fallbackDelay;
 }
 
@@ -197,7 +199,9 @@ export async function executeScenesWithPolicy<TContext = undefined>(input: {
   let failedScenes = 0;
   const warnings: GenerationWarning[] = [];
 
-  const executeItemWithRetry = async (item: SceneExecutionItem<TContext>): Promise<SceneOutcome> => {
+  const executeItemWithRetry = async (
+    item: SceneExecutionItem<TContext>,
+  ): Promise<SceneOutcome> => {
     for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
       try {
         const rawOutcome = await input.executeScene(item, attempt);

@@ -102,10 +102,7 @@ async function withJobLock<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function buildRequestKeyLockId(
-  requestKey: string,
-  owner: ClassroomGenerationJobOwner,
-): string {
+function buildRequestKeyLockId(requestKey: string, owner: ClassroomGenerationJobOwner): string {
   return [
     owner.organizationId ?? 'no-org',
     owner.userId ?? 'no-user',

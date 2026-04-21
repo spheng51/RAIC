@@ -125,11 +125,7 @@ export function canAccessMiroFishCreationJob(
   if (job.owner.organizationId && job.owner.organizationId !== owner.organizationId) {
     return false;
   }
-  if (
-    owner.actorRole === 'teacher' &&
-    job.owner.userId &&
-    job.owner.userId !== owner.userId
-  ) {
+  if (owner.actorRole === 'teacher' && job.owner.userId && job.owner.userId !== owner.userId) {
     return false;
   }
   return true;

@@ -104,7 +104,7 @@ vi.mock('@/lib/utils/participant-presence', () => ({
     state: 'active',
     label: 'active',
   }),
-  sortParticipantsByPresence: <T,>(participants: T[]) => participants,
+  sortParticipantsByPresence: <T>(participants: T[]) => participants,
 }));
 
 vi.mock('@/lib/hooks/use-i18n', () => ({
@@ -311,10 +311,7 @@ function findTextarea(container: HTMLElement, id: string) {
   return container.querySelector(`#${id}`) as HTMLTextAreaElement | null;
 }
 
-function setElementValue(
-  element: HTMLInputElement | HTMLTextAreaElement,
-  value: string,
-) {
+function setElementValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const prototype =
     element instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
@@ -366,10 +363,7 @@ describe('MiroFishManagerDialog', () => {
       }),
     });
 
-    const attachButton = findButton(
-      mounted.container,
-      'classroom.mirofish.updateAttachButton',
-    );
+    const attachButton = findButton(mounted.container, 'classroom.mirofish.updateAttachButton');
     expect(attachButton).toBeTruthy();
 
     await act(async () => {
