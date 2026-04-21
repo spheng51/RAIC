@@ -186,6 +186,99 @@ describe('classroom generation job store', () => {
     }
   });
 
+  it('keeps request-key claims attached to long-running jobs during reuse checks', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir);
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+
+      await store.createOrReuseClassroomGenerationJob(
+        'job-1',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      await writeFile(
+        path.join(tempDir, 'job-1.json'),
+        JSON.stringify(
+          {
+            id: 'job-1',
+            requestKey: 'request-1',
+            status: 'running',
+            step: 'generating_media',
+            progress: 80,
+            message: 'Working',
+            createdAt: '2026-04-19T00:00:00.000Z',
+            updatedAt: '2026-04-18T00:00:00.000Z',
+            owner,
+            inputSummary: {
+              requirementPreview: 'Teach gravity',
+              language: 'en-US',
+              hasPdf: false,
+              pdfTextLength: 0,
+              pdfImageCount: 0,
+            },
+            scenesGenerated: 1,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+
+      const reused = await store.createOrReuseClassroomGenerationJob(
+        'job-2',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      expect(reused.existing).toBe(true);
+      expect(reused.job.id).toBe('job-1');
+
+      const files = await readdir(tempDir);
+      expect(
+        files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-')),
+      ).toHaveLength(1);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores unrelated corrupt job files during request-key scans', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir);
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+
+      await store.createClassroomGenerationJob(
+        'job-1',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+      await writeFile(path.join(tempDir, 'broken.json'), '{not valid json', 'utf-8');
+
+      await expect(
+        store.findClassroomGenerationJobByRequestKey('request-1', owner),
+      ).resolves.toMatchObject({
+        id: 'job-1',
+        requestKey: 'request-1',
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('marks stale running jobs as failed on read', async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
     try {

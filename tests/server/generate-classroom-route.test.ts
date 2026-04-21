@@ -162,7 +162,7 @@ describe('POST /api/generate-classroom', () => {
     );
   });
 
-  it('reuses an existing queued job and schedules the async runner', async () => {
+  it('reuses an existing queued job without scheduling a second runner', async () => {
     createOrReuseClassroomGenerationJobMock.mockResolvedValue({
       existing: true,
       job: {
@@ -209,18 +209,7 @@ describe('POST /api/generate-classroom', () => {
       'session-123',
     );
     expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
-    expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
-      'job-existing',
-      expect.objectContaining({
-        requirement: 'Create a renewable energy classroom',
-        requestKey: 'session-123',
-      }),
-      'http://localhost:3000',
-      {
-        organizationId: 'org-1',
-        userId: 'teacher-1',
-      },
-    );
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
   });
 
   it('returns a running reused job without re-scheduling the runner', async () => {

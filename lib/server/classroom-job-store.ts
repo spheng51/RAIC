@@ -68,6 +68,10 @@ export interface ClassroomGenerationJob {
   error?: string;
 }
 
+interface ReadClassroomGenerationJobOptions {
+  applyStaleTimeout?: boolean;
+}
+
 function jobFilePath(jobId: string) {
   return path.join(CLASSROOM_JOBS_DIR, `${jobId}.json`);
 }
@@ -191,7 +195,9 @@ async function readUsableRequestKeyClaimedJob(
     return null;
   }
 
-  const claimedJob = await readClassroomGenerationJob(claim.jobId);
+  const claimedJob = await readClassroomGenerationJobFile(claim.jobId, {
+    applyStaleTimeout: false,
+  }).catch(() => null);
   if (!claimedJob) {
     if (isRequestKeyClaimStale(claim)) {
       await removeRequestKeyClaim(claimPath);
@@ -381,10 +387,17 @@ function classroomGenerationJobOwnerMatches(
 export async function readClassroomGenerationJob(
   jobId: string,
 ): Promise<ClassroomGenerationJob | null> {
+  return readClassroomGenerationJobFile(jobId);
+}
+
+async function readClassroomGenerationJobFile(
+  jobId: string,
+  options: ReadClassroomGenerationJobOptions = {},
+): Promise<ClassroomGenerationJob | null> {
   try {
     const content = await fs.readFile(jobFilePath(jobId), 'utf-8');
     const job = JSON.parse(content) as ClassroomGenerationJob;
-    return markStaleIfNeeded(job);
+    return options.applyStaleTimeout === false ? job : markStaleIfNeeded(job);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null;
@@ -415,7 +428,9 @@ export async function findClassroomGenerationJobByRequestKey(
       .filter((entry) => !entry.name.startsWith('.request-key-'))
       .map(async (entry) => {
         const jobId = entry.name.replace(/\.json$/i, '');
-        const job = await readClassroomGenerationJob(jobId);
+        const job = await readClassroomGenerationJobFile(jobId, {
+          applyStaleTimeout: false,
+        }).catch(() => null);
         if (
           !job ||
           job.requestKey !== requestKey ||
