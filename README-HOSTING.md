@@ -153,7 +153,17 @@ Optional production features:
 - `MIROFISH_API_BASE_URL`
 - `MIROFISH_API_KEY`
 - `MIROFISH_EMBED_SECRET`
+- `MIROFISH_AUTHORING_ENABLED` (teacher-server AI-guided creation inside the classroom MiroFish dialog)
 - `MIROFISH_MULTI_USER_ENABLED`
+
+If you enable `MIROFISH_AUTHORING_ENABLED`, the MiroFish wrapper also needs to expose:
+
+- `POST /api/authoring/publish`
+- `GET /api/authoring/jobs/:jobId`
+
+Health checks distinguish embed readiness from authoring readiness. Before validating the AI-guided
+creation flow, confirm `/api/health` reports both `readiness.mirofish.ready` and
+`readiness.mirofish.authoringReady` as `true`.
 
 ---
 

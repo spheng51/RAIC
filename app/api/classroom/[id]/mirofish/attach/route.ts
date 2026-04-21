@@ -10,13 +10,12 @@ import { updateClassroom, readClassroom, isValidClassroomId } from '@/lib/server
 import { recordAuditEvent } from '@/lib/server/audit-log';
 import { createLogger } from '@/lib/logger';
 import {
-  buildMiroFishReportUrl,
-  buildMiroFishRunUrl,
+  buildAttachedMiroFishSharedSimulation,
   isMiroFishMultiUserEnabled,
   validateMiroFishReport,
   validateMiroFishSimulation,
 } from '@/lib/server/mirofish';
-import type { SharedSimulation, SharedSimulationCollaborationMode } from '@/lib/types/stage';
+import type { SharedSimulationCollaborationMode } from '@/lib/types/stage';
 
 interface AttachMiroFishBody {
   simulationId?: string;
@@ -109,22 +108,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const sharedSimulation: SharedSimulation = {
-    provider: 'mirofish',
+  const sharedSimulation = buildAttachedMiroFishSharedSimulation({
     simulationId,
     reportId,
-    runUrl: buildMiroFishRunUrl(simulationId),
-    reportUrl: reportId ? buildMiroFishReportUrl(reportId) : undefined,
-    activeSurface: defaultSurface,
-    controllerRole: 'teacher',
+    defaultSurface,
     collaborationMode: requestedCollaborationMode,
-    collaborationState: 'inactive',
-    allowStudentInteraction: requestedCollaborationMode === 'multi-user',
-    participantCount: 0,
-    lastCollaborationSyncAt: new Date().toISOString(),
-    removedParticipantSessionIds: undefined,
-    status: 'attached',
-  };
+    authoring: {
+      source: 'manual-attach',
+      createdAt: new Date().toISOString(),
+    },
+  });
 
   const updated = await updateClassroom(id, (current) => ({
     ...current,

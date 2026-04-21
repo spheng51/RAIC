@@ -5,6 +5,7 @@ const runPostgresQueryMock = vi.fn();
 const hasEncryptionKeyConfiguredMock = vi.fn();
 const getMiroFishConfigMock = vi.fn();
 const isMiroFishMultiUserEnabledMock = vi.fn();
+const getMiroFishAuthoringReadinessMock = vi.fn();
 const getServerWebSearchProvidersMock = vi.fn();
 const getServerImageProvidersMock = vi.fn();
 const getServerVideoProvidersMock = vi.fn();
@@ -24,6 +25,10 @@ vi.mock('@/lib/server/mirofish', () => ({
   isMiroFishMultiUserEnabled: isMiroFishMultiUserEnabledMock,
 }));
 
+vi.mock('@/lib/server/mirofish-authoring', () => ({
+  getMiroFishAuthoringReadiness: getMiroFishAuthoringReadinessMock,
+}));
+
 vi.mock('@/lib/server/provider-config', () => ({
   getServerWebSearchProviders: getServerWebSearchProvidersMock,
   getServerImageProviders: getServerImageProvidersMock,
@@ -40,6 +45,7 @@ describe('GET /api/health', () => {
     hasEncryptionKeyConfiguredMock.mockReset();
     getMiroFishConfigMock.mockReset();
     isMiroFishMultiUserEnabledMock.mockReset();
+    getMiroFishAuthoringReadinessMock.mockReset();
     getServerWebSearchProvidersMock.mockReset();
     getServerImageProvidersMock.mockReset();
     getServerVideoProvidersMock.mockReset();
@@ -52,6 +58,10 @@ describe('GET /api/health', () => {
       baseUrl: 'https://mirofish.example',
     });
     isMiroFishMultiUserEnabledMock.mockReturnValue(false);
+    getMiroFishAuthoringReadinessMock.mockReturnValue({
+      authoringEnabled: false,
+      authoringReady: false,
+    });
     getServerWebSearchProvidersMock.mockReturnValue({});
     getServerImageProvidersMock.mockReturnValue({});
     getServerVideoProvidersMock.mockReturnValue({});
@@ -70,6 +80,10 @@ describe('GET /api/health', () => {
     getPersistenceModeMock.mockResolvedValue('postgres');
     hasEncryptionKeyConfiguredMock.mockReturnValue(true);
     isMiroFishMultiUserEnabledMock.mockReturnValue(true);
+    getMiroFishAuthoringReadinessMock.mockReturnValue({
+      authoringEnabled: true,
+      authoringReady: true,
+    });
     getServerWebSearchProvidersMock.mockReturnValue({ tavily: {} });
     getServerImageProvidersMock.mockReturnValue({ seedream: {} });
     getServerTTSProvidersMock.mockReturnValue({ openai: {} });
@@ -111,6 +125,8 @@ describe('GET /api/health', () => {
         apiAccessConfigured: true,
         embedSigningConfigured: true,
         multiUserEnabled: true,
+        authoringEnabled: true,
+        authoringReady: true,
       },
     });
     expect(runPostgresQueryMock).toHaveBeenCalledWith('SELECT 1');
@@ -139,6 +155,8 @@ describe('GET /api/health', () => {
     expect(body.readiness.mirofish.reason).toBe('MIROFISH_API_BASE_URL must use http or https');
     expect(body.readiness.mirofish.apiAccessConfigured).toBe(false);
     expect(body.readiness.mirofish.embedSigningConfigured).toBe(false);
+    expect(body.readiness.mirofish.authoringEnabled).toBe(false);
+    expect(body.readiness.mirofish.authoringReady).toBe(false);
   });
 
   it('flags hosted JSON storage as non-durable when DATABASE_URL is unset', async () => {

@@ -28,6 +28,11 @@ import type {
 } from '@/lib/types/classroom-collaboration';
 import type { ClassroomPresentationStatePayload } from '@/lib/types/classroom-presentation';
 import type {
+  MiroFishCreationJobStatus,
+  MiroFishCreationPlanRequest,
+  MiroFishCreationSpec,
+} from '@/lib/types/mirofish-authoring';
+import type {
   PresentationSurface,
   SharedSimulation,
   SharedSimulationCollaborationMode,
@@ -231,6 +236,7 @@ export function Stage({
   const [presentationFallbackMessage, setPresentationFallbackMessage] = useState<string | null>(
     null,
   );
+  const [miroFishAuthoringAvailable, setMiroFishAuthoringAvailable] = useState(false);
 
   // Whiteboard state (from canvas store so AI tools can open it)
   const whiteboardOpen = useCanvasStore.use.whiteboardOpen();
@@ -477,6 +483,50 @@ export function Stage({
     onStateChange: syncCollaborationState,
   });
 
+  useEffect(() => {
+    if (!stage?.id || classroomSource !== 'teacher-server') {
+      setMiroFishAuthoringAvailable(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch('/api/health', { cache: 'no-store' });
+        const json = (await response.json().catch(() => null)) as {
+          success?: boolean;
+          readiness?: {
+            mirofish?: {
+              authoringEnabled?: boolean;
+              authoringReady?: boolean;
+            };
+          };
+        } | null;
+
+        if (cancelled) {
+          return;
+        }
+
+        setMiroFishAuthoringAvailable(
+          Boolean(
+            response.ok &&
+              json?.success &&
+              json.readiness?.mirofish?.authoringEnabled &&
+              json.readiness?.mirofish?.authoringReady,
+          ),
+        );
+      } catch {
+        if (!cancelled) {
+          setMiroFishAuthoringAvailable(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [classroomSource, stage?.id]);
+
   const patchPresentationState = useCallback(
     async (
       body: Partial<{ activeSurface: PresentationSurface; status: SharedSimulationStatus }>,
@@ -562,6 +612,113 @@ export function Stage({
       }
     },
     [patchPresentationState],
+  );
+
+  const handleGenerateMiroFishPlan = useCallback(
+    async (input: MiroFishCreationPlanRequest) => {
+      if (!stage?.id) {
+        throw new Error('Classroom is not ready');
+      }
+
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(stage.id)}/mirofish/create-plan`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(input),
+        },
+      );
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        spec?: MiroFishCreationSpec;
+        promptPreview?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success || !json.spec || !json.promptPreview) {
+        throw new Error(errorMessage || 'Failed to generate the MiroFish plan.');
+      }
+
+      return {
+        spec: json.spec,
+        promptPreview: json.promptPreview,
+      };
+    },
+    [stage?.id],
+  );
+
+  const handleCreateMiroFish = useCallback(
+    async (input: { spec: MiroFishCreationSpec }) => {
+      if (!stage?.id) {
+        throw new Error('Classroom is not ready');
+      }
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/mirofish/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        jobId?: string;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success || !json.jobId) {
+        throw new Error(errorMessage || 'Failed to start MiroFish creation.');
+      }
+
+      return {
+        jobId: json.jobId,
+      };
+    },
+    [stage?.id],
+  );
+
+  const handlePollMiroFishCreateJob = useCallback(
+    async (jobId: string) => {
+      if (!stage?.id) {
+        throw new Error('Classroom is not ready');
+      }
+
+      const response = await fetch(
+        `/api/classroom/${encodeURIComponent(stage.id)}/mirofish/create/${encodeURIComponent(jobId)}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        },
+      );
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        status?: MiroFishCreationJobStatus;
+        sharedSimulation?: SharedSimulation;
+      } | null;
+      const errorMessage = json && 'error' in json ? json.error : undefined;
+
+      if (!response.ok || !json?.success || !json.status) {
+        throw new Error(errorMessage || 'Failed to poll MiroFish creation.');
+      }
+
+      if (json.status === 'ready' && json.sharedSimulation) {
+        await refreshPresentationState(true);
+        await refreshCollaborationState(true);
+        setMiroFishSessionEmbed(null);
+      }
+
+      return {
+        status: json.status,
+        error: errorMessage,
+        sharedSimulation: json.sharedSimulation,
+      };
+    },
+    [refreshCollaborationState, refreshPresentationState, stage?.id],
   );
 
   const handleGrantMiroFishControl = useCallback(
@@ -2118,7 +2275,17 @@ export function Stage({
         participants={presentationParticipants}
         collaboration={collaborationState}
         multiUserEnabled={collaborationState?.multiUserEnabled ?? false}
+        authoringAvailable={classroomSource === 'teacher-server' && miroFishAuthoringAvailable}
+        classroomContext={{
+          stageName: stage?.name,
+          currentSceneId: currentScene?.id,
+          currentSceneTitle: currentScene?.title,
+          currentSceneType: currentScene?.type,
+        }}
         onAttach={handleAttachMiroFish}
+        onGeneratePlan={handleGenerateMiroFishPlan}
+        onCreateWithAI={handleCreateMiroFish}
+        onPollCreateJob={handlePollMiroFishCreateJob}
         onGrantControl={handleGrantMiroFishControl}
         onRevokeControl={handleRevokeMiroFishControl}
         onCollaborationAction={handleMiroFishCollaborationAction}
