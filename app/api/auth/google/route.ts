@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyGoogleIdToken } from '@/lib/auth/google';
-import { getDefaultLandingPath } from '@/lib/auth/authorize';
+import { resolvePostAuthRedirectPath } from '@/lib/auth/authorize';
 import { AUTH_NONCE_COOKIE_NAME } from '@/lib/auth/constants';
 import {
   attachSessionCookie,
@@ -21,18 +21,6 @@ function resolveTeacherRole(email: string) {
       .filter(Boolean) ?? [];
 
   return adminEmails.includes(email.trim().toLowerCase()) ? 'org_admin' : 'teacher';
-}
-
-function sanitizeRedirectPath(redirectTo: unknown, role: 'teacher' | 'org_admin') {
-  if (typeof redirectTo !== 'string' || !redirectTo.startsWith('/')) {
-    return getDefaultLandingPath(role);
-  }
-
-  if (redirectTo.startsWith('//')) {
-    return getDefaultLandingPath(role);
-  }
-
-  return redirectTo;
 }
 
 export async function POST(request: NextRequest) {
@@ -104,7 +92,10 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      redirectTo: sanitizeRedirectPath(body.redirectTo, membership.role as 'teacher' | 'org_admin'),
+      redirectTo: resolvePostAuthRedirectPath(
+        membership.role as 'teacher' | 'org_admin',
+        body.redirectTo,
+      ),
       role: membership.role,
     });
     clearNonceCookie(response);

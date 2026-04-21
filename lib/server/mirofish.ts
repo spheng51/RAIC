@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHmac } from 'crypto';
+import type { SharedSimulation, SharedSimulationCollaborationMode } from '@/lib/types/stage';
 
 interface MiroFishConfig {
   baseUrl: string;
@@ -169,6 +170,32 @@ export function buildMiroFishReportUrl(reportId: string) {
   const url = createUrlFromBase(config.baseUrl, `/report/${encodeURIComponent(reportId)}`);
   url.searchParams.set('embed', '1');
   return url.toString();
+}
+
+export function buildAttachedMiroFishSharedSimulation(input: {
+  simulationId: string;
+  reportId?: string;
+  defaultSurface: 'lesson' | 'simulation';
+  collaborationMode: SharedSimulationCollaborationMode;
+  authoring?: SharedSimulation['authoring'];
+}): SharedSimulation {
+  return {
+    provider: 'mirofish',
+    simulationId: input.simulationId,
+    reportId: input.reportId,
+    runUrl: buildMiroFishRunUrl(input.simulationId),
+    reportUrl: input.reportId ? buildMiroFishReportUrl(input.reportId) : undefined,
+    authoring: input.authoring,
+    activeSurface: input.defaultSurface,
+    controllerRole: 'teacher',
+    collaborationMode: input.collaborationMode,
+    collaborationState: 'inactive',
+    allowStudentInteraction: input.collaborationMode === 'multi-user',
+    participantCount: 0,
+    lastCollaborationSyncAt: new Date().toISOString(),
+    removedParticipantSessionIds: undefined,
+    status: 'attached',
+  };
 }
 
 export function createMiroFishEmbedToken(input: MiroFishEmbedTokenInput) {

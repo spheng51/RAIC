@@ -421,19 +421,19 @@ export function CanvasToolbar({
                 {[
                   {
                     surface: 'lesson' as const,
-                    label: 'Lesson',
+                    label: t('classroom.mirofish.surfaceLesson'),
                     icon: BookOpen,
                     disabled: !viewerCanControlPresentation,
                   },
                   {
                     surface: 'simulation' as const,
-                    label: 'Simulation',
+                    label: t('classroom.mirofish.surfaceSimulation'),
                     icon: FlaskConical,
                     disabled: !viewerCanControlPresentation,
                   },
                   {
                     surface: 'report' as const,
-                    label: 'Report',
+                    label: t('classroom.mirofish.surfaceReport'),
                     icon: FileText,
                     disabled: !reportAvailable || !viewerCanControlPresentation,
                   },
@@ -479,11 +479,23 @@ export function CanvasToolbar({
                 ? 'text-slate-700 dark:text-slate-200'
                 : 'text-slate-500 dark:text-slate-400',
             )}
-            aria-label={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
-            title={sharedSimulation ? 'Manage MiroFish' : 'Attach MiroFish'}
+            aria-label={
+              sharedSimulation
+                ? t('classroom.mirofish.manageButton')
+                : t('classroom.mirofish.attachButton')
+            }
+            title={
+              sharedSimulation
+                ? t('classroom.mirofish.manageButton')
+                : t('classroom.mirofish.attachButton')
+            }
           >
             <Settings2 className="h-3.5 w-3.5" />
-            <span>{sharedSimulation ? 'MiroFish' : 'Attach'}</span>
+            <span>
+              {sharedSimulation
+                ? t('classroom.mirofish.manageButtonShort')
+                : t('classroom.mirofish.attachButtonShort')}
+            </span>
           </button>
         )}
         {onTogglePresentation && (
