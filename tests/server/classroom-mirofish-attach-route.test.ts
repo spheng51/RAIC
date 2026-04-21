@@ -9,6 +9,7 @@ const validateMiroFishSimulationMock = vi.fn();
 const validateMiroFishReportMock = vi.fn();
 const buildAttachedMiroFishSharedSimulationMock = vi.fn();
 const recordAuditEventMock = vi.fn();
+const recordClassroomRoomEventMock = vi.fn();
 
 vi.mock('@/lib/auth/authorize', () => ({
   requireRequestRole: requireRequestRoleMock,
@@ -38,6 +39,11 @@ vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  buildClassroomRoomEventActor: (input: unknown) => input,
+  recordClassroomRoomEvent: recordClassroomRoomEventMock,
+}));
+
 describe('POST /api/classroom/[id]/mirofish/attach', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -49,6 +55,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
     validateMiroFishReportMock.mockReset();
     buildAttachedMiroFishSharedSimulationMock.mockReset();
     recordAuditEventMock.mockReset();
+    recordClassroomRoomEventMock.mockReset();
 
     requireRequestRoleMock.mockResolvedValue({
       session: { id: 'teacher-session', role: 'teacher', kind: 'web', organizationId: 'org-1' },
@@ -90,6 +97,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
   it('requires simulationId', async () => {
     readClassroomMock.mockResolvedValue({
       id: 'room-1',
+      roomVersion: 0,
       stage: { id: 'room-1' },
       scenes: [],
       createdAt: '2026-04-11T00:00:00.000Z',
@@ -112,6 +120,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
   it('returns 400 when MiroFish validation rejects the IDs', async () => {
     readClassroomMock.mockResolvedValue({
       id: 'room-1',
+      roomVersion: 0,
       stage: { id: 'room-1' },
       scenes: [],
       createdAt: '2026-04-11T00:00:00.000Z',
@@ -135,6 +144,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
   it('persists the attached sharedSimulation on success', async () => {
     readClassroomMock.mockResolvedValue({
       id: 'room-1',
+      roomVersion: 0,
       stage: { id: 'room-1' },
       scenes: [],
       createdAt: '2026-04-11T00:00:00.000Z',
@@ -146,6 +156,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
         id: 'room-1',
         ownerUserId: 'teacher-1',
         organizationId: 'org-1',
+        roomVersion: 1,
         stage: { id: 'room-1' },
         scenes: [],
         createdAt: '2026-04-11T00:00:00.000Z',
@@ -186,6 +197,13 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
         resourceId: 'room-1',
       }),
     );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'mirofish.attached',
+      }),
+    );
     expect(json.sharedSimulation).toEqual(
       expect.objectContaining({
         provider: 'mirofish',
@@ -203,6 +221,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
   it('records an update audit event when replacing an existing attachment', async () => {
     readClassroomMock.mockResolvedValue({
       id: 'room-1',
+      roomVersion: 0,
       stage: {
         id: 'room-1',
         sharedSimulation: {
@@ -223,6 +242,7 @@ describe('POST /api/classroom/[id]/mirofish/attach', () => {
         id: 'room-1',
         ownerUserId: 'teacher-1',
         organizationId: 'org-1',
+        roomVersion: 1,
         stage: {
           id: 'room-1',
           sharedSimulation: {

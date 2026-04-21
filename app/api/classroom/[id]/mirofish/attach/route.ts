@@ -6,6 +6,10 @@ import {
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
+import {
+  buildClassroomRoomEventActor,
+  recordClassroomRoomEvent,
+} from '@/lib/server/classroom-room-events';
 import { updateClassroom, readClassroom, isValidClassroomId } from '@/lib/server/classroom-storage';
 import { recordAuditEvent } from '@/lib/server/audit-log';
 import { createLogger } from '@/lib/logger';
@@ -164,6 +168,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     actorUserId: auth.user.id,
     result: hadExistingAttachment ? 'updated' : 'attached',
   });
+
+  if (updated.roomVersion !== classroom.roomVersion) {
+    await recordClassroomRoomEvent({
+      classroomId: id,
+      roomVersion: updated.roomVersion,
+      kind: 'mirofish.attached',
+      actor: buildClassroomRoomEventActor({
+        sessionId: auth.session.id,
+        userId: auth.user.id,
+        role: auth.session.role,
+        kind: 'web',
+      }),
+      metadata: {
+        simulationId,
+        reportId: reportId ?? null,
+        defaultSurface,
+        collaborationMode: requestedCollaborationMode,
+        action: hadExistingAttachment ? 'updated' : 'attached',
+      },
+    });
+  }
 
   return apiSuccessWithRequestSession(request, {
     sharedSimulation,

@@ -6,6 +6,7 @@ const getClassroomPresentationSnapshotMock = vi.fn();
 const canSessionControlPresentationMock = vi.fn();
 const updateClassroomMock = vi.fn();
 const recordAuditEventMock = vi.fn();
+const recordClassroomRoomEventMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -28,6 +29,11 @@ vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  buildClassroomRoomEventActor: (input: unknown) => input,
+  recordClassroomRoomEvent: recordClassroomRoomEventMock,
+}));
+
 describe('PATCH /api/classroom/[id]/presentation', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -36,6 +42,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     canSessionControlPresentationMock.mockReset();
     updateClassroomMock.mockReset();
     recordAuditEventMock.mockReset();
+    recordClassroomRoomEventMock.mockReset();
   });
 
   it('rejects invalid activeSurface values', async () => {
@@ -47,6 +54,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -81,6 +89,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -115,6 +124,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -149,6 +159,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'classroom',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -185,6 +196,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -198,6 +210,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     canSessionControlPresentationMock.mockReturnValue(true);
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -238,6 +251,13 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
         }),
       }),
     );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'presentation.updated',
+      }),
+    );
     expect(json.sharedSimulation).toEqual(
       expect.objectContaining({
         activeSurface: 'report',
@@ -255,6 +275,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -268,6 +289,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     canSessionControlPresentationMock.mockReturnValue(true);
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -305,6 +327,13 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
         }),
       }),
     );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'presentation.updated',
+      }),
+    );
     expect(json.sharedSimulation).toEqual(
       expect.objectContaining({
         activeSurface: 'lesson',
@@ -322,6 +351,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'classroom',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -372,6 +402,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -385,6 +416,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     canSessionControlPresentationMock.mockReturnValue(true);
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 0,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -427,6 +459,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
       source: 'web',
     });
     getClassroomPresentationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -440,6 +473,7 @@ describe('PATCH /api/classroom/[id]/presentation', () => {
     canSessionControlPresentationMock.mockReturnValue(true);
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 0,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',

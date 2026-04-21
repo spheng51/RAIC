@@ -1,0 +1,25 @@
+export type RoomVersion = number;
+
+export type ClassroomRoomEventKind =
+  | 'presentation.updated'
+  | 'collaboration.updated'
+  | 'control.updated'
+  | 'mirofish.attached'
+  | 'mirofish.session.updated';
+
+export interface ClassroomRoomEventActor {
+  sessionId: string | null;
+  userId: string | null;
+  role: string | null;
+  kind: 'web' | 'classroom' | 'system';
+}
+
+export interface ClassroomRoomEvent {
+  classroomId: string;
+  roomVersion: RoomVersion;
+  eventId: string;
+  kind: ClassroomRoomEventKind;
+  occurredAt: string;
+  actor: ClassroomRoomEventActor;
+  metadata?: Record<string, unknown>;
+}

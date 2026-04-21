@@ -3,7 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SharedSimulation } from '@/lib/types/stage';
+import type { Scene, SharedSimulation } from '@/lib/types/stage';
 
 let miroFishMountCount = 0;
 let miroFishUnmountCount = 0;
@@ -90,6 +90,8 @@ interface CanvasAreaTestProps {
   readonly activeSurface: 'lesson' | 'simulation' | 'report';
   readonly runUrl: string | null;
   readonly reportUrl: string | null;
+  readonly currentScene: Scene | null;
+  readonly onPlayPause: () => void;
 }
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -108,6 +110,33 @@ function buildSharedSimulation(overrides: Partial<SharedSimulation> = {}): Share
   };
 }
 
+function buildSlideScene(): Scene {
+  return {
+    id: 'scene-1',
+    stageId: 'stage-1',
+    type: 'slide',
+    title: 'Slide scene',
+    order: 0,
+    content: {
+      type: 'slide',
+      canvas: {
+        id: 'slide-1',
+        viewportSize: 1000,
+        viewportRatio: 0.5625,
+        theme: {
+          backgroundColor: '#ffffff',
+          themeColors: ['#111111'],
+          fontColor: '#111111',
+          fontName: 'Inter',
+        },
+        elements: [],
+      },
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
 async function mountCanvasArea(initialOverrides: Partial<CanvasAreaTestProps> = {}): Promise<{
   readonly container: HTMLDivElement;
   readonly rerender: (nextProps?: Partial<CanvasAreaTestProps>) => Promise<void>;
@@ -123,6 +152,8 @@ async function mountCanvasArea(initialOverrides: Partial<CanvasAreaTestProps> = 
     activeSurface: 'simulation',
     runUrl: 'https://mirofish.example/simulation/sim-1/start?embed=1&classroomToken=token-a',
     reportUrl: 'https://mirofish.example/report/report-1?embed=1&classroomToken=report-token-a',
+    currentScene: null,
+    onPlayPause: vi.fn(),
     ...initialOverrides,
   };
 
@@ -130,7 +161,7 @@ async function mountCanvasArea(initialOverrides: Partial<CanvasAreaTestProps> = 
     await act(async () => {
       root.render(
         createElement(CanvasArea, {
-          currentScene: null,
+          currentScene: props.currentScene,
           currentSceneIndex: 0,
           scenesCount: 1,
           mode: 'playback',
@@ -143,7 +174,7 @@ async function mountCanvasArea(initialOverrides: Partial<CanvasAreaTestProps> = 
           onToggleChat: vi.fn(),
           onPrevSlide: vi.fn(),
           onNextSlide: vi.fn(),
-          onPlayPause: vi.fn(),
+          onPlayPause: props.onPlayPause,
           onWhiteboardClose: vi.fn(),
           isPresenting: false,
           onTogglePresentation: vi.fn(),
@@ -247,5 +278,32 @@ describe('CanvasArea', () => {
     expect(updatedPane?.getAttribute('data-simulation-id')).toBe('sim-2');
     expect(miroFishMountCount).toBe(2);
     expect(miroFishUnmountCount).toBe(1);
+  });
+
+  it('exposes keyboard playback controls for slide scenes on the lesson surface', async () => {
+    const onPlayPause = vi.fn();
+    const mounted = await mountCanvasArea({
+      sharedSimulation: null,
+      activeSurface: 'lesson',
+      runUrl: null,
+      reportUrl: null,
+      currentScene: buildSlideScene(),
+      onPlayPause,
+    });
+
+    const playbackSurface = mounted.container.querySelector('[role="button"]') as HTMLDivElement;
+    expect(playbackSurface).toBeTruthy();
+    expect(playbackSurface.getAttribute('aria-label')).toBe('roundtable.play');
+
+    await act(async () => {
+      playbackSurface.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+        }),
+      );
+    });
+
+    expect(onPlayPause).toHaveBeenCalledTimes(1);
   });
 });

@@ -190,4 +190,41 @@ describe('classroom-storage helpers', () => {
     const stored = await readClassroom('room-1');
     expect(stored?.stage.name).toMatch(/^Base-(A-B|B-A)$/);
   });
+
+  it('initializes roomVersion and increments it only when classroom content changes', async () => {
+    const { persistClassroom, readClassroom, updateClassroom } =
+      await import('@/lib/server/classroom-storage');
+
+    await persistClassroom(
+      {
+        id: 'room-room-version',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        stage: {
+          id: 'room-room-version',
+          name: 'Base',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        scenes: [],
+      },
+      'http://localhost:3000',
+    );
+
+    expect((await readClassroom('room-room-version'))?.roomVersion).toBe(0);
+
+    await updateClassroom('room-room-version', (current) => ({
+      ...current,
+    }));
+    expect((await readClassroom('room-room-version'))?.roomVersion).toBe(0);
+
+    await updateClassroom('room-room-version', (current) => ({
+      ...current,
+      stage: {
+        ...current.stage,
+        name: 'Updated',
+      },
+    }));
+    expect((await readClassroom('room-room-version'))?.roomVersion).toBe(1);
+  });
 });

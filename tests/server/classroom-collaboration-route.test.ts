@@ -8,6 +8,7 @@ const buildClassroomCollaborationStatePayloadMock = vi.fn();
 const updateClassroomMock = vi.fn();
 const recordAuditEventMock = vi.fn();
 const isMiroFishMultiUserEnabledMock = vi.fn();
+const recordClassroomRoomEventMock = vi.fn();
 
 vi.mock('@/lib/auth/authorize', () => ({
   requireRequestRole: requireRequestRoleMock,
@@ -34,6 +35,11 @@ vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  buildClassroomRoomEventActor: (input: unknown) => input,
+  recordClassroomRoomEvent: recordClassroomRoomEventMock,
+}));
+
 vi.mock('@/lib/server/mirofish', () => ({
   isMiroFishMultiUserEnabled: isMiroFishMultiUserEnabledMock,
 }));
@@ -48,6 +54,7 @@ describe('PATCH /api/classroom/[id]/collaboration', () => {
     updateClassroomMock.mockReset();
     recordAuditEventMock.mockReset();
     isMiroFishMultiUserEnabledMock.mockReset();
+    recordClassroomRoomEventMock.mockReset();
     isMiroFishMultiUserEnabledMock.mockReturnValue(true);
     requireClassroomAccessMock.mockResolvedValue({
       auth: {
@@ -90,6 +97,7 @@ describe('PATCH /api/classroom/[id]/collaboration', () => {
     });
     getClassroomCollaborationSnapshotMock
       .mockResolvedValueOnce({
+        classroom: { roomVersion: 0 },
         sharedSimulation: {
           provider: 'mirofish',
           simulationId: 'sim-1',
@@ -106,6 +114,7 @@ describe('PATCH /api/classroom/[id]/collaboration', () => {
         participants: [],
       })
       .mockResolvedValueOnce({
+        classroom: { roomVersion: 1 },
         sharedSimulation: {
           provider: 'mirofish',
           simulationId: 'sim-1',
@@ -126,6 +135,7 @@ describe('PATCH /api/classroom/[id]/collaboration', () => {
     });
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -160,6 +170,13 @@ describe('PATCH /api/classroom/[id]/collaboration', () => {
       expect.objectContaining({
         action: 'classroom.mirofish.collaboration.freeze',
         resourceId: 'room-1',
+      }),
+    );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'collaboration.updated',
       }),
     );
     expect(json.collaboration).toEqual(expect.objectContaining({ collaborationState: 'frozen' }));

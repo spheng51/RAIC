@@ -8,6 +8,7 @@ const updateClassroomMock = vi.fn();
 const isMiroFishMultiUserEnabledMock = vi.fn();
 const issueMiroFishParticipantTokenMock = vi.fn();
 const withMiroFishParticipantTokenMock = vi.fn();
+const recordClassroomRoomEventMock = vi.fn();
 
 vi.mock('@/lib/auth/classroom-access', () => ({
   requireClassroomAccess: requireClassroomAccessMock,
@@ -34,6 +35,11 @@ vi.mock('@/lib/server/mirofish', () => ({
   withMiroFishParticipantToken: withMiroFishParticipantTokenMock,
 }));
 
+vi.mock('@/lib/server/classroom-room-events', () => ({
+  buildClassroomRoomEventActor: (input: unknown) => input,
+  recordClassroomRoomEvent: recordClassroomRoomEventMock,
+}));
+
 describe('POST /api/classroom/[id]/mirofish/session', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -44,6 +50,7 @@ describe('POST /api/classroom/[id]/mirofish/session', () => {
     isMiroFishMultiUserEnabledMock.mockReset();
     issueMiroFishParticipantTokenMock.mockReset();
     withMiroFishParticipantTokenMock.mockReset();
+    recordClassroomRoomEventMock.mockReset();
     isMiroFishMultiUserEnabledMock.mockReturnValue(true);
   });
 
@@ -80,6 +87,7 @@ describe('POST /api/classroom/[id]/mirofish/session', () => {
       source: 'classroom',
     });
     getClassroomCollaborationSnapshotMock.mockResolvedValue({
+      classroom: { roomVersion: 0 },
       sharedSimulation: {
         provider: 'mirofish',
         simulationId: 'sim-1',
@@ -100,6 +108,7 @@ describe('POST /api/classroom/[id]/mirofish/session', () => {
     });
     updateClassroomMock.mockImplementation(async (_id, updater) =>
       updater({
+        roomVersion: 1,
         stage: {
           sharedSimulation: {
             provider: 'mirofish',
@@ -151,6 +160,13 @@ describe('POST /api/classroom/[id]/mirofish/session', () => {
         collaborationMode: 'multi-user',
         embedUrl: 'https://mirofish.example/run?embed=1&participantToken=participant-token',
         tokenExpiresAt: '2026-04-11T02:00:00.000Z',
+      }),
+    );
+    expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        roomVersion: 1,
+        kind: 'mirofish.session.updated',
       }),
     );
   });

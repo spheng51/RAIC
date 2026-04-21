@@ -6,6 +6,10 @@ import {
   buildClassroomCollaborationStatePayload,
   getClassroomCollaborationSnapshot,
 } from '@/lib/server/classroom-collaboration';
+import {
+  buildClassroomRoomEventActor,
+  recordClassroomRoomEvent,
+} from '@/lib/server/classroom-room-events';
 import { recordAuditEvent } from '@/lib/server/audit-log';
 import {
   apiErrorWithRequestSession,
@@ -286,6 +290,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     targetSessionId: targetSessionId ?? null,
     result: action,
   });
+
+  if (updated.roomVersion !== snapshot.classroom.roomVersion) {
+    await recordClassroomRoomEvent({
+      classroomId: id,
+      roomVersion: updated.roomVersion,
+      kind: 'collaboration.updated',
+      actor: buildClassroomRoomEventActor({
+        sessionId: access.auth.session.id,
+        userId: access.auth.user.id,
+        role: access.auth.session.role,
+        kind: access.source,
+      }),
+      metadata: {
+        action,
+        targetSessionId: targetSessionId ?? null,
+        simulationId: updated.stage.sharedSimulation.simulationId,
+        reportId: updated.stage.sharedSimulation.reportId ?? null,
+        collaborationState: updated.stage.sharedSimulation.collaborationState,
+        spotlightSessionId: updated.stage.sharedSimulation.spotlightSessionId ?? null,
+      },
+    });
+  }
 
   return apiSuccessWithRequestSession(request, {
     sharedSimulation: updated.stage.sharedSimulation,

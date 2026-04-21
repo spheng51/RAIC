@@ -5,7 +5,6 @@ import { listRecentClassroomSessions } from '@/lib/db/repositories/sessions';
 import { findUserById } from '@/lib/db/repositories/users';
 import {
   readClassroom,
-  updateClassroom,
   type PersistedClassroomData,
 } from '@/lib/server/classroom-storage';
 import { isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
@@ -22,7 +21,6 @@ import {
   getSharedSimulationRemovedSessionIds,
   getStageSharedSimulation,
   normalizeSharedSimulationState,
-  preserveStageSharedSimulation,
 } from '@/lib/utils/classroom-presentation';
 
 export interface ClassroomCollaborationSnapshot {
@@ -35,12 +33,11 @@ export function canSessionModerateCollaboration(session: SessionRecord) {
   return session.kind === 'web' && session.role !== 'student';
 }
 
-async function listClassroomCollaborationParticipants(
-  classroomId: string,
+function buildClassroomCollaborationParticipants(
+  sessions: SessionRecord[],
+  users: Awaited<ReturnType<typeof findUserById>>[],
   sharedSimulation: SharedSimulation | null,
-): Promise<ClassroomCollaborationParticipant[]> {
-  const sessions = await listRecentClassroomSessions(classroomId);
-  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
+): ClassroomCollaborationParticipant[] {
   const removedSessionIds = new Set(getSharedSimulationRemovedSessionIds(sharedSimulation));
   const collaborationState = getSharedSimulationCollaborationState(sharedSimulation);
   const allowStudentInteraction = sharedSimulation?.allowStudentInteraction !== false;
@@ -70,17 +67,19 @@ async function listClassroomCollaborationParticipants(
 export async function getClassroomCollaborationSnapshot(
   classroomId: string,
 ): Promise<ClassroomCollaborationSnapshot | null> {
-  let classroom = await readClassroom(classroomId);
+  const classroom = await readClassroom(classroomId);
   if (!classroom) {
     return null;
   }
 
-  let sharedSimulation = getStageSharedSimulation(classroom.stage);
-  let participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
+  const sharedSimulation = getStageSharedSimulation(classroom.stage);
+  const sessions = await listRecentClassroomSessions(classroomId);
+  const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
   let nextSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
-    participants.map((participant) => participant.sessionId),
+    sessions.map((session) => session.id),
   );
+  const participants = buildClassroomCollaborationParticipants(sessions, users, nextSharedSimulation);
 
   if (
     nextSharedSimulation &&
@@ -95,26 +94,9 @@ export async function getClassroomCollaborationSnapshot(
     };
   }
 
-  if (sharedSimulation !== nextSharedSimulation) {
-    const updated = await updateClassroom(classroomId, (current) => ({
-      ...current,
-      stage: preserveStageSharedSimulation(current.stage, nextSharedSimulation),
-    }));
-
-    if (updated) {
-      classroom = updated;
-      sharedSimulation = getStageSharedSimulation(updated.stage);
-      participants = await listClassroomCollaborationParticipants(classroomId, sharedSimulation);
-    } else {
-      sharedSimulation = nextSharedSimulation;
-    }
-  } else {
-    sharedSimulation = nextSharedSimulation;
-  }
-
   return {
     classroom,
-    sharedSimulation,
+    sharedSimulation: nextSharedSimulation,
     participants,
   };
 }
@@ -130,6 +112,7 @@ export function buildClassroomCollaborationStatePayload(
   );
 
   return {
+    roomVersion: snapshot.classroom.roomVersion,
     collaborationMode,
     collaborationState: getSharedSimulationCollaborationState(snapshot.sharedSimulation),
     allowStudentInteraction: snapshot.sharedSimulation?.allowStudentInteraction !== false,
