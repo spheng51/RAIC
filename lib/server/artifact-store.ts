@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { promises as fs } from 'fs';
-import path from 'path';
 import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
+import { getDataPath } from '@/lib/server/data-root';
 
 export interface ArtifactManifest {
   lessonId: string;
@@ -17,7 +17,7 @@ export interface ArtifactManifest {
 }
 
 function getArtifactManifestPath(lessonId: string) {
-  return path.join(process.cwd(), 'data', 'artifacts', lessonId, 'manifest.json');
+  return getDataPath('artifacts', lessonId, 'manifest.json');
 }
 
 export async function readArtifactManifest(lessonId: string): Promise<ArtifactManifest | null> {

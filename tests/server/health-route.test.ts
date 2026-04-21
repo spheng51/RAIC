@@ -158,4 +158,20 @@ describe('GET /api/health', () => {
     expect(body.readiness.mirofish.authoringEnabled).toBe(false);
     expect(body.readiness.mirofish.authoringReady).toBe(false);
   });
+
+  it('flags hosted JSON storage as non-durable when DATABASE_URL is unset', async () => {
+    vi.stubEnv('VERCEL', '1');
+    getPersistenceModeMock.mockResolvedValue('json');
+
+    const { GET } = await import('@/app/api/health/route');
+    const response = await GET();
+    const body = await response.json();
+
+    expect(body.readiness.storage).toEqual({
+      ready: false,
+      reason:
+        'DATABASE_URL is required for durable hosted storage; JSON fallback uses temporary runtime storage only',
+      mode: 'json',
+    });
+  });
 });
