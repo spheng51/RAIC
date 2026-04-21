@@ -62,7 +62,8 @@ describe('classroom snapshot normalization', () => {
       scenes: [],
     });
 
-    const { getClassroomPresentationSnapshot } = await import('@/lib/server/classroom-presentation');
+    const { getClassroomPresentationSnapshot } =
+      await import('@/lib/server/classroom-presentation');
     const snapshot = await getClassroomPresentationSnapshot('room-1');
 
     expect(snapshot?.sharedSimulation?.controllerRole).toBe('teacher');
@@ -98,9 +99,8 @@ describe('classroom snapshot normalization', () => {
       scenes: [],
     });
 
-    const { getClassroomCollaborationSnapshot } = await import(
-      '@/lib/server/classroom-collaboration'
-    );
+    const { getClassroomCollaborationSnapshot } =
+      await import('@/lib/server/classroom-collaboration');
     const snapshot = await getClassroomCollaborationSnapshot('room-1');
 
     expect(snapshot?.sharedSimulation?.controllerRole).toBe('teacher');
