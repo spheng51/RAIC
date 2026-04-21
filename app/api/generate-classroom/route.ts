@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     const jobId = job.id;
     const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
 
-    if (!existing || job.status === 'queued' || job.status === 'running') {
+    if (!existing || job.status === 'queued') {
       after(() =>
         runClassroomGenerationJob(jobId, body, baseUrl, {
           organizationId: auth.organization?.id ?? null,

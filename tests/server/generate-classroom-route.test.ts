@@ -162,14 +162,14 @@ describe('POST /api/generate-classroom', () => {
     );
   });
 
-  it('reuses an existing job for the same request key', async () => {
+  it('reuses an existing queued job and schedules the async runner', async () => {
     createOrReuseClassroomGenerationJobMock.mockResolvedValue({
       existing: true,
       job: {
         id: 'job-existing',
-        status: 'running',
+        status: 'queued',
         step: 'generating_outlines',
-        message: 'Still working',
+        message: 'Queued',
       },
     });
 
@@ -189,9 +189,9 @@ describe('POST /api/generate-classroom', () => {
     expect(body).toEqual({
       success: true,
       jobId: 'job-existing',
-      status: 'running',
+      status: 'queued',
       step: 'generating_outlines',
-      message: 'Still working',
+      message: 'Queued',
       pollUrl: 'http://localhost:3000/api/generate-classroom/job-existing',
       pollIntervalMs: 5000,
     });
@@ -221,6 +221,42 @@ describe('POST /api/generate-classroom', () => {
         userId: 'teacher-1',
       },
     );
+  });
+
+  it('returns a running reused job without re-scheduling the runner', async () => {
+    createOrReuseClassroomGenerationJobMock.mockResolvedValue({
+      existing: true,
+      job: {
+        id: 'job-running',
+        status: 'running',
+        step: 'generating_outlines',
+        message: 'Still working',
+      },
+    });
+
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a renewable energy classroom',
+          requestKey: 'session-123-running',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(body).toEqual({
+      success: true,
+      jobId: 'job-running',
+      status: 'running',
+      step: 'generating_outlines',
+      message: 'Still working',
+      pollUrl: 'http://localhost:3000/api/generate-classroom/job-running',
+      pollIntervalMs: 5000,
+    });
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
   });
 
   it('returns a completed job without scheduling a rerun', async () => {

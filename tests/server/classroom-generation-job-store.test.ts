@@ -95,12 +95,90 @@ describe('classroom generation job store', () => {
         ),
       ]);
 
-      expect(left.job.id).toBe('job-1');
-      expect(right.job.id).toBe('job-1');
+      const winning = left.existing ? right.job.id : left.job.id;
+      expect(right.job.id).toBe(winning);
+      expect(left.job.id).toBe(winning);
       expect([left.existing, right.existing].sort()).toEqual([false, true]);
 
       const files = await readdir(tempDir);
-      expect(files.filter((file) => file.endsWith('.json'))).toHaveLength(1);
+      expect(files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-'))).toHaveLength(1);
+      expect(files.some((file) => file.startsWith('.request-key-'))).toBe(true);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reuses a claimed non-failed job and retries when the claim points to a failed job', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir, { writeDelayMs: 20 });
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+
+      const first = await store.createOrReuseClassroomGenerationJob(
+        'job-1',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+      expect(first.existing).toBe(false);
+      expect(first.job.id).toBe('job-1');
+
+      await store.markClassroomGenerationJobFailed('job-1', 'boom');
+
+      const second = await store.createOrReuseClassroomGenerationJob(
+        'job-2',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+      expect(second.existing).toBe(false);
+      expect(second.job.id).toBe('job-2');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('recovers from stale missing request-key claim entries', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir);
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+
+      await store.createOrReuseClassroomGenerationJob(
+        'job-1',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      const files = await readdir(tempDir);
+      const claimFile = files.find((entry) => entry.startsWith('.request-key-'));
+      expect(claimFile).toBeDefined();
+
+      await rm(path.join(tempDir, 'job-1.json'), { force: true });
+
+      const claimPath = path.join(tempDir, claimFile!);
+      const claimRaw = JSON.parse(await readFile(claimPath, 'utf-8'));
+      claimRaw.createdAt = new Date(Date.now() - 120_000).toISOString();
+      await writeFile(claimPath, JSON.stringify(claimRaw, null, 2), 'utf-8');
+
+      const recovered = await store.createOrReuseClassroomGenerationJob(
+        'job-2',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      expect(recovered.existing).toBe(false);
+      expect(recovered.job.id).toBe('job-2');
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

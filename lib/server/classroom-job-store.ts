@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { createHash } from 'crypto';
 import path from 'path';
 import type { AuthContext } from '@/lib/auth/current-user';
 import type { PlatformRole } from '@/lib/db/schema';
@@ -84,7 +85,6 @@ function buildInputSummary(input: GenerateClassroomInput): ClassroomGenerationJo
 
 /** Simple per-job mutex to serialize read-modify-write on the same job file. */
 const jobLocks = new Map<string, Promise<void>>();
-const requestKeyLocks = new Map<string, Promise<void>>();
 
 async function withJobLock<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
   const prev = jobLocks.get(jobId) ?? Promise.resolve();
@@ -114,25 +114,148 @@ function buildRequestKeyLockId(
   ].join('::');
 }
 
-async function withRequestKeyLock<T>(
+const REQUEST_KEY_CLAIM_STALE_MS = 90_000;
+const REQUEST_KEY_CLAIM_POLL_MS = 25;
+
+interface ClassroomGenerationJobRequestKeyClaim {
+  requestKey: string;
+  jobId: string;
+  createdAt: string;
+  lockId: string;
+}
+
+function requestKeyClaimFileName(requestKey: string, owner: ClassroomGenerationJobOwner) {
+  const lockId = buildRequestKeyLockId(requestKey, owner);
+  const hash = createHash('sha256').update(lockId).digest('hex');
+  return `.request-key-${hash}.json`;
+}
+
+function requestKeyClaimPath(requestKey: string, owner: ClassroomGenerationJobOwner) {
+  return path.join(CLASSROOM_JOBS_DIR, requestKeyClaimFileName(requestKey, owner));
+}
+
+function isRequestKeyClaimStale(claim: ClassroomGenerationJobRequestKeyClaim): boolean {
+  return Date.now() - new Date(claim.createdAt).getTime() > REQUEST_KEY_CLAIM_STALE_MS;
+}
+
+async function readRequestKeyClaim(
+  claimPath: string,
+): Promise<ClassroomGenerationJobRequestKeyClaim | null> {
+  try {
+    const content = await fs.readFile(claimPath, 'utf-8');
+    const parsed = JSON.parse(content) as ClassroomGenerationJobRequestKeyClaim;
+    if (
+      typeof parsed.requestKey !== 'string' ||
+      typeof parsed.jobId !== 'string' ||
+      typeof parsed.createdAt !== 'string' ||
+      typeof parsed.lockId !== 'string'
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    return null;
+  }
+}
+
+async function writeRequestKeyClaim(
+  claimPath: string,
+  claim: ClassroomGenerationJobRequestKeyClaim,
+): Promise<boolean> {
+  try {
+    await fs.writeFile(claimPath, JSON.stringify(claim, null, 2), {
+      encoding: 'utf-8',
+      flag: 'wx',
+    });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function removeRequestKeyClaim(claimPath: string): Promise<void> {
+  await fs.rm(claimPath, { force: true });
+}
+
+async function readUsableRequestKeyClaimedJob(
   requestKey: string,
   owner: ClassroomGenerationJobOwner,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const lockId = buildRequestKeyLockId(requestKey, owner);
-  const prev = requestKeyLocks.get(lockId) ?? Promise.resolve();
-  let resolve: () => void;
-  const next = new Promise<void>((r) => {
-    resolve = r;
-  });
-  requestKeyLocks.set(lockId, next);
-  try {
-    await prev;
-    return await fn();
-  } finally {
-    resolve!();
-    if (requestKeyLocks.get(lockId) === next) requestKeyLocks.delete(lockId);
+  claimPath: string,
+): Promise<ClassroomGenerationJob | null> {
+  const claim = await readRequestKeyClaim(claimPath);
+  if (!claim || claim.requestKey !== requestKey) {
+    await removeRequestKeyClaim(claimPath);
+    return null;
   }
+
+  const claimedJob = await readClassroomGenerationJob(claim.jobId);
+  if (!claimedJob) {
+    if (isRequestKeyClaimStale(claim)) {
+      await removeRequestKeyClaim(claimPath);
+    }
+    return null;
+  }
+
+  if (!classroomGenerationJobOwnerMatches(claimedJob, owner)) {
+    await removeRequestKeyClaim(claimPath);
+    return null;
+  }
+
+  if (claimedJob.status === 'failed') {
+    await removeRequestKeyClaim(claimPath);
+    return null;
+  }
+
+  return claimedJob;
+}
+
+async function waitForUsableRequestKeyClaim(
+  requestKey: string,
+  owner: ClassroomGenerationJobOwner,
+  claimPath: string,
+): Promise<ClassroomGenerationJob | null> {
+  while (true) {
+    const claimedJob = await readUsableRequestKeyClaimedJob(requestKey, owner, claimPath);
+    if (claimedJob) {
+      return claimedJob;
+    }
+
+    const claim = await readRequestKeyClaim(claimPath);
+    if (!claim) {
+      return null;
+    }
+
+    if (isRequestKeyClaimStale(claim)) {
+      return null;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, REQUEST_KEY_CLAIM_POLL_MS));
+  }
+}
+
+async function findReusableJobFromRequestKeyClaim(
+  requestKey: string,
+  owner: ClassroomGenerationJobOwner,
+): Promise<ClassroomGenerationJob | null> {
+  const claimPath = requestKeyClaimPath(requestKey, owner);
+  await ensureClassroomJobsDir();
+  const claim = await readRequestKeyClaim(claimPath);
+  if (!claim) {
+    return null;
+  }
+
+  const claimedJob = await readUsableRequestKeyClaimedJob(requestKey, owner, claimPath);
+  if (!claimedJob && isRequestKeyClaimStale(claim)) {
+    await removeRequestKeyClaim(claimPath);
+  }
+
+  return claimedJob;
 }
 
 /** Max age (ms) before a "running" job without an active runner is considered stale. */
@@ -203,17 +326,48 @@ export async function createOrReuseClassroomGenerationJob(
     };
   }
 
-  return withRequestKeyLock(requestKey, owner, async () => {
+  const claimPath = requestKeyClaimPath(requestKey, owner);
+  await ensureClassroomJobsDir();
+
+  while (true) {
     const existingJob = await findClassroomGenerationJobByRequestKey(requestKey, owner);
     if (existingJob) {
       return { existing: true, job: existingJob };
     }
 
-    return {
-      existing: false,
-      job: await createClassroomGenerationJob(jobId, input, owner, requestKey),
+    const claimedJob = await waitForUsableRequestKeyClaim(requestKey, owner, claimPath);
+    if (claimedJob) {
+      return { existing: true, job: claimedJob };
+    }
+
+    const claim: ClassroomGenerationJobRequestKeyClaim = {
+      requestKey,
+      jobId,
+      createdAt: new Date().toISOString(),
+      lockId: buildRequestKeyLockId(requestKey, owner),
     };
-  });
+
+    const acquired = await writeRequestKeyClaim(claimPath, claim);
+    if (!acquired) {
+      continue;
+    }
+
+    try {
+      const retryExistingJob = await findClassroomGenerationJobByRequestKey(requestKey, owner);
+      if (retryExistingJob) {
+        await removeRequestKeyClaim(claimPath);
+        return { existing: true, job: retryExistingJob };
+      }
+
+      return {
+        existing: false,
+        job: await createClassroomGenerationJob(jobId, input, owner, requestKey),
+      };
+    } catch (error) {
+      await removeRequestKeyClaim(claimPath);
+      throw error;
+    }
+  }
 }
 
 function classroomGenerationJobOwnerMatches(
@@ -251,10 +405,17 @@ export async function findClassroomGenerationJobByRequestKey(
   }
 
   await ensureClassroomJobsDir();
+
+  const claimedJob = await findReusableJobFromRequestKeyClaim(requestKey, owner);
+  if (claimedJob) {
+    return claimedJob;
+  }
+
   const entries = await fs.readdir(CLASSROOM_JOBS_DIR, { withFileTypes: true });
   const matchingJobs = await Promise.all(
     entries
       .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .filter((entry) => !entry.name.startsWith('.request-key-'))
       .map(async (entry) => {
         const jobId = entry.name.replace(/\.json$/i, '');
         const job = await readClassroomGenerationJob(jobId);
