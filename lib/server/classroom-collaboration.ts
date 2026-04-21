@@ -72,7 +72,7 @@ export async function getClassroomCollaborationSnapshot(
   const sharedSimulation = getStageSharedSimulation(classroom.stage);
   const sessions = await listRecentClassroomSessions(classroomId);
   const users = await Promise.all(sessions.map((session) => findUserById(session.userId)));
-  let nextSharedSimulation = normalizeSharedSimulationState(
+  const nextSharedSimulation = normalizeSharedSimulationState(
     sharedSimulation,
     sessions.map((session) => session.id),
   );
