@@ -70,9 +70,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const lastEventId = request.headers.get('last-event-id') ?? request.headers.get('Last-Event-ID');
   const pendingRoomEvents = await listClassroomRoomEventsSince(id, lastEventId);
   const latestRelevantRoomEventId =
-    pendingRoomEvents
-      .filter((event) => PRESENTATION_EVENT_KINDS.has(event.kind))
-      .at(-1)?.eventId ?? undefined;
+    pendingRoomEvents.filter((event) => PRESENTATION_EVENT_KINDS.has(event.kind)).at(-1)?.eventId ??
+    undefined;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

@@ -3,10 +3,7 @@ import 'server-only';
 import type { SessionRecord } from '@/lib/db/schema';
 import { listRecentClassroomSessions } from '@/lib/db/repositories/sessions';
 import { findUserById } from '@/lib/db/repositories/users';
-import {
-  readClassroom,
-  type PersistedClassroomData,
-} from '@/lib/server/classroom-storage';
+import { readClassroom, type PersistedClassroomData } from '@/lib/server/classroom-storage';
 import { withMiroFishEmbedToken } from '@/lib/server/mirofish';
 import type {
   ClassroomPresentationParticipant,
