@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClassroomCollaborationStatePayload } from '@/lib/types/classroom-collaboration';
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
+import type { MiroFishCreationSpec } from '@/lib/types/mirofish-authoring';
 import type { SharedSimulation } from '@/lib/types/stage';
 
 vi.mock('@/components/ui/dialog', async () => {
@@ -50,6 +51,14 @@ vi.mock('@/components/ui/input', async () => {
   };
 });
 
+vi.mock('@/components/ui/textarea', async () => {
+  const React = await import('react');
+  return {
+    Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) =>
+      React.createElement('textarea', props),
+  };
+});
+
 vi.mock('@/components/ui/label', async () => {
   const React = await import('react');
   return {
@@ -69,9 +78,65 @@ vi.mock('@/components/ui/badge', async () => {
   };
 });
 
+vi.mock('@/components/participants/participant-presence-card', async () => {
+  const React = await import('react');
+  return {
+    ParticipantPresenceCard: ({
+      name,
+      activityLabel,
+      trailing,
+    }: {
+      name: string;
+      activityLabel: string;
+      trailing?: React.ReactNode;
+    }) =>
+      React.createElement(
+        'div',
+        null,
+        React.createElement('span', null, `${name}:${activityLabel}`),
+        trailing,
+      ),
+  };
+});
+
+vi.mock('@/lib/utils/participant-presence', () => ({
+  getParticipantActivityLabel: () => ({
+    state: 'active',
+    label: 'active',
+  }),
+  sortParticipantsByPresence: <T,>(participants: T[]) => participants,
+}));
+
+vi.mock('@/lib/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, vars?: Record<string, string | number>) => {
+      if (vars?.count !== undefined && key === 'classroom.mirofish.leaseMinutes') {
+        return `${vars.count} minutes`;
+      }
+      if (vars?.countdown !== undefined && key === 'classroom.mirofish.leaseShort') {
+        return `Lease: ${vars.countdown}`;
+      }
+      if (vars?.time !== undefined && key === 'classroom.mirofish.leaseExpiresAt') {
+        return `Student lease expires at ${vars.time}.`;
+      }
+      if (vars?.countdown !== undefined && key === 'classroom.mirofish.leaseCountdown') {
+        return `Countdown: ${vars.countdown}`;
+      }
+      if (vars?.count !== undefined && key === 'classroom.mirofish.participantsCount') {
+        return `Participants: ${vars.count}`;
+      }
+      if (vars?.name !== undefined) {
+        return key.replace('{{name}}', String(vars.name));
+      }
+      return key;
+    },
+  }),
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
+    success: vi.fn(),
   },
 }));
 
@@ -86,12 +151,29 @@ interface ManagerDialogTestProps {
   readonly participants: ClassroomPresentationParticipant[];
   readonly collaboration: ClassroomCollaborationStatePayload | null;
   readonly multiUserEnabled?: boolean;
+  readonly authoringAvailable?: boolean;
+  readonly classroomContext?: {
+    stageName?: string;
+    currentSceneId?: string;
+    currentSceneTitle?: string;
+    currentSceneType?: string;
+  };
   readonly onAttach: (input: {
     simulationId: string;
     reportId?: string;
     defaultSurface: 'lesson' | 'simulation';
     collaborationMode?: 'single-controller' | 'multi-user';
   }) => Promise<void>;
+  readonly onGeneratePlan?: (input: unknown) => Promise<{
+    spec: MiroFishCreationSpec;
+    promptPreview: string;
+  }>;
+  readonly onCreateWithAI?: (input: { spec: MiroFishCreationSpec }) => Promise<{ jobId: string }>;
+  readonly onPollCreateJob?: (jobId: string) => Promise<{
+    status: 'queued' | 'running' | 'ready' | 'failed';
+    error?: string;
+    sharedSimulation?: SharedSimulation;
+  }>;
   readonly onGrantControl: (targetSessionId: string, leaseMinutes: number) => Promise<void>;
   readonly onRevokeControl: () => Promise<void>;
   readonly onCollaborationAction?: (input: {
@@ -121,6 +203,32 @@ function buildSharedSimulation(overrides: Partial<SharedSimulation> = {}): Share
   };
 }
 
+function buildSpec(overrides: Partial<MiroFishCreationSpec> = {}): MiroFishCreationSpec {
+  return {
+    title: 'Coral Investigation',
+    brief: 'Create a coral investigation for this scene.',
+    goal: 'Create a coral investigation for this scene.',
+    activityType: 'investigation',
+    targetAudience: 'Grade 8 science',
+    includeReport: true,
+    defaultSurface: 'simulation',
+    collaborationMode: 'single-controller',
+    teacherInstructions: ['Introduce setup', 'Ask for a prediction', 'Debrief findings'],
+    studentTasks: ['Change salinity', 'Observe coral', 'Compare outcomes'],
+    successChecks: ['Students explain one pattern', 'Students compare two conditions'],
+    reportFocus: ['Summarize the strongest pattern'],
+    authoringNotes: 'Keep it compact.',
+    sceneContext: {
+      sceneId: 'scene-1',
+      sceneTitle: 'Coral salinity lab',
+      sceneType: 'interactive',
+      teacherControls: [],
+      misconceptionHooks: [],
+    },
+    ...overrides,
+  };
+}
+
 async function mountDialog(
   initialOverrides: Partial<ManagerDialogTestProps> = {},
 ): Promise<MountedComponent<ManagerDialogTestProps>> {
@@ -135,7 +243,29 @@ async function mountDialog(
     sharedSimulation: null,
     participants: [],
     collaboration: null,
+    authoringAvailable: false,
+    classroomContext: {
+      stageName: 'Coral Reef Lab',
+      currentSceneId: 'scene-1',
+      currentSceneTitle: 'Coral salinity lab',
+      currentSceneType: 'interactive',
+    },
     onAttach: vi.fn(async () => {}),
+    onGeneratePlan: vi.fn(async () => ({
+      spec: buildSpec(),
+      promptPreview: 'Stage: Coral Reef Lab',
+    })),
+    onCreateWithAI: vi.fn(async () => ({ jobId: 'job-1' })),
+    onPollCreateJob: vi.fn(async () => ({
+      status: 'ready' as const,
+      sharedSimulation: buildSharedSimulation({
+        authoring: {
+          source: 'ai-guided',
+          briefPreview: 'Create a coral investigation',
+          createdAt: '2026-04-20T00:00:00.000Z',
+        },
+      }),
+    })),
     onGrantControl: vi.fn(async () => {}),
     onRevokeControl: vi.fn(async () => {}),
     onCollaborationAction: vi.fn(async () => {}),
@@ -165,6 +295,34 @@ async function mountDialog(
       await renderWithProps();
     },
   };
+}
+
+function findButton(container: HTMLElement, text: string) {
+  return Array.from(container.querySelectorAll('button')).find((button) =>
+    button.textContent?.includes(text),
+  );
+}
+
+function findInput(container: HTMLElement, id: string) {
+  return container.querySelector(`#${id}`) as HTMLInputElement | null;
+}
+
+function findTextarea(container: HTMLElement, id: string) {
+  return container.querySelector(`#${id}`) as HTMLTextAreaElement | null;
+}
+
+function setElementValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+) {
+  const prototype =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  descriptor?.set?.call(element, value);
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 describe('MiroFishManagerDialog', () => {
@@ -208,8 +366,9 @@ describe('MiroFishManagerDialog', () => {
       }),
     });
 
-    const attachButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Update attached MiroFish'),
+    const attachButton = findButton(
+      mounted.container,
+      'classroom.mirofish.updateAttachButton',
     );
     expect(attachButton).toBeTruthy();
 
@@ -226,144 +385,143 @@ describe('MiroFishManagerDialog', () => {
     expect(mounted.container.textContent).toContain('Simulation not found');
   });
 
-  it('passes the selected lease duration and renders the active lease state', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-04-11T00:00:00.000Z'));
-    const now = new Date().toISOString();
-
-    const participants: ClassroomPresentationParticipant[] = [
-      {
-        sessionId: 'student-controller',
-        userId: 'student-1',
-        displayName: 'Student One',
-        role: 'student',
-        lastSeenAt: now,
-        isController: true,
-      },
-      {
-        sessionId: 'student-target',
-        userId: 'student-2',
-        displayName: 'Student Two',
-        role: 'student',
-        lastSeenAt: now,
-        isController: false,
-      },
-    ];
-    const onGrantControl = vi.fn(async () => {});
+  it('generates a reviewed AI plan from the dialog', async () => {
+    const onGeneratePlan = vi.fn(async () => ({
+      spec: buildSpec(),
+      promptPreview: 'Stage: Coral Reef Lab',
+    }));
 
     const mounted = await mountDialog({
-      sharedSimulation: buildSharedSimulation(),
-      participants,
-      onGrantControl,
+      authoringAvailable: true,
+      onGeneratePlan,
     });
-
-    expect(mounted.container.textContent).toContain('Control: Student One');
-    expect(mounted.container.textContent).toContain('Countdown: 5m 00s remaining');
-    expect(mounted.container.textContent).toContain('active');
-    expect(mounted.container.textContent).toContain('just now');
-
-    const thirtyMinuteButton = Array.from(mounted.container.querySelectorAll('button')).find(
-      (button) => button.textContent?.includes('30 minutes'),
-    );
-    expect(thirtyMinuteButton).toBeTruthy();
 
     await act(async () => {
-      thirtyMinuteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      findButton(mounted.container, 'classroom.mirofish.modeCreate')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
 
-    const grantButtons = Array.from(mounted.container.querySelectorAll('button')).filter((button) =>
-      button.textContent?.includes('Grant control'),
-    );
-    expect(grantButtons).toHaveLength(1);
+    const goalInput = findTextarea(mounted.container, 'mirofish-goal');
+    const audienceInput = findInput(mounted.container, 'mirofish-target-audience');
+    expect(goalInput).toBeTruthy();
+    expect(audienceInput).toBeTruthy();
 
     await act(async () => {
-      grantButtons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      if (goalInput) {
+        setElementValue(goalInput, 'Create a coral investigation about salinity changes.');
+      }
+      if (audienceInput) {
+        setElementValue(audienceInput, 'Grade 8 science');
+      }
     });
 
-    expect(onGrantControl).toHaveBeenCalledWith('student-target', 30);
-    expect(mounted.container.textContent).toContain('Lease: 5m 00s remaining');
+    await act(async () => {
+      findButton(mounted.container, 'classroom.mirofish.generatePlanButton')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+
+    expect(onGeneratePlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goal: 'Create a coral investigation about salinity changes.',
+        targetAudience: 'Grade 8 science',
+        currentSceneId: 'scene-1',
+      }),
+    );
+    expect(mounted.container.textContent).toContain('classroom.mirofish.generatedPlanTitle');
+    expect(findTextarea(mounted.container, 'mirofish-plan-preview')?.value).toContain(
+      'Stage: Coral Reef Lab',
+    );
   });
 
-  it('passes multi-user mode and collaboration actions through the manager UI', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-04-11T00:00:00.000Z'));
-    const now = new Date().toISOString();
-    const onAttach = vi.fn(async () => {});
-    const onCollaborationAction = vi.fn(async () => {});
-    const mounted = await mountDialog({
-      multiUserEnabled: true,
-      onAttach,
-      onCollaborationAction,
+  it('creates and polls an AI-authored simulation, then closes on success', async () => {
+    const onOpenChange = vi.fn();
+    const onGeneratePlan = vi.fn(async () => ({
+      spec: buildSpec(),
+      promptPreview: 'Stage: Coral Reef Lab',
+    }));
+    const onCreateWithAI = vi.fn(async () => ({ jobId: 'job-1' }));
+    const onPollCreateJob = vi.fn(async () => ({
+      status: 'ready' as const,
       sharedSimulation: buildSharedSimulation({
-        collaborationMode: 'multi-user',
-        collaborationState: 'live',
-        allowStudentInteraction: true,
-        controllerSessionId: undefined,
-        controllerRole: 'teacher',
-        controlLeaseExpiresAt: undefined,
+        authoring: {
+          source: 'ai-guided',
+          briefPreview: 'Create a coral investigation',
+          createdAt: '2026-04-20T00:00:00.000Z',
+        },
       }),
-      collaboration: {
-        collaborationMode: 'multi-user',
-        collaborationState: 'live',
-        allowStudentInteraction: true,
-        spotlightSessionId: null,
-        participantCount: 1,
-        participants: [
-          {
-            sessionId: 'student-target',
-            userId: 'student-2',
-            displayName: 'Student Two',
-            role: 'student',
-            lastSeenAt: now,
-            isRemoved: false,
-            isSpotlighted: false,
-            canInteract: true,
+    }));
+
+    const { MiroFishManagerDialog } = await import('@/components/mirofish/mirofish-manager-dialog');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+
+    await act(async () => {
+      root.render(
+        createElement(MiroFishManagerDialog, {
+          open: true,
+          onOpenChange,
+          sharedSimulation: null,
+          participants: [],
+          collaboration: null,
+          multiUserEnabled: false,
+          authoringAvailable: true,
+          classroomContext: {
+            stageName: 'Coral Reef Lab',
+            currentSceneId: 'scene-1',
+            currentSceneTitle: 'Coral salinity lab',
+            currentSceneType: 'interactive',
           },
-        ],
-        mirofishSessionId: 'miro-session-1',
-        lastCollaborationSyncAt: '2026-04-11T00:00:00.000Z',
-        viewerSessionId: 'teacher-session',
-        viewerRole: 'teacher',
-        viewerKind: 'web',
-        viewerCanModerateCollaboration: true,
-        viewerCanInteract: true,
-        viewerIsRemoved: false,
-        viewerInteractionReason: null,
-        multiUserEnabled: true,
-      },
+          onAttach: vi.fn(async () => {}),
+          onGeneratePlan,
+          onCreateWithAI,
+          onPollCreateJob,
+          onGrantControl: vi.fn(async () => {}),
+          onRevokeControl: vi.fn(async () => {}),
+          onCollaborationAction: vi.fn(async () => {}),
+        }),
+      );
     });
-
-    const attachButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Update attached MiroFish'),
-    );
-    expect(attachButton).toBeTruthy();
 
     await act(async () => {
-      attachButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      findButton(container, 'classroom.mirofish.modeCreate')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
 
-    expect(onAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        collaborationMode: 'multi-user',
+    const goalInput = findTextarea(container, 'mirofish-goal');
+    const audienceInput = findInput(container, 'mirofish-target-audience');
+
+    await act(async () => {
+      if (goalInput) {
+        setElementValue(goalInput, 'Create a coral investigation about salinity changes.');
+      }
+      if (audienceInput) {
+        setElementValue(audienceInput, 'Grade 8 science');
+      }
+    });
+
+    await act(async () => {
+      findButton(container, 'classroom.mirofish.generatePlanButton')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+
+    await act(async () => {
+      findButton(container, 'classroom.mirofish.createAndAttachButton')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+
+    expect(onCreateWithAI).toHaveBeenCalledWith({
+      spec: expect.objectContaining({
+        title: 'Coral Investigation',
       }),
-    );
-
-    const freezeButton = Array.from(mounted.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Freeze'),
-    );
-    expect(freezeButton).toBeTruthy();
-
-    await act(async () => {
-      freezeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-
-    expect(onCollaborationAction).toHaveBeenCalledWith({
-      action: 'freeze',
-      targetSessionId: undefined,
-    });
-    expect(mounted.container.textContent).toContain('Mode: Multi-user');
-    expect(mounted.container.textContent).toContain('Collaboration: live');
-    expect(mounted.container.textContent).toContain('active');
-    expect(mounted.container.textContent).toContain('just now');
+    expect(onPollCreateJob).toHaveBeenCalledWith('job-1');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

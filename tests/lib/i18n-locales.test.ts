@@ -6,7 +6,12 @@ function readLocaleMessages(code: string) {
   return JSON.parse(
     readFileSync(new URL(`../../lib/i18n/locales/${code}.json`, import.meta.url), 'utf8'),
   ) as {
-    classroom?: Record<string, string | undefined>;
+    classroom?: {
+      localDemoBadge?: string;
+      localDemoNotice?: string;
+      teacherBackedBadge?: string;
+      mirofish?: Record<string, string | undefined>;
+    };
     settings?: Record<string, string | undefined>;
   };
 }
@@ -53,6 +58,31 @@ describe('locale resource parity', () => {
         settings.modelsManagementDescription,
         `${locale.code} missing settings.modelsManagementDescription`,
       ).toBeTruthy();
+    }
+  });
+
+  it('includes MiroFish manager strings in every supported locale', () => {
+    const requiredKeys = [
+      'dialogTitle',
+      'modeCreate',
+      'attachButtonShort',
+      'manageButtonShort',
+      'generatePlanButton',
+      'createAndAttachButton',
+      'manageButton',
+      'surfaceLesson',
+      'surfaceSimulation',
+      'surfaceReport',
+      'sharedPaneStatusTitle',
+    ] as const;
+
+    for (const locale of supportedLocales) {
+      const messages = readLocaleMessages(locale.code);
+      const mirofish = messages.classroom?.mirofish ?? {};
+
+      for (const key of requiredKeys) {
+        expect(mirofish[key], `${locale.code} missing classroom.mirofish.${key}`).toBeTruthy();
+      }
     }
   });
 });

@@ -24,6 +24,11 @@ export interface SharedSimulation {
   reportId?: string;
   runUrl: string;
   reportUrl?: string;
+  authoring?: {
+    source: 'manual-attach' | 'ai-guided';
+    briefPreview?: string;
+    createdAt: string;
+  };
   activeSurface: PresentationSurface;
   controllerSessionId?: string;
   controllerRole: 'teacher' | 'student';

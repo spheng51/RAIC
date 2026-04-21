@@ -4,6 +4,7 @@ import type { PersistenceMode } from '@/lib/db/client';
 import { getPersistenceMode, runPostgresQuery } from '@/lib/db/client';
 import { hasEncryptionKeyConfigured } from '@/lib/server/encrypted-secrets';
 import { getMiroFishConfig, isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
+import { getMiroFishAuthoringReadiness } from '@/lib/server/mirofish-authoring';
 
 interface ReadinessCheck {
   ready: boolean;
@@ -29,6 +30,8 @@ interface HealthMiroFishReadiness extends ReadinessCheck {
   apiAccessConfigured: boolean;
   embedSigningConfigured: boolean;
   multiUserEnabled: boolean;
+  authoringEnabled: boolean;
+  authoringReady: boolean;
 }
 
 export interface HealthReadinessReport {
@@ -103,6 +106,7 @@ function getMiroFishReadiness(): HealthMiroFishReadiness {
   const apiAccessConfigured = hasConfiguredEnv('MIROFISH_API_KEY');
   const embedSigningConfigured = hasConfiguredEnv('MIROFISH_EMBED_SECRET');
   const multiUserEnabled = isMiroFishMultiUserEnabled();
+  const { authoringEnabled, authoringReady } = getMiroFishAuthoringReadiness();
 
   if (!baseUrlConfigured) {
     return {
@@ -111,6 +115,8 @@ function getMiroFishReadiness(): HealthMiroFishReadiness {
       apiAccessConfigured,
       embedSigningConfigured,
       multiUserEnabled,
+      authoringEnabled,
+      authoringReady,
       ...createReadyCheck(false, 'MIROFISH_BASE_URL is not configured'),
     };
   }
@@ -124,6 +130,8 @@ function getMiroFishReadiness(): HealthMiroFishReadiness {
       apiAccessConfigured,
       embedSigningConfigured,
       multiUserEnabled,
+      authoringEnabled,
+      authoringReady,
       ...createReadyCheck(
         false,
         error instanceof Error ? error.message : 'MiroFish configuration is invalid',
@@ -137,6 +145,8 @@ function getMiroFishReadiness(): HealthMiroFishReadiness {
     apiAccessConfigured,
     embedSigningConfigured,
     multiUserEnabled,
+    authoringEnabled,
+    authoringReady,
     ...createReadyCheck(
       apiAccessConfigured && embedSigningConfigured,
       'MiroFish API validation or embed signing is not fully configured',
