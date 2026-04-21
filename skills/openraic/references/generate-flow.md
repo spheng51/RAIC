@@ -75,6 +75,14 @@ Treat the `POST` response as job submission only. Expect fields such as:
 }
 ```
 
+Final poll responses may now include additive completion metadata for usable-but-incomplete classrooms:
+
+- `completionStatus`: `"complete"` or `"partial"`
+- `warnings`: structured generation warnings
+- `result.totalScenes`
+- `result.warnings`
+- `result.sceneOutcomes`
+
 ## PDF-Based Generation
 
 1. Resolve the absolute path to the PDF.
@@ -106,6 +114,7 @@ GET {pollUrl}
 4. Prefer a conservative polling cadence of about 60 seconds between polls for classroom generation jobs, even if `pollIntervalMs` is shorter.
 5. Treat `queued` and `running` as in-progress states.
 6. Stop only when `status` becomes `succeeded` or `failed`.
+7. Treat `status: "succeeded"` plus `completionStatus: "partial"` as usable but incomplete, not as a hard failure.
 
 ### Reliability Rules
 
@@ -117,7 +126,8 @@ GET {pollUrl}
 - Report progress to the user only when `status`, `step`, or visible progress meaningfully changes. Do not spam every poll result.
 - Do not try to recover from auth, provider, model, or base URL errors by changing request parameters. Tell the user to fix Open-RAIC server-side config and retry only after they confirm.
 - On `failed`, surface the server error and include the `jobId`.
-- On `succeeded`, use `result.classroomId` and `result.url` from the final poll response.
+- On `succeeded`, use `result.id` and `result.url` from the final poll response.
+- If `completionStatus` is `partial`, surface that clearly and include a concise warning summary before the classroom link.
 
 ## If The Loop Ends First
 

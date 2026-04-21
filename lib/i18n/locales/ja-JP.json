@@ -380,7 +380,8 @@
       "revokeControlFailed": "Failed to return control to the teacher.",
       "multiUserFootnote": "Multi-user classrooms keep the teacher in charge of pane switching while students collaborate live inside the shared simulation.",
       "closeButton": "Close"
-    }
+    },
+    "partialGenerationWarning": "{{count}} 件の生成警告がある状態で教室を開きました。"
   },
   "upload": {
     "pdfSizeLimit": "50MBまでのPDFファイルに対応しています",
@@ -558,7 +559,7 @@
     "browserLocalModeNotice": "{{provider}} のブラウザーローカルモードはこの端末でのみ有効で、現在は Q&A とディスカッションのみをサポートします。教室生成、シーン生成/再生成、PBL、ツール呼び出し、そのほかサーバー編成のワークフローでは、ネットワーク到達可能なエンドポイントを使う server モードが引き続き必要です。",
     "browserLocalPermissionHint": "このモードでは Hosted Open-RAIC がブラウザーを直接使うため、この端末へ到達する前にブラウザーがローカルネットワークアクセスの許可を求める場合があります。",
     "browserLocalLmstudioCorsHint": "LM Studio はブラウザーローカルモードでブラウザー CORS を許可する必要があります。必要であれば {{command}} でローカルサーバーを起動してください。",
-    "hostedLocalProviderWarning": "公開/ホスト型 Open-RAIC は、server モードでローカルの {{provider}} エンドポイントに到達できません。プロバイダー通信はブラウザーではなく Open-RAIC サーバーから送信されます。ブラウザーローカルモードを使うか、同じ端末/プライベートネットワークで Open-RAIC を動かすか、ネットワーク到達可能なエンドポイントを使用してください。",
+    "hostedLocalProviderWarning": "ホスト型 Open-RAIC は、localhost やプライベートアドレス上のローカル {{provider}} サーバーに到達できません。このアプリはブラウザではなくサーバーからプロバイダーへ接続します。ローカル版 Open-RAIC、同一マシンまたは同一ネットワークでのプライベート self-host、またはサーバーから到達できるエンドポイントを使用してください。",
     "browserLocalUnsupportedWorkflow": "ブラウザーローカルモードは現在、Q&A とディスカッションのみをサポートします。",
     "browserLocalUnsupportedWorkflowDetail": "生成、再生成、教室/PBL ワークフロー、ツール呼び出し、そのほかサーバー編成のフローでは、ネットワーク到達可能なエンドポイントを使う server モードが必要です。",
     "capabilities": {
@@ -990,8 +991,7 @@
     "webSearchApiKeyHint": "ウェブ検索用のAPIキーをtavily.comで取得してください",
     "webSearchBaseUrl": "ベースURL",
     "webSearchServerConfigured": "サーバー側でTavily APIキーが設定済みです",
-    "optional": "任意",
-    "hostedLocalProviderWarning": "ホスト型 Open-RAIC は、localhost やプライベートアドレス上のローカル {{provider}} サーバーに到達できません。このアプリはブラウザではなくサーバーからプロバイダーへ接続します。ローカル版 Open-RAIC、同一マシンまたは同一ネットワークでのプライベート self-host、またはサーバーから到達できるエンドポイントを使用してください。"
+    "optional": "任意"
   },
   "profile": {
     "title": "プロフィール",

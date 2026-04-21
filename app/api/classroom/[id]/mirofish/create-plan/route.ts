@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
 import { requireRequestRole } from '@/lib/auth/authorize';
-import {
-  requireClassroomAccess,
-  type ClassroomAccessContext,
-} from '@/lib/auth/classroom-access';
+import { requireClassroomAccess, type ClassroomAccessContext } from '@/lib/auth/classroom-access';
 import { createLogger } from '@/lib/logger';
-import { apiErrorWithRequestSession, apiSuccessWithRequestSession } from '@/lib/server/api-response';
+import {
+  apiErrorWithRequestSession,
+  apiSuccessWithRequestSession,
+} from '@/lib/server/api-response';
 import {
   assertMiroFishAuthoringAvailable,
   generateMiroFishCreationSpec,

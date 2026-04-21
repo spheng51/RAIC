@@ -380,7 +380,8 @@
       "revokeControlFailed": "Failed to return control to the teacher.",
       "multiUserFootnote": "Multi-user classrooms keep the teacher in charge of pane switching while students collaborate live inside the shared simulation.",
       "closeButton": "Close"
-    }
+    },
+    "partialGenerationWarning": "Класс открыт с предупреждениями генерации: {{count}}."
   },
   "upload": {
     "pdfSizeLimit": "Поддержка PDF до 50 МБ",
@@ -558,7 +559,7 @@
     "browserLocalModeNotice": "Браузерный локальный режим для {{provider}} работает только на этом устройстве и пока поддерживает только Q&A и обсуждение. Генерация класса, генерация/перегенерация сцен, PBL, инструменты и другие серверно-оркестрируемые сценарии по-прежнему требуют server-режим и сетевой endpoint, доступный серверу.",
     "browserLocalPermissionHint": "В этом режиме Hosted Open-RAIC использует ваш браузер напрямую, поэтому браузер может запросить доступ к локальной сети перед подключением к этому устройству.",
     "browserLocalLmstudioCorsHint": "Для браузерного локального режима LM Studio должен разрешать браузерный CORS. При необходимости запустите локальный сервер командой {{command}}.",
-    "hostedLocalProviderWarning": "Публичный/хостed Open-RAIC не может использовать server-режим, чтобы обратиться к вашему локальному endpoint {{provider}}. Трафик провайдера идёт с сервера Open-RAIC, а не из вашего браузера. Используйте браузерный локальный режим, запускайте Open-RAIC локально/в приватной сети на той же машине или сети, либо укажите endpoint, доступный по сети.",
+    "hostedLocalProviderWarning": "Хостинговый Open-RAIC не может обратиться к вашему локальному серверу {{provider}} по адресу localhost или в частной сети. Это приложение отправляет запросы к провайдерам с сервера, а не из браузера. Используйте локальный Open-RAIC, приватный self-host на той же машине или в той же сети, либо сетевой адрес, доступный серверу.",
     "browserLocalUnsupportedWorkflow": "Браузерный локальный режим пока поддерживает только Q&A и обсуждение.",
     "browserLocalUnsupportedWorkflowDetail": "Генерация, перегенерация, classroom/PBL-сценарии, инструменты и другие серверно-оркестрируемые потоки по-прежнему требуют server-режим и сетевой endpoint, доступный серверу.",
     "capabilities": {
@@ -990,8 +991,7 @@
     "webSearchApiKeyHint": "Получите API-ключ на tavily.com для веб-поиска",
     "webSearchBaseUrl": "Base URL",
     "webSearchServerConfigured": "Серверный Tavily API-ключ настроен",
-    "optional": "Необязательно",
-    "hostedLocalProviderWarning": "Хостинговый Open-RAIC не может обратиться к вашему локальному серверу {{provider}} по адресу localhost или в частной сети. Это приложение отправляет запросы к провайдерам с сервера, а не из браузера. Используйте локальный Open-RAIC, приватный self-host на той же машине или в той же сети, либо сетевой адрес, доступный серверу."
+    "optional": "Необязательно"
   },
   "profile": {
     "title": "Профиль",

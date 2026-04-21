@@ -41,7 +41,8 @@ describe('MiroFish authoring helpers', () => {
   it('normalizes AI output into a creation spec and preserves the requested contract', async () => {
     const { generateMiroFishCreationSpec } = await import('@/lib/server/mirofish-authoring');
 
-    const aiCall = vi.fn(async () => `\`\`\`json
+    const aiCall = vi.fn(
+      async () => `\`\`\`json
 {
   "title": "Tide Pool Investigation",
   "brief": "ignored by parser",
@@ -57,7 +58,8 @@ describe('MiroFish authoring helpers', () => {
   "reportFocus": ["Summarize the pattern"],
   "authoringNotes": "Keep the setup compact."
 }
-\`\`\``);
+\`\`\``,
+    );
 
     const result = await generateMiroFishCreationSpec({
       goal: 'Build a short tide pool investigation about salinity and species response.',
@@ -102,10 +104,8 @@ describe('MiroFish authoring helpers', () => {
   });
 
   it('builds a stable failure message and compact brief preview', async () => {
-    const {
-      buildMiroFishCreationBriefPreview,
-      buildMiroFishCreationFailureMessage,
-    } = await import('@/lib/server/mirofish-authoring');
+    const { buildMiroFishCreationBriefPreview, buildMiroFishCreationFailureMessage } =
+      await import('@/lib/server/mirofish-authoring');
 
     expect(
       buildMiroFishCreationFailureMessage({

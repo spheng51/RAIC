@@ -58,7 +58,11 @@ const PLACEHOLDER_VALUE_RE =
   /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
 function normalizeArgv(argv) {
-  const args = { mode: null, ci: false, strictRemoteBacklog: false };
+  const args = {
+    mode: null,
+    ci: process.env.GITHUB_ACTIONS === 'true',
+    strictRemoteBacklog: false,
+  };
   let seenMode = false;
 
   for (const arg of argv) {
@@ -360,7 +364,13 @@ function getWorkingToplevel() {
 
 function getCurrentBranch() {
   const branch = String(runGitCommand('git rev-parse --abbrev-ref HEAD')).trim();
-  if (!branch || branch === 'HEAD') {
+  if (!branch) {
+    fail('Repository is in a detached HEAD state. A branch must be checked out.');
+  }
+  if (branch === 'HEAD') {
+    if (options.ci) {
+      return branch;
+    }
     fail('Repository is in a detached HEAD state. A branch must be checked out.');
   }
   return branch;
@@ -382,6 +392,10 @@ function parseWorktrees() {
 
 function listLocalBranches() {
   return runGitCommand('git branch --format "%(refname:short)"', { parse: true });
+}
+
+function isDetachedHeadBranchName(name) {
+  return name === 'HEAD' || /^\(HEAD detached at /i.test(name);
 }
 
 function listRemoteBranches() {
@@ -407,7 +421,9 @@ function checkDrift() {
   const statusBranch = runGitCommand('git status --short --branch').trim();
   console.log('[ops-check] git status:', statusBranch || 'clean');
 
-  const localBranches = listLocalBranches();
+  const localBranches = listLocalBranches().filter(
+    (name) => !(options.ci && isDetachedHeadBranchName(name)),
+  );
   const extraBranches = localBranches.filter((name) => name !== 'main');
   if (extraBranches.length > 0) {
     fail('Local branch cleanup required before handoff.', {
@@ -419,7 +435,7 @@ function checkDrift() {
   const expectedRemoteRefs = new Set(['origin/main', 'origin/HEAD']);
   const unexpectedRemote = remoteBranches.filter((name) => !expectedRemoteRefs.has(name));
 
-  if (options.ci && options.mode === 'drift') {
+  if (options.ci) {
     console.log(
       '[ops-check] CI mode active: skipping strict remote ref gating to allow ephemeral runner refs.',
     );

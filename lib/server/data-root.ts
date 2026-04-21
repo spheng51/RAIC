@@ -4,8 +4,8 @@ import path from 'node:path';
 function isHostedServerlessRuntime() {
   return Boolean(
     process.env.VERCEL?.trim() ||
-      process.env.AWS_EXECUTION_ENV?.trim() ||
-      process.env.LAMBDA_TASK_ROOT?.trim(),
+    process.env.AWS_EXECUTION_ENV?.trim() ||
+    process.env.LAMBDA_TASK_ROOT?.trim(),
   );
 }
 

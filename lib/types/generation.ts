@@ -128,6 +128,52 @@ export interface SceneOutline {
   };
 }
 
+export type GenerationCompletionStatus = 'complete' | 'partial' | 'failed';
+
+export type SceneFailureStage = 'content' | 'actions' | 'create';
+
+export interface SceneExecutionPolicy {
+  concurrency: number;
+  maxAttempts: number;
+  retryDelaysMs: number[];
+  retryableErrorCodes: string[];
+}
+
+export interface SceneOutcome {
+  index: number;
+  title: string;
+  status: 'generated' | 'failed';
+  stage: SceneFailureStage;
+  sceneId?: string;
+  attempts: number;
+  retryable: boolean;
+  code: string;
+  message: string;
+}
+
+export interface GenerationWarning {
+  stage: 'scene' | 'media' | 'tts';
+  code: string;
+  message: string;
+  sceneIndex?: number;
+  sceneTitle?: string;
+  sceneId?: string;
+  elementId?: string;
+  actionId?: string;
+  retryable: boolean;
+  attempts: number;
+}
+
+export interface SceneGenerationSummary {
+  sceneIds: string[];
+  totalScenes: number;
+  generatedScenes: number;
+  failedScenes: number;
+  completionStatus: GenerationCompletionStatus;
+  warnings: GenerationWarning[];
+  sceneOutcomes: SceneOutcome[];
+}
+
 // ==================== Stage 3 Output: Generated Content ====================
 
 import type { PPTElement, SlideBackground } from './slides';

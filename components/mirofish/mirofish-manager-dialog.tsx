@@ -62,9 +62,7 @@ interface MiroFishManagerDialogProps {
   readonly onGeneratePlan?: (
     input: MiroFishCreationPlanRequest,
   ) => Promise<{ spec: MiroFishCreationSpec; promptPreview: string }>;
-  readonly onCreateWithAI?: (input: {
-    spec: MiroFishCreationSpec;
-  }) => Promise<{ jobId: string }>;
+  readonly onCreateWithAI?: (input: { spec: MiroFishCreationSpec }) => Promise<{ jobId: string }>;
   readonly onPollCreateJob?: (jobId: string) => Promise<{
     status: MiroFishCreationJobStatus;
     error?: string;
@@ -136,9 +134,7 @@ export function MiroFishManagerDialog({
   const [createJobId, setCreateJobId] = useState<string | null>(null);
   const [creationStatus, setCreationStatus] = useState<MiroFishCreationJobStatus | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createBusyAction, setCreateBusyAction] = useState<'plan' | 'create' | 'poll' | null>(
-    null,
-  );
+  const [createBusyAction, setCreateBusyAction] = useState<'plan' | 'create' | 'poll' | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -256,9 +252,7 @@ export function MiroFishManagerDialog({
       await onCollaborationAction({ action, targetSessionId });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : t('classroom.mirofish.collaborationUpdateFailed'),
+        error instanceof Error ? error.message : t('classroom.mirofish.collaborationUpdateFailed'),
       );
     } finally {
       setBusyAction(null);
@@ -404,7 +398,9 @@ export function MiroFishManagerDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="mirofish-report-id">{t('classroom.mirofish.reportIdLabel')}</Label>
+                  <Label htmlFor="mirofish-report-id">
+                    {t('classroom.mirofish.reportIdLabel')}
+                  </Label>
                   <Input
                     id="mirofish-report-id"
                     value={reportId}
@@ -512,7 +508,9 @@ export function MiroFishManagerDialog({
                       });
                     } catch (error) {
                       setAttachError(
-                        error instanceof Error ? error.message : t('classroom.mirofish.attachFailed'),
+                        error instanceof Error
+                          ? error.message
+                          : t('classroom.mirofish.attachFailed'),
                       );
                     } finally {
                       setBusyAction(null);
@@ -541,7 +539,8 @@ export function MiroFishManagerDialog({
                     </p>
                     <p>
                       {t('classroom.mirofish.contextScene')}:&nbsp;
-                      {classroomContext?.currentSceneTitle || t('classroom.mirofish.contextUnavailable')}
+                      {classroomContext?.currentSceneTitle ||
+                        t('classroom.mirofish.contextUnavailable')}
                     </p>
                   </div>
                 </div>
@@ -672,13 +671,17 @@ export function MiroFishManagerDialog({
                   <Button
                     type="button"
                     disabled={
-                      createBusyAction !== null || goal.trim().length < 12 || targetAudience.trim().length < 2
+                      createBusyAction !== null ||
+                      goal.trim().length < 12 ||
+                      targetAudience.trim().length < 2
                     }
                     onClick={() => {
                       void handleGeneratePlan();
                     }}
                   >
-                    {createBusyAction === 'plan' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {createBusyAction === 'plan' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
                     {generatedSpec
                       ? t('classroom.mirofish.regeneratePlanButton')
                       : t('classroom.mirofish.generatePlanButton')}
@@ -812,9 +815,12 @@ export function MiroFishManagerDialog({
                   </div>
                 ) : null}
 
-                <div aria-live="polite" className="min-h-5 text-sm text-slate-500 dark:text-slate-400">
+                <div
+                  aria-live="polite"
+                  className="min-h-5 text-sm text-slate-500 dark:text-slate-400"
+                >
                   {creationStatusLabel ||
-                  (createJobId ? `${t('classroom.mirofish.jobIdLabel')}: ${createJobId}` : null)}
+                    (createJobId ? `${t('classroom.mirofish.jobIdLabel')}: ${createJobId}` : null)}
                 </div>
                 {createError ? (
                   <p className="text-sm text-rose-600 dark:text-rose-400">{createError}</p>
@@ -864,11 +870,15 @@ export function MiroFishManagerDialog({
                     <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                       <p>
                         {t('classroom.mirofish.leaseExpiresAt', {
-                          time: new Date(sharedSimulation.controlLeaseExpiresAt).toLocaleTimeString(),
+                          time: new Date(
+                            sharedSimulation.controlLeaseExpiresAt,
+                          ).toLocaleTimeString(),
                         })}
                       </p>
                       {leaseCountdown ? (
-                        <p>{t('classroom.mirofish.leaseCountdown', { countdown: leaseCountdown })}</p>
+                        <p>
+                          {t('classroom.mirofish.leaseCountdown', { countdown: leaseCountdown })}
+                        </p>
                       ) : null}
                     </div>
                   ) : null}

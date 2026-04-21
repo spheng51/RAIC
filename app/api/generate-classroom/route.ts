@@ -7,7 +7,10 @@ import {
 } from '@/lib/server/api-response';
 import { type GenerateClassroomInput } from '@/lib/server/classroom-generation';
 import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
-import { createClassroomGenerationJob } from '@/lib/server/classroom-job-store';
+import {
+  createOrReuseClassroomGenerationJob,
+  createClassroomGenerationJob,
+} from '@/lib/server/classroom-job-store';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
 
@@ -24,6 +27,7 @@ type ImageProviderOverride = {
 
 type GenerateClassroomRequestBody = Partial<GenerateClassroomInput> & {
   imageProviderOverride?: ImageProviderOverride;
+  requestKey?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -40,6 +44,7 @@ export async function POST(req: NextRequest) {
       readonly imageProviderOverride?: ImageProviderOverride;
     } = {
       requirement: rawBody.requirement || '',
+      ...(rawBody.requestKey?.trim() ? { requestKey: rawBody.requestKey.trim() } : {}),
       ...(rawBody.pdfContent ? { pdfContent: rawBody.pdfContent } : {}),
       ...(rawBody.language ? { language: rawBody.language } : {}),
       ...(rawBody.enableWebSearch != null ? { enableWebSearch: rawBody.enableWebSearch } : {}),
@@ -80,20 +85,29 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl = buildRequestOrigin(req);
-    const jobId = nanoid(10);
-    const job = await createClassroomGenerationJob(jobId, body, {
+    const owner = {
       organizationId: auth.organization?.id ?? null,
       userId: auth.user.id,
       actorRole: auth.session.role,
-    });
+    };
+    const generatedJobId = nanoid(10);
+    const { existing, job } = body.requestKey
+      ? await createOrReuseClassroomGenerationJob(generatedJobId, body, owner, body.requestKey)
+      : {
+          existing: false,
+          job: await createClassroomGenerationJob(generatedJobId, body, owner),
+        };
+    const jobId = job.id;
     const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
 
-    after(() =>
-      runClassroomGenerationJob(jobId, body, baseUrl, {
-        organizationId: auth.organization?.id ?? null,
-        userId: auth.user.id,
-      }),
-    );
+    if (!existing) {
+      after(() =>
+        runClassroomGenerationJob(jobId, body, baseUrl, {
+          organizationId: auth.organization?.id ?? null,
+          userId: auth.user.id,
+        }),
+      );
+    }
 
     return apiSuccessWithRequestSession(
       req,

@@ -4,6 +4,8 @@ export interface ClassroomLaunchContext {
   classroomId: string;
   launchMode: ClassroomLaunchMode;
   homePath?: string;
+  generationCompletionStatus?: 'complete' | 'partial';
+  generationWarnings?: string[];
 }
 
 const CLASSROOM_LAUNCH_CONTEXT_KEY = 'classroomLaunchContext';
@@ -57,6 +59,11 @@ export function readClassroomLaunchContext(): ClassroomLaunchContext | null {
       classroomId: parsed.classroomId,
       launchMode: parsed.launchMode,
       homePath: typeof parsed.homePath === 'string' ? parsed.homePath : undefined,
+      generationCompletionStatus:
+        parsed.generationCompletionStatus === 'partial' ? 'partial' : 'complete',
+      generationWarnings: Array.isArray(parsed.generationWarnings)
+        ? parsed.generationWarnings.filter((value): value is string => typeof value === 'string')
+        : undefined,
     };
   } catch {
     return null;

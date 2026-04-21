@@ -17,7 +17,7 @@ import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { isMediaPlaceholder } from '@/lib/store/media-generation';
 import { resolveGovernedProviderConfig } from '@/lib/server/ai-governance';
-import type { SceneOutline } from '@/lib/types/generation';
+import type { GenerationWarning, SceneOutline } from '@/lib/types/generation';
 import type { Scene } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
 import type { ImageProviderId } from '@/lib/media/types';
@@ -188,13 +188,24 @@ export async function generateMediaForClassroom(
     organizationId: string | null;
     imageProviderOverride?: ImageProviderOverride;
   },
-): Promise<Record<string, string>> {
+): Promise<{ mediaMap: Record<string, string>; warnings: GenerationWarning[] }> {
   const mediaDir = path.join(CLASSROOMS_DIR, classroomId, 'media');
   await ensureDir(mediaDir);
 
   // Collect all media generation requests from outlines
-  const requests = outlines.flatMap((o) => o.mediaGenerations ?? []);
-  if (requests.length === 0) return {};
+  const requests = outlines.flatMap((outline, index) =>
+    (outline.mediaGenerations ?? []).map((request) => ({
+      ...request,
+      sceneIndex: index,
+      sceneTitle: outline.title,
+    })),
+  );
+  if (requests.length === 0) {
+    return {
+      mediaMap: {},
+      warnings: [],
+    };
+  }
 
   const videoProviderIds = Object.keys(VIDEO_PROVIDERS) as VideoProviderId[];
   const resolvedImageProvider = await resolveImageProviderForClassroom(scope);
@@ -205,6 +216,7 @@ export async function generateMediaForClassroom(
   });
 
   const mediaMap: Record<string, string> = {};
+  const warnings: GenerationWarning[] = [];
 
   // Separate image and video requests, generate each type sequentially
   // but run the two types in parallel (providers often have limited concurrency).
@@ -215,6 +227,13 @@ export async function generateMediaForClassroom(
     if (!resolvedImageProvider) {
       if (requests.some((r) => r.type === 'image')) {
         log.warn('No image provider available for classroom media generation, skipping images');
+        warnings.push({
+          stage: 'media',
+          code: 'media_provider_missing',
+          message: 'No image provider available for classroom media generation',
+          retryable: false,
+          attempts: 1,
+        });
       }
       return;
     }
@@ -246,6 +265,16 @@ export async function generateMediaForClassroom(
           ext = ['png', 'jpg', 'jpeg', 'webp'].includes(urlExt) ? urlExt : 'png';
         } else {
           log.warn(`Image generation returned no data for ${req.elementId}`);
+          warnings.push({
+            stage: 'media',
+            code: 'media_request_failed',
+            message: `Image generation returned no data for ${req.elementId}`,
+            sceneIndex: req.sceneIndex,
+            sceneTitle: req.sceneTitle,
+            elementId: req.elementId,
+            retryable: false,
+            attempts: 1,
+          });
           continue;
         }
 
@@ -255,12 +284,31 @@ export async function generateMediaForClassroom(
         log.info(`Generated image: ${filename}`);
       } catch (err) {
         log.warn(`Image generation failed for ${req.elementId}:`, err);
+        warnings.push({
+          stage: 'media',
+          code: 'media_request_failed',
+          message: `Image generation failed for ${req.elementId}`,
+          sceneIndex: req.sceneIndex,
+          sceneTitle: req.sceneTitle,
+          elementId: req.elementId,
+          retryable: false,
+          attempts: 1,
+        });
       }
     }
   };
 
   const generateVideos = async () => {
     if (!resolvedVideoProvider) {
+      if (requests.some((r) => r.type === 'video')) {
+        warnings.push({
+          stage: 'media',
+          code: 'media_provider_missing',
+          message: 'No video provider available for classroom media generation',
+          retryable: false,
+          attempts: 1,
+        });
+      }
       return;
     }
 
@@ -292,13 +340,23 @@ export async function generateMediaForClassroom(
         log.info(`Generated video: ${filename}`);
       } catch (err) {
         log.warn(`Video generation failed for ${req.elementId}:`, err);
+        warnings.push({
+          stage: 'media',
+          code: 'media_request_failed',
+          message: `Video generation failed for ${req.elementId}`,
+          sceneIndex: req.sceneIndex,
+          sceneTitle: req.sceneTitle,
+          elementId: req.elementId,
+          retryable: false,
+          attempts: 1,
+        });
       }
     }
   };
 
   await Promise.all([generateImages(), generateVideos()]);
 
-  return mediaMap;
+  return { mediaMap, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -341,9 +399,10 @@ export async function generateTTSForClassroom(
   scope: {
     organizationId: string | null;
   },
-): Promise<void> {
+): Promise<GenerationWarning[]> {
   const audioDir = path.join(CLASSROOMS_DIR, classroomId, 'audio');
   await ensureDir(audioDir);
+  const warnings: GenerationWarning[] = [];
 
   // Resolve TTS provider (exclude browser-native-tts)
   const resolvedTTSProvider = await resolveFirstBackgroundProvider({
@@ -356,7 +415,14 @@ export async function generateTTSForClassroom(
 
   if (!resolvedTTSProvider) {
     log.warn('No server TTS provider configured, skipping TTS generation');
-    return;
+    warnings.push({
+      stage: 'tts',
+      code: 'tts_provider_missing',
+      message: 'No server TTS provider configured for classroom generation',
+      retryable: false,
+      attempts: 1,
+    });
+    return warnings;
   }
 
   const providerId = resolvedTTSProvider.providerId as TTSProviderId;
@@ -401,7 +467,18 @@ export async function generateTTSForClassroom(
         log.info(`Generated TTS: ${filename} (${result.audio.length} bytes)`);
       } catch (err) {
         log.warn(`TTS generation failed for action ${action.id}:`, err);
+        warnings.push({
+          stage: 'tts',
+          code: 'tts_action_failed',
+          message: `TTS generation failed for action ${action.id}`,
+          sceneId: scene.id,
+          actionId: action.id,
+          retryable: false,
+          attempts: 1,
+        });
       }
     }
   }
+
+  return warnings;
 }

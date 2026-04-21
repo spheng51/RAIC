@@ -14,6 +14,8 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  SceneGenerationSummary,
+  SceneOutcome,
   ScientificModel,
   PdfImage,
   ImageMapping,
@@ -44,103 +46,280 @@ import type {
   GenerationResult,
   GenerationCallbacks,
 } from './pipeline-types';
+import { executeScenesWithPolicy } from './scene-executor';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
 
+export interface SceneGenerationExecutionContext {
+  api: ReturnType<typeof createStageAPI>;
+  aiCall: AICallFn;
+  assignedImages?: PdfImage[];
+  imageMapping?: ImageMapping;
+  languageModel?: LanguageModel;
+  visionEnabled?: boolean;
+  generatedMediaMapping?: ImageMapping;
+  agents?: AgentInfo[];
+  ctx?: SceneGenerationContext;
+  userProfile?: string;
+  adaptivePrompt?: string;
+}
+
+function sanitizeSceneFailureMessage(message: string): string {
+  return message
+    .replace(/\bBearer\s+[A-Za-z0-9._-]+\b/gi, 'Bearer [REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]+\b/g, '[REDACTED]')
+    .replace(/\bsk-ant-[A-Za-z0-9_-]+\b/g, '[REDACTED]')
+    .replace(/\bAIza[0-9A-Za-z\-_]{20,}\b/g, '[REDACTED]')
+    .trim()
+    .slice(0, 300);
+}
+
+function classifySceneFailure(error: unknown): {
+  code: string;
+  message: string;
+  retryable: boolean;
+} {
+  const errorWithMeta = error as Error & {
+    code?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+  };
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Scene generation failed';
+  const message = sanitizeSceneFailureMessage(rawMessage);
+  const haystack = [
+    errorWithMeta.code,
+    errorWithMeta.status,
+    errorWithMeta.statusCode,
+    error instanceof Error ? error.name : undefined,
+    rawMessage,
+  ]
+    .map((value) => (value == null ? '' : String(value).toLowerCase()))
+    .join(' ');
+
+  if (/\b429\b|rate limit|too many requests/.test(haystack)) {
+    return { code: 'rate_limit', message, retryable: true };
+  }
+  if (
+    /\b408\b|\b502\b|\b503\b|\b504\b|timeout|timed out|overloaded|temporarily unavailable/.test(
+      haystack,
+    )
+  ) {
+    return { code: 'timeout', message, retryable: true };
+  }
+  if (
+    /econnreset|etimedout|econnrefused|enotfound|eai_again|network|socket|fetch failed|connect timeout/.test(
+      haystack,
+    )
+  ) {
+    return { code: 'network_error', message, retryable: true };
+  }
+  if (/service unavailable|internal server error|bad gateway|gateway timeout/.test(haystack)) {
+    return { code: 'provider_unavailable', message, retryable: true };
+  }
+
+  return {
+    code: 'scene_generation_failed',
+    message: message || 'Scene generation failed',
+    retryable: false,
+  };
+}
+
 /**
- * Stage 3: Generate full scenes (parallel version)
- *
- * Two steps:
- * - Step 3.1: Outline -> Page content (slide/quiz)
- * - Step 3.2: Content + script -> Action list
- *
- * All scenes generated in parallel using Promise.all
+ * Stage 3: Generate full scenes with bounded concurrency and structured outcomes.
  */
 export async function generateFullScenes(
   sceneOutlines: SceneOutline[],
   store: StageStore,
   aiCall: AICallFn,
   callbacks?: GenerationCallbacks,
-): Promise<GenerationResult<string[]>> {
+): Promise<GenerationResult<SceneGenerationSummary>> {
   const api = createStageAPI(store);
   const totalScenes = sceneOutlines.length;
-  let completedCount = 0;
 
   callbacks?.onProgress?.({
     currentStage: 3,
     overallProgress: 66,
     stageProgress: 0,
-    statusMessage: `正在并行生成 ${totalScenes} 个场景...`,
+    statusMessage: `Generating ${totalScenes} scenes...`,
     scenesGenerated: 0,
     totalScenes,
   });
 
-  // Generate all scenes in parallel
-  const results = await Promise.all(
-    sceneOutlines.map(async (outline, index) => {
-      try {
-        const sceneId = await generateSingleScene(outline, api, aiCall);
+  const summary = await executeScenesWithPolicy({
+    items: sceneOutlines.map((outline, index) => ({
+      outline,
+      index,
+      context: {
+        api,
+        aiCall,
+      } satisfies SceneGenerationExecutionContext,
+    })),
+    executeScene: async (item, attempt) =>
+      generateSingleSceneOutcome(
+        item.outline,
+        item.index,
+        attempt,
+        item.context as SceneGenerationExecutionContext,
+      ),
+    onProgress: async (progress) => {
+      callbacks?.onProgress?.({
+        currentStage: 3,
+        overallProgress:
+          66 + Math.floor((progress.completedScenes / Math.max(totalScenes, 1)) * 34),
+        stageProgress: Math.floor((progress.completedScenes / Math.max(totalScenes, 1)) * 100),
+        statusMessage:
+          progress.failedScenes > 0
+            ? `Generated ${progress.generatedScenes}/${totalScenes} scenes (${progress.failedScenes} failed)`
+            : `Generated ${progress.generatedScenes}/${totalScenes} scenes`,
+        scenesGenerated: progress.generatedScenes,
+        totalScenes,
+      });
 
-        // Update progress (not atomic, but sufficient for UI display)
-        completedCount++;
-        callbacks?.onProgress?.({
-          currentStage: 3,
-          overallProgress: 66 + Math.floor((completedCount / totalScenes) * 34),
-          stageProgress: Math.floor((completedCount / totalScenes) * 100),
-          statusMessage: `已完成 ${completedCount}/${totalScenes} 个场景`,
-          scenesGenerated: completedCount,
-          totalScenes,
-        });
-
-        return { success: true, sceneId, index };
-      } catch (error) {
-        completedCount++;
-        callbacks?.onError?.(`Failed to generate scene ${outline.title}: ${error}`);
-        return { success: false, sceneId: null, index };
+      if (progress.latestOutcome.status === 'failed') {
+        callbacks?.onError?.(
+          `Failed to generate scene ${progress.latestOutcome.title}: ${progress.latestOutcome.message}`,
+        );
       }
-    }),
-  );
+    },
+  });
 
-  // Collect successful sceneIds in original order
-  const sceneIds = results
-    .filter(
-      (r): r is { success: true; sceneId: string; index: number } =>
-        r.success && r.sceneId !== null,
-    )
-    .sort((a, b) => a.index - b.index)
-    .map((r) => r.sceneId);
-
-  return { success: true, data: sceneIds };
+  return { success: true, data: summary };
 }
 
 /**
- * Generate a single scene (two-step process)
+ * Generate a single scene outcome (two-step process)
  *
  * Step 3.1: Generate content
- * Step 3.2: Generate Actions
+ * Step 3.2: Generate actions and create the scene
  */
-async function generateSingleScene(
+export async function generateSingleSceneOutcome(
   outline: SceneOutline,
-  api: ReturnType<typeof createStageAPI>,
-  aiCall: AICallFn,
-): Promise<string | null> {
-  // Step 3.1: Generate content
+  index: number,
+  attempt: number,
+  context: SceneGenerationExecutionContext,
+): Promise<SceneOutcome> {
   log.info(`Step 3.1: Generating content for: ${outline.title}`);
-  const content = await generateSceneContent(outline, aiCall);
-  if (!content) {
-    log.error(`Failed to generate content for: ${outline.title}`);
-    return null;
+  let content:
+    | GeneratedSlideContent
+    | GeneratedQuizContent
+    | GeneratedInteractiveContent
+    | GeneratedPBLContent
+    | null;
+
+  try {
+    content = await generateSceneContent(
+      outline,
+      context.aiCall,
+      context.assignedImages,
+      context.imageMapping,
+      context.languageModel,
+      context.visionEnabled,
+      context.generatedMediaMapping,
+      context.agents,
+      context.adaptivePrompt,
+    );
+  } catch (error) {
+    const failure = classifySceneFailure(error);
+    return {
+      index,
+      title: outline.title,
+      status: 'failed',
+      stage: 'content',
+      attempts: attempt,
+      retryable: failure.retryable,
+      code: failure.code,
+      message: failure.message,
+    };
   }
 
-  // Step 3.2: Generate Actions
+  if (!content) {
+    return {
+      index,
+      title: outline.title,
+      status: 'failed',
+      stage: 'content',
+      attempts: attempt,
+      retryable: false,
+      code: 'content_empty',
+      message: 'Scene content generation returned no content',
+    };
+  }
+
   log.info(`Step 3.2: Generating actions for: ${outline.title}`);
-  const actions = await generateSceneActions(outline, content, aiCall);
+  let actions: Action[];
+
+  try {
+    actions = await generateSceneActions(
+      outline,
+      content,
+      context.aiCall,
+      context.ctx,
+      context.agents,
+      context.userProfile,
+      context.adaptivePrompt,
+    );
+  } catch (error) {
+    const failure = classifySceneFailure(error);
+    return {
+      index,
+      title: outline.title,
+      status: 'failed',
+      stage: 'actions',
+      attempts: attempt,
+      retryable: failure.retryable,
+      code: failure.code,
+      message: failure.message,
+    };
+  }
+
   log.info(`Generated ${actions.length} actions for: ${outline.title}`);
 
-  // Create complete Scene
-  return createSceneWithActions(outline, content, actions, api);
+  try {
+    const sceneId = createSceneWithActions(outline, content, actions, context.api);
+    if (!sceneId) {
+      return {
+        index,
+        title: outline.title,
+        status: 'failed',
+        stage: 'create',
+        attempts: attempt,
+        retryable: false,
+        code: 'scene_create_failed',
+        message: 'Scene creation returned no scene id',
+      };
+    }
+
+    return {
+      index,
+      title: outline.title,
+      status: 'generated',
+      stage: 'create',
+      sceneId,
+      attempts: attempt,
+      retryable: false,
+      code: 'generated',
+      message: 'Scene generated successfully',
+    };
+  } catch (error) {
+    const failure = classifySceneFailure(error);
+    return {
+      index,
+      title: outline.title,
+      status: 'failed',
+      stage: 'create',
+      attempts: attempt,
+      retryable: failure.retryable,
+      code: failure.code,
+      message: failure.message,
+    };
+  }
 }
 
 /**

@@ -25,6 +25,7 @@ import {
 } from '@/lib/utils/classroom-launch';
 import { Button } from '@/components/ui/button';
 import { SessionReflectionDialog } from '@/components/stage/session-reflection-dialog';
+import { toast } from 'sonner';
 import {
   applyPersistedSessionContextFloor,
   applySceneSelectionSignal,
@@ -339,6 +340,16 @@ export default function ClassroomDetailPage() {
 
       setClassroomSource(resolvedSource);
       setErrorAction(null);
+      if (
+        launchContext?.generationCompletionStatus === 'partial' &&
+        launchContext.generationWarnings?.length
+      ) {
+        toast.warning(
+          t('classroom.partialGenerationWarning', {
+            count: launchContext.generationWarnings.length,
+          }),
+        );
+      }
       clearClassroomLaunchContext(classroomId);
     } catch (err) {
       log.error('Failed to load classroom:', err);
