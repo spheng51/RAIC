@@ -73,18 +73,27 @@ describe('classroom launch helpers', () => {
       canUseLocalClassroomFallback({
         expectServerBacked: false,
         hasLocalStage: true,
+        preferLocalDemo: true,
       }),
     ).toBe(true);
     expect(
       canUseLocalClassroomFallback({
+        expectServerBacked: false,
+        hasLocalStage: true,
+      }),
+    ).toBe(false);
+    expect(
+      canUseLocalClassroomFallback({
         expectServerBacked: true,
         hasLocalStage: true,
+        preferLocalDemo: true,
       }),
     ).toBe(false);
     expect(
       canUseLocalClassroomFallback({
         expectServerBacked: false,
         hasLocalStage: false,
+        preferLocalDemo: true,
       }),
     ).toBe(false);
   });
