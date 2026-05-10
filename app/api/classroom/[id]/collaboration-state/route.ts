@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireClassroomAccess } from '@/lib/auth/classroom-access';
+import { createLogger } from '@/lib/logger';
 import {
   buildClassroomCollaborationStatePayload,
   getClassroomCollaborationSnapshot,
@@ -10,6 +11,8 @@ import {
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
 import { isValidClassroomId } from '@/lib/server/classroom-storage';
+
+const log = createLogger('CollaborationState API');
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,11 +27,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const access = await requireClassroomAccess(request, id);
   if (access instanceof NextResponse) {
+    if (access.status === 404) {
+      log.warn('Collaboration classroom access lookup failed', { classroomId: id });
+    }
     return access;
   }
 
   const snapshot = await getClassroomCollaborationSnapshot(id);
   if (!snapshot) {
+    log.warn('Collaboration snapshot lookup failed', { classroomId: id });
     return apiErrorWithRequestSession(
       request,
       API_ERROR_CODES.INVALID_REQUEST,
