@@ -30,9 +30,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function apiHeaders(apiKey: string): Record<string, string> {
+function authHeaders(apiKey: string): Record<string, string> {
   return {
-    'Content-Type': 'application/json',
     Authorization: `Bearer ${apiKey}`,
   };
 }
@@ -89,17 +88,16 @@ async function submitVideoGeneration(
   options: VideoGenerationOptions,
 ): Promise<SoraVideoJob> {
   const { size } = getSize(options);
-  const body = {
-    model,
-    prompt: options.prompt,
-    size,
-    seconds: String(options.duration || 8),
-  };
+  const body = new FormData();
+  body.set('model', model);
+  body.set('prompt', options.prompt);
+  body.set('size', size);
+  body.set('seconds', String(options.duration || 8));
 
   const response = await fetch(`${baseUrl}/videos`, {
     method: 'POST',
-    headers: apiHeaders(apiKey),
-    body: JSON.stringify(body),
+    headers: authHeaders(apiKey),
+    body,
   });
 
   if (!response.ok) {
@@ -117,7 +115,7 @@ async function pollVideoStatus(
 ): Promise<SoraVideoJob> {
   const response = await fetch(`${baseUrl}/videos/${videoId}`, {
     method: 'GET',
-    headers: apiHeaders(apiKey),
+    headers: authHeaders(apiKey),
   });
 
   if (!response.ok) {
@@ -135,9 +133,7 @@ async function downloadVideoContent(
 ): Promise<string> {
   const response = await fetch(`${baseUrl}/videos/${videoId}/content`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: authHeaders(apiKey),
   });
 
   if (!response.ok) {
@@ -157,9 +153,7 @@ export async function testSoraConnectivity(
   try {
     const response = await fetch(`${baseUrl}/models`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
+      headers: authHeaders(config.apiKey),
     });
 
     if (response.ok) {
@@ -170,7 +164,7 @@ export async function testSoraConnectivity(
     if (response.status === 401 || response.status === 403) {
       return {
         success: false,
-        message: `Sora auth failed (${response.status}). Check your OpenAI API key.` ,
+        message: `Sora auth failed (${response.status}). Check your OpenAI API key.`,
       };
     }
     return { success: false, message: `Sora connectivity failed (${response.status}): ${text}` };
