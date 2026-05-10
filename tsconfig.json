@@ -19,6 +19,8 @@
       }
     ],
     "paths": {
+      "@/lib/ai/providers": ["./lib/ai/providers-current.ts"],
+      "@/lib/audio/constants": ["./lib/audio/constants-current.ts"],
       "@/*": ["./*"]
     }
   },
