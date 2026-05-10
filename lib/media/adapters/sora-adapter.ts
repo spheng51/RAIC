@@ -26,6 +26,10 @@ const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const POLL_INTERVAL_MS = 10_000;
 const MAX_POLL_ATTEMPTS = 60;
 
+type BufferLike = {
+  from(buffer: ArrayBuffer): { toString(encoding: 'base64'): string };
+};
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -55,8 +59,9 @@ function getSize(options: VideoGenerationOptions): { size: string; width: number
 }
 
 async function arrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(buffer).toString('base64');
+  const maybeBuffer = (globalThis as typeof globalThis & { Buffer?: BufferLike }).Buffer;
+  if (maybeBuffer) {
+    return maybeBuffer.from(buffer).toString('base64');
   }
 
   let binary = '';
