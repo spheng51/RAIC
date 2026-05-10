@@ -18,6 +18,8 @@ import {
 } from './adapters/minimax-image-adapter';
 import { generateWithGrokImage, testGrokImageConnectivity } from './adapters/grok-image-adapter';
 
+export const IMAGE_MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
+
 export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
   seedream: {
     id: 'seedream',
@@ -88,8 +90,9 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
     requiresApiKey: true,
     defaultBaseUrl: 'https://api.x.ai/v1',
     models: [
+      { id: 'grok-imagine-image-quality', name: 'Grok Imagine Image Quality' },
       { id: 'grok-imagine-image', name: 'Grok Imagine Image' },
-      { id: 'grok-imagine-image-pro', name: 'Grok Imagine Image Pro' },
+      { id: 'grok-imagine-image-pro', name: 'Grok Imagine Image Pro (legacy)' },
     ],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
