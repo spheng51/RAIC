@@ -6,6 +6,7 @@ import type {
   BenchmarkArtifactStatus,
   ClassroomRevisitIntent,
 } from '@/lib/types/classroom-intelligence';
+import type { Scene, Stage } from '@/lib/types/stage';
 
 export type PlatformRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
 export type OrganizationKind = 'personal' | 'school';
@@ -69,6 +70,17 @@ export interface JoinTokenRecord {
   createdAt: string;
   expiresAt: string;
   consumedAt: string | null;
+}
+
+export interface ClassroomRecord {
+  id: string;
+  ownerUserId: string | null;
+  organizationId: string | null;
+  roomVersion: number;
+  stage: Stage;
+  scenes: Scene[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuditLogRecord {
@@ -257,6 +269,16 @@ export const PLATFORM_SCHEMA_SQL = [
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ
   )`,
+  `CREATE TABLE IF NOT EXISTS classrooms (
+    id TEXT PRIMARY KEY,
+    owner_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    room_version INTEGER NOT NULL DEFAULT 0,
+    stage JSONB NOT NULL,
+    scenes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
     organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
@@ -355,6 +377,8 @@ export const PLATFORM_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_classroom_id ON sessions (classroom_id)`,
   `CREATE INDEX IF NOT EXISTS idx_join_tokens_token_hash ON join_tokens (token_hash)`,
+  `CREATE INDEX IF NOT EXISTS idx_classrooms_owner_user_id ON classrooms (owner_user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_classrooms_org_updated ON classrooms (organization_id, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON memberships (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_org_provider_configs_org_family ON organization_provider_configs (organization_id, family)`,
   `CREATE INDEX IF NOT EXISTS idx_user_provider_overrides_org_user_family ON user_provider_overrides (organization_id, user_id, family)`,
