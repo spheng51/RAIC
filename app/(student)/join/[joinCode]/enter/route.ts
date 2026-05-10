@@ -9,7 +9,19 @@ import { resolveAuthContextFromToken } from '@/lib/auth/current-user';
 import { createClassroomSession, getRequestIpAddress } from '@/lib/auth/session';
 import { ensureMembership } from '@/lib/db/repositories/memberships';
 import { createClassroomGuestUser } from '@/lib/db/repositories/users';
+import { createLogger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/server/audit-log';
+import { readClassroom } from '@/lib/server/classroom-storage';
+
+const log = createLogger('JoinTokenEnter');
+
+function redirectToJoin(request: NextRequest, joinCode: string) {
+  const response = NextResponse.redirect(
+    new URL(`/join/${encodeURIComponent(joinCode)}`, request.url),
+  );
+  clearClassroomAccessCookie(response);
+  return response;
+}
 
 export async function GET(
   request: NextRequest,
@@ -19,12 +31,22 @@ export async function GET(
   const joinToken = await findValidJoinToken(joinCode);
 
   if (!joinToken) {
-    const response = NextResponse.redirect(
-      new URL(`/join/${encodeURIComponent(joinCode)}`, request.url),
-    );
-    clearClassroomAccessCookie(response);
-    return response;
+    return redirectToJoin(request, joinCode);
   }
+
+  const classroom = await readClassroom(joinToken.classroomId);
+  if (!classroom) {
+    log.warn('Join token classroom lookup failed', {
+      joinTokenId: joinToken.id,
+      classroomId: joinToken.classroomId,
+    });
+    return redirectToJoin(request, joinCode);
+  }
+
+  log.info('Join token classroom lookup verified', {
+    joinTokenId: joinToken.id,
+    classroomId: joinToken.classroomId,
+  });
 
   const existingClassroomToken = request.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value ?? null;
   const existingClassroomAuth = await resolveAuthContextFromToken(existingClassroomToken);
@@ -65,6 +87,12 @@ export async function GET(
     userAgent: request.headers.get('user-agent'),
     ipAddress: getRequestIpAddress(request),
     maxExpiresAt: joinToken.expiresAt,
+  });
+
+  log.info('Join token redeemed', {
+    joinTokenId: joinToken.id,
+    classroomId: joinToken.classroomId,
+    sessionId: session.id,
   });
 
   await recordAuditEvent({
