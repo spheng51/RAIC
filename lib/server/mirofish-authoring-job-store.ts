@@ -3,7 +3,7 @@ import 'server-only';
 import { promises as fs } from 'fs';
 import path from 'node:path';
 import type { PlatformRole } from '@/lib/db/schema';
-import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
+import { writeJsonFileAtomic } from '@/lib/server/json-file';
 import type {
   MiroFishCreationJobStatus,
   MiroFishCreationSpec,
