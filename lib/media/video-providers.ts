@@ -12,11 +12,14 @@ import type {
 import { generateWithSeedance, testSeedanceConnectivity } from './adapters/seedance-adapter';
 import { generateWithKling, testKlingConnectivity } from './adapters/kling-adapter';
 import { generateWithVeo, testVeoConnectivity } from './adapters/veo-adapter';
+import { generateWithSora, testSoraConnectivity } from './adapters/sora-adapter';
 import {
   generateWithMiniMaxVideo,
   testMiniMaxVideoConnectivity,
 } from './adapters/minimax-video-adapter';
 import { generateWithGrokVideo, testGrokVideoConnectivity } from './adapters/grok-video-adapter';
+
+export const VIDEO_MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
 
 export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
   seedance: {
@@ -60,8 +63,10 @@ export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
     requiresApiKey: true,
     defaultBaseUrl: 'https://generativelanguage.googleapis.com',
     models: [
-      { id: 'veo-3.1-fast-generate-001', name: 'Veo 3.1 Fast' },
-      { id: 'veo-3.1-generate-001', name: 'Veo 3.1' },
+      { id: 'veo-3.1-generate-preview', name: 'Veo 3.1' },
+      { id: 'veo-3.1-fast-generate-preview', name: 'Veo 3.1 Fast' },
+      { id: 'veo-3.1-generate-001', name: 'Veo 3.1 (legacy)' },
+      { id: 'veo-3.1-fast-generate-001', name: 'Veo 3.1 Fast (legacy)' },
       { id: 'veo-3.0-fast-generate-001', name: 'Veo 3.0 Fast' },
       { id: 'veo-3.0-generate-001', name: 'Veo 3.0' },
       { id: 'veo-2.0-generate-001', name: 'Veo 2.0' },
@@ -75,8 +80,14 @@ export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
     id: 'sora',
     name: 'Sora',
     requiresApiKey: true,
-    models: [],
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: [
+      { id: 'sora-2', name: 'Sora 2' },
+      { id: 'sora-2-pro', name: 'Sora 2 Pro' },
+    ],
     supportedAspectRatios: ['16:9', '1:1', '9:16'],
+    supportedDurations: [8, 12, 20],
+    supportedResolutions: ['720p', '1080p'],
     maxDuration: 20,
   },
   'minimax-video': {
@@ -118,6 +129,8 @@ export async function testVideoConnectivity(
       return testKlingConnectivity(config);
     case 'veo':
       return testVeoConnectivity(config);
+    case 'sora':
+      return testSoraConnectivity(config);
     case 'minimax-video':
       return testMiniMaxVideoConnectivity(config);
     case 'grok-video':
@@ -183,6 +196,8 @@ export async function generateVideo(
       return generateWithKling(config, options);
     case 'veo':
       return generateWithVeo(config, options);
+    case 'sora':
+      return generateWithSora(config, options);
     case 'minimax-video':
       return generateWithMiniMaxVideo(config, options);
     case 'grok-video':
