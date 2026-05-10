@@ -1,8 +1,18 @@
 import 'server-only';
 
 import { runPostgresQuery, runPostgresTransaction } from '@/lib/db/client';
-import type { ClassroomRecord } from '@/lib/db/schema';
 import type { Scene, Stage } from '@/lib/types/stage';
+
+export interface ClassroomRecord {
+  id: string;
+  ownerUserId: string | null;
+  organizationId: string | null;
+  roomVersion: number;
+  stage: Stage;
+  scenes: Scene[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface ClassroomRow {
   id: string;
