@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { EMPTY_PLATFORM_STORE, PLATFORM_SCHEMA_SQL, type PlatformStore } from '@/lib/db/schema';
-import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
+import { writeJsonFileAtomic } from '@/lib/server/json-file';
 import { getDataPath } from '@/lib/server/data-root';
 
 const runtimeRequire = createRequire(import.meta.url);
