@@ -44,15 +44,15 @@ describe('grok model aliases', () => {
       providerType: 'openai',
     });
 
-    expect(openAIChatMock).toHaveBeenCalledWith('grok-4.20-reasoning');
-    expect(result.model).toBe('openai:grok-4.20-reasoning');
+    expect(openAIChatMock).toHaveBeenCalledWith('grok-4.20-0309-reasoning');
+    expect(result.model).toBe('openai:grok-4.20-0309-reasoning');
   });
 
   it('returns current registry metadata for older saved Grok ids', async () => {
     const { getModelInfo } = await import('@/lib/ai/providers');
     const modelInfo = getModelInfo('grok', 'grok-4.20-beta-0309-reasoning');
 
-    expect(modelInfo?.id).toBe('grok-4.20-reasoning');
+    expect(modelInfo?.id).toBe('grok-4.20-0309-reasoning');
     expect(modelInfo?.name).toBe('Grok 4.20 Reasoning');
   });
 });
