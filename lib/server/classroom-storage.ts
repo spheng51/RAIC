@@ -6,13 +6,15 @@ import {
   readClassroomRecord,
   updateClassroomRecord,
   upsertClassroomRecord,
+  type ClassroomRecord,
 } from '@/lib/db/repositories/classrooms';
-import type { ClassroomRecord } from '@/lib/db/schema';
 import { createLogger } from '@/lib/logger';
 import { ensureDirPath, writeJsonFileAtomic } from '@/lib/server/json-file';
 import type { Scene, Stage } from '@/lib/types/stage';
 import { preserveStageSharedSimulation } from '@/lib/utils/classroom-presentation';
 import { getDataPath } from '@/lib/server/data-root';
+
+export { writeJsonFileAtomic } from '@/lib/server/json-file';
 
 export const CLASSROOMS_DIR = getDataPath('classrooms');
 export const CLASSROOM_JOBS_DIR = getDataPath('classroom-jobs');
