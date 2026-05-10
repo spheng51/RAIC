@@ -2,7 +2,7 @@
  * Veo (Google) Video Generation Adapter
  *
  * Direct REST API calls for video generation with Google's Veo models.
- * Async task pattern: submit → poll → return inline base64 video.
+ * Async task pattern: submit -> poll -> return inline base64 video.
  *
  * REST endpoints (Gemini API):
  * - Submit:   POST /v1beta/models/{model}:predictLongRunning
@@ -10,11 +10,13 @@
  *   Returns inline base64 video data in response.videos[]
  *
  * Supported models:
- * - veo-3.1-fast-generate-001  (fast, $0.15/sec)
- * - veo-3.1-generate-001       (quality, $0.40/sec)
- * - veo-3.0-fast-generate-001  (fast, $0.15/sec)
- * - veo-3.0-generate-001       (quality, $0.40/sec)
- * - veo-2.0-generate-001       (legacy, $0.50/sec)
+ * - veo-3.1-generate-preview       (quality)
+ * - veo-3.1-fast-generate-preview  (fast)
+ * - veo-3.1-generate-001           (legacy)
+ * - veo-3.1-fast-generate-001      (legacy fast)
+ * - veo-3.0-fast-generate-001      (fast)
+ * - veo-3.0-generate-001           (quality)
+ * - veo-2.0-generate-001           (legacy)
  *
  * Authentication: x-goog-api-key header
  *
@@ -28,7 +30,7 @@ import type {
   VideoGenerationResult,
 } from '../types';
 
-const DEFAULT_MODEL = 'veo-3.0-generate-001';
+const DEFAULT_MODEL = 'veo-3.1-generate-preview';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const POLL_INTERVAL_MS = 10_000; // 10 seconds
 const MAX_POLL_ATTEMPTS = 60; // 10 minutes max
@@ -38,10 +40,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Dimension defaults per aspect ratio */
-function getDimensions(aspectRatio?: string): {
-  width: number;
-  height: number;
-} {
+function getDimensions(aspectRatio?: string): { width: number; height: number } {
   switch (aspectRatio) {
     case '9:16':
       return { width: 720, height: 1280 };
@@ -95,7 +94,7 @@ async function submitVideoGeneration(
     instances: [{ prompt: options.prompt }],
   };
 
-  // Parameters are optional — only include if we have values
+  // Parameters are optional; only include if we have values.
   const parameters: Record<string, unknown> = {};
   if (options.aspectRatio) parameters.aspectRatio = options.aspectRatio;
   if (options.duration) parameters.durationSeconds = options.duration;
@@ -148,8 +147,8 @@ async function pollOperation(
 // ---------------------------------------------------------------------------
 
 /**
- * Lightweight connectivity test — validates API key by fetching model info.
- * Uses GET /v1beta/models/{model} which does not trigger generation.
+ * Lightweight connectivity test - validates API key by fetching model info.
+ * Uses GET /v1beta/models which does not trigger generation.
  */
 export async function testVeoConnectivity(
   config: VideoGenerationConfig,
