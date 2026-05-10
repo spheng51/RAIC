@@ -10,22 +10,27 @@ interface UseClassroomCollaborationStateOptions {
   readonly classroomId?: string;
   readonly enabled?: boolean;
   readonly onStateChange: (nextState: ClassroomCollaborationStatePayload | null) => void;
+  readonly onFatalError?: (error: Error) => void;
 }
 
 export function useClassroomCollaborationState({
   classroomId,
   enabled = true,
   onStateChange,
+  onFatalError,
 }: UseClassroomCollaborationStateOptions) {
   const pollInFlightRef = useRef(false);
   const queuedRefreshSilentRef = useRef<boolean | null>(null);
   const lastStateRef = useRef<string | null>(null);
+  const fatalErrorRef = useRef(false);
   const refreshCollaborationStateRef = useRef<(silent?: boolean) => Promise<void>>(
     async () => undefined,
   );
 
   const applyIfChanged = (nextState: ClassroomCollaborationStatePayload | null) => {
     if (!nextState) {
+      lastStateRef.current = null;
+      onStateChange(null);
       return;
     }
 
@@ -40,7 +45,7 @@ export function useClassroomCollaborationState({
 
   const refreshCollaborationState = useCallback(
     async (silent = false) => {
-      if (!enabled || !classroomId) {
+      if (!enabled || !classroomId || fatalErrorRef.current) {
         return;
       }
 
@@ -66,6 +71,17 @@ export function useClassroomCollaborationState({
           | null;
         const errorMessage = json && 'error' in json ? json.error : undefined;
 
+        if (response.status === 404) {
+          const error = new Error(errorMessage || 'Classroom not found');
+          fatalErrorRef.current = true;
+          applyIfChanged(null);
+          onFatalError?.(error);
+          if (!silent) {
+            throw error;
+          }
+          return;
+        }
+
         if (!response.ok || !json?.success) {
           if (!silent) {
             throw new Error(errorMessage || 'Failed to refresh classroom collaboration state.');
@@ -83,7 +99,7 @@ export function useClassroomCollaborationState({
         }
       }
     },
-    [classroomId, enabled, onStateChange],
+    [classroomId, enabled, onFatalError, onStateChange],
   );
 
   refreshCollaborationStateRef.current = refreshCollaborationState;
@@ -94,6 +110,7 @@ export function useClassroomCollaborationState({
     }
 
     lastStateRef.current = null;
+    fatalErrorRef.current = false;
 
     let disposed = false;
     let retryIndex = 0;
@@ -109,7 +126,7 @@ export function useClassroomCollaborationState({
     };
 
     const startPolling = () => {
-      if (disposed || pollTimer) {
+      if (disposed || pollTimer || fatalErrorRef.current) {
         return;
       }
 
@@ -134,7 +151,12 @@ export function useClassroomCollaborationState({
     };
 
     const connectEventSource = () => {
-      if (disposed || typeof window === 'undefined' || !('EventSource' in window)) {
+      if (
+        disposed ||
+        fatalErrorRef.current ||
+        typeof window === 'undefined' ||
+        !('EventSource' in window)
+      ) {
         startPolling();
         return;
       }
@@ -168,6 +190,11 @@ export function useClassroomCollaborationState({
 
       source.onerror = () => {
         closeEventSource();
+        if (fatalErrorRef.current) {
+          stopPolling();
+          clearRetryTimer();
+          return;
+        }
         startPolling();
 
         if (disposed || retryTimer) {
