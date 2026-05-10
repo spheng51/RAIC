@@ -26,14 +26,15 @@ export async function POST(request: NextRequest) {
   }
 
   let stageId: string | undefined;
+  let canonicalClassroomId: string | undefined;
   let sceneCount: number | undefined;
   try {
     const body = await request.json();
     const { stage, scenes } = body;
-    stageId = stage?.id;
-    sceneCount = scenes?.length;
+    stageId = typeof stage?.id === 'string' ? stage.id : undefined;
+    sceneCount = Array.isArray(scenes) ? scenes.length : undefined;
 
-    if (!stage || !scenes) {
+    if (!stage || !Array.isArray(scenes)) {
       return apiError(
         API_ERROR_CODES.MISSING_REQUIRED_FIELD,
         400,
@@ -41,20 +42,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const requestedId = stage.id;
-    if (requestedId !== undefined && requestedId !== null && requestedId !== '') {
-      if (typeof requestedId !== 'string' || !isValidClassroomId(requestedId)) {
-        return apiErrorWithRequestSession(
-          request,
-          API_ERROR_CODES.INVALID_REQUEST,
-          400,
-          'Invalid classroom id',
-        );
-      }
-    }
-
-    const id = requestedId || randomUUID();
+    const id = randomUUID();
+    canonicalClassroomId = id;
     const baseUrl = buildRequestOrigin(request);
+
+    log.info('Classroom create persist requested', {
+      requestedStageId: stageId ?? null,
+      canonicalClassroomId: id,
+      sceneCount: scenes.length,
+      ownerUserId: auth.user.id,
+      organizationId: auth.session.organizationId,
+    });
 
     const persisted = await persistClassroom(
       {
@@ -77,13 +75,16 @@ export async function POST(request: NextRequest) {
       metadata: {
         source: 'web',
         classroomId: persisted.id,
+        requestedStageId: stageId ?? null,
       },
     });
 
     return apiSuccessWithRequestSession(request, { id: persisted.id, url: persisted.url }, 201);
   } catch (error) {
     log.error(
-      `Classroom storage failed [stageId=${stageId ?? 'unknown'}, scenes=${sceneCount ?? 0}]:`,
+      `Classroom storage failed [stageId=${stageId ?? 'unknown'}, canonicalId=${
+        canonicalClassroomId ?? 'unknown'
+      }, scenes=${sceneCount ?? 0}]:`,
       error,
     );
     return apiErrorWithRequestSession(
@@ -119,6 +120,7 @@ export async function GET(request: NextRequest) {
 
     const classroom = await readClassroom(id);
     if (!classroom) {
+      log.warn('Classroom GET read miss after access check', { classroomId: id });
       return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
     }
 
