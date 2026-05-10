@@ -3,9 +3,12 @@ import { createOpaqueToken, hashToken } from '@/lib/auth/session';
 import { requireRequestRole } from '@/lib/auth/authorize';
 import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import { createJoinTokenRecord } from '@/lib/db/repositories/join-tokens';
+import { createLogger } from '@/lib/logger';
 import { buildRequestOrigin, isValidClassroomId } from '@/lib/server/classroom-storage';
 import { recordAuditEvent } from '@/lib/server/audit-log';
 import { withRequestWebSession } from '@/lib/server/api-response';
+
+const log = createLogger('JoinToken API');
 
 export async function POST(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
@@ -33,8 +36,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  log.info('Join token create requested', {
+    classroomId: body.classroomId,
+    createdByUserId: auth.user.id,
+    organizationId: auth.session.organizationId,
+  });
+
   const access = await requireClassroomAccess(request, body.classroomId);
   if (access instanceof NextResponse) {
+    if (access.status === 404) {
+      log.warn('Join token create classroom lookup failed', { classroomId: body.classroomId });
+    }
     return access;
   }
 
@@ -47,6 +59,12 @@ export async function POST(request: NextRequest) {
     organizationId: auth.session.organizationId,
     displayName: body.displayName?.trim() || `Classroom ${body.classroomId}`,
     tokenHash: hashToken(rawToken),
+    expiresAt,
+  });
+
+  log.info('Join token created', {
+    joinTokenId: joinToken.id,
+    classroomId: body.classroomId,
     expiresAt,
   });
 
