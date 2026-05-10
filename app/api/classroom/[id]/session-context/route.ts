@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireClassroomAccess } from '@/lib/auth/classroom-access';
+import { createLogger } from '@/lib/logger';
 import {
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
@@ -25,6 +26,8 @@ interface SessionContextBody {
   masteryHints?: string[];
   revisitIntent?: 'continue' | 'revisit' | 'remediate' | 'deepen';
 }
+
+const log = createLogger('SessionContext API');
 
 function canWriteTeacherContext(
   access: Exclude<Awaited<ReturnType<typeof requireClassroomAccess>>, NextResponse>,
@@ -53,6 +56,12 @@ function parseSceneCount(value: unknown, fieldName: 'completedSceneCount' | 'tot
   return value;
 }
 
+function logLookupFailure(response: NextResponse, classroomId: string) {
+  if (response.status === 404) {
+    log.warn('Session-context classroom lookup failed', { classroomId });
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidClassroomId(id)) {
@@ -66,6 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const access = await requireClassroomAccess(request, id);
   if (access instanceof NextResponse) {
+    logLookupFailure(access, id);
     return access;
   }
 
@@ -99,6 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const access = await requireClassroomAccess(request, id);
   if (access instanceof NextResponse) {
+    logLookupFailure(access, id);
     return access;
   }
 
