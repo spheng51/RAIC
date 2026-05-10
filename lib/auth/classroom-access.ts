@@ -10,6 +10,7 @@ import {
 import { findLatestAuditLogByActionAndResource } from '@/lib/db/repositories/audit-logs';
 import { hashToken } from '@/lib/auth/session';
 import { findJoinTokenByHash } from '@/lib/db/repositories/join-tokens';
+import { createLogger } from '@/lib/logger';
 import {
   readClassroom,
   updateClassroom,
@@ -23,6 +24,7 @@ export interface ClassroomAccessContext {
 }
 
 const CLASSROOM_AUTH_RETRY_COUNT = 5;
+const log = createLogger('ClassroomAccess');
 
 function isSecureCookieRequest() {
   return process.env.NODE_ENV === 'production';
@@ -72,6 +74,11 @@ export async function findValidJoinToken(rawToken: string) {
 
   const expiresAt = new Date(joinToken.expiresAt).getTime();
   if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+    log.warn('Join token expired', {
+      joinTokenId: joinToken.id,
+      classroomId: joinToken.classroomId,
+      expiresAt: joinToken.expiresAt,
+    });
     return null;
   }
 
@@ -118,6 +125,7 @@ async function resolveClassroomOwnership(
 ): Promise<PersistedClassroomData | null> {
   const classroom = await readClassroom(classroomId);
   if (!classroom) {
+    log.warn('Classroom ownership lookup miss', { classroomId });
     return null;
   }
 
@@ -181,6 +189,7 @@ export async function requireClassroomAccess(
 ): Promise<ClassroomAccessContext | NextResponse> {
   const classroom = await resolveClassroomOwnership(classroomId);
   if (!classroom) {
+    log.warn('Classroom access rejected because classroom was not found', { classroomId });
     return classroomNotFound();
   }
 
