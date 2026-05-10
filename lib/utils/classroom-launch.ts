@@ -31,8 +31,9 @@ export function isPublicDemoLaunchContext(
 export function canUseLocalClassroomFallback(input: {
   expectServerBacked: boolean;
   hasLocalStage: boolean;
+  preferLocalDemo?: boolean;
 }): boolean {
-  return !input.expectServerBacked && input.hasLocalStage;
+  return Boolean(input.preferLocalDemo) && !input.expectServerBacked && input.hasLocalStage;
 }
 
 export function readClassroomLaunchContext(): ClassroomLaunchContext | null {
