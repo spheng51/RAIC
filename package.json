@@ -23,6 +23,7 @@
     "secrets:scan": "node scripts/ops-check.mjs secrets",
     "ops:verify": "node scripts/ops-check.mjs verify",
     "ops:drift:ci": "node scripts/ops-check.mjs drift --ci",
+    "smoke:production:milestone": "node scripts/production-milestone-smoke.mjs",
     "verify:mirofish:deployment": "node scripts/verify-mirofish-deployment.mjs",
     "verify:mirofish:audit": "node scripts/verify-mirofish-audit-log.mjs",
     "test:e2e": "playwright test",
