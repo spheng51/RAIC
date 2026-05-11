@@ -46,8 +46,10 @@ export interface GenerateClassroomInput {
   requirement: string;
   requestKey?: string;
   pdfContent?: { text: string; images: string[] };
+  pdfFileName?: string;
   language?: string;
   enableWebSearch?: boolean;
+  selectedModel?: string;
   enableImageGeneration?: boolean;
   enableVideoGeneration?: boolean;
   enableTTS?: boolean;
@@ -363,8 +365,16 @@ export async function generateClassroom(
     id: stageId,
     name: outlines[0]?.title || requirement.slice(0, 50),
     description: undefined,
+    learningGoal: requirement.trim() || outlines[0]?.title || 'Untitled lesson',
     language: lang,
     style: 'interactive',
+    sourceContext: {
+      pdfAttached: Boolean(pdfText || input.pdfFileName),
+      ...(input.pdfFileName ? { pdfName: input.pdfFileName } : {}),
+      tavilyEnabled: Boolean(input.enableWebSearch),
+      language: lang,
+      selectedModel: input.selectedModel || modelString,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
     // For LLM-generated agents, embed full configs so the client can

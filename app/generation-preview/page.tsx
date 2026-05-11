@@ -251,8 +251,10 @@ function GenerationPreviewContent() {
               },
             }
           : {}),
+        ...(currentSession.pdfFileName ? { pdfFileName: currentSession.pdfFileName } : {}),
         language: currentSession.requirements.language,
         enableWebSearch: !!currentSession.requirements.webSearch,
+        selectedModel: getCurrentModelConfig().modelString,
         enableImageGeneration: !!settings.imageGenerationEnabled,
         ...(settings.imageGenerationEnabled && settings.imageProviderId
           ? {
@@ -616,8 +618,18 @@ function GenerationPreviewContent() {
         id: stageId,
         name: extractTopicFromRequirement(currentSession.requirements.requirement),
         description: '',
+        learningGoal: currentSession.requirements.requirement.trim() || undefined,
         language: currentSession.requirements.language || 'zh-CN',
         style: 'professional',
+        sourceContext: {
+          pdfAttached: Boolean(
+            currentSession.pdfFileName || currentSession.pdfText || currentSession.pdfStorageKey,
+          ),
+          ...(currentSession.pdfFileName ? { pdfName: currentSession.pdfFileName } : {}),
+          tavilyEnabled: Boolean(currentSession.requirements.webSearch),
+          language: currentSession.requirements.language || 'zh-CN',
+          selectedModel: getCurrentModelConfig().modelString,
+        },
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };

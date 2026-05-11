@@ -1,5 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Scene, SceneType, SceneContent, Whiteboard } from '@/lib/types/stage';
+import type {
+  ClassroomSourceContext,
+  Scene,
+  SceneType,
+  SceneContent,
+  Whiteboard,
+} from '@/lib/types/stage';
 import type { Action } from '@/lib/types/action';
 import type {
   SessionType,
@@ -45,8 +51,10 @@ export interface StageRecord {
   description?: string;
   createdAt: number; // timestamp
   updatedAt: number; // timestamp
+  learningGoal?: string;
   language?: string;
   style?: string;
+  sourceContext?: ClassroomSourceContext;
   currentSceneId?: string;
   agentIds?: string[]; // Agent IDs selected at creation time
 }

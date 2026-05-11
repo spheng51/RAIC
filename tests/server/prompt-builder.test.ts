@@ -57,6 +57,31 @@ describe('buildStructuredPrompt', () => {
     });
   });
 
+  it('adds the interactive tutor lesson contract to classroom chat prompts', () => {
+    const prompt = buildStructuredPrompt(teacherAgent, {
+      ...storeState,
+      stage: {
+        ...storeState.stage,
+        learningGoal: 'Use energy conservation to solve a roller-coaster problem',
+        sourceContext: {
+          pdfAttached: true,
+          pdfName: 'energy.pdf',
+          tavilyEnabled: false,
+          language: 'en-US',
+          selectedModel: 'openai:gpt-5.1',
+        },
+      },
+    });
+
+    expect(prompt).toContain('## Interactive Tutor Lesson Contract');
+    expect(prompt).toContain(
+      'Learning goal: Use energy conservation to solve a roller-coaster problem',
+    );
+    expect(prompt).toContain('Ask one short diagnostic question');
+    expect(prompt).toContain('PDF is available: energy.pdf');
+    expect(prompt).toContain('Web search is disabled');
+  });
+
   it.each([
     'teacher first-run classrooms',
     'public demo flows',

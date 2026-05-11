@@ -10,6 +10,10 @@ import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { WhiteboardActionRecord, AgentTurnSummary } from './director-prompt';
 import { getActionDescriptions, getEffectiveActions } from './tool-schemas';
 import { formatAdaptiveContextForPrompt } from '@/lib/server/classroom-intelligence';
+import {
+  buildClassroomLessonState,
+  buildClassroomTutorSystemPrompt,
+} from '@/lib/classroom/lesson-state';
 
 // ==================== Role Guidelines ====================
 
@@ -128,6 +132,13 @@ Personalize your teaching based on their background when relevant. Address them 
   // Build peer context section (what agents already said this round)
   const peerContext = buildPeerContextSection(agentResponses, agentConfig.name);
   const adaptiveContextSection = formatAdaptiveContextForPrompt(adaptiveContext ?? null);
+  const tutorPrompt = buildClassroomTutorSystemPrompt(
+    buildClassroomLessonState({
+      stage: storeState.stage,
+      scenes: storeState.scenes,
+      currentSceneId: storeState.currentSceneId,
+    }),
+  );
 
   // Whether spotlight/laser are available (only on slide scenes)
   const hasSlideActions =
@@ -181,9 +192,9 @@ ${agentConfig.persona}
 
 ## Your Classroom Role
 ${roleGuideline}
-${studentProfileSection}${peerContext}${languageConstraint}${
-    adaptiveContextSection ? `\n${adaptiveContextSection}\n` : ''
-  }
+${studentProfileSection}${peerContext}${languageConstraint}
+${tutorPrompt}
+${adaptiveContextSection ? `\n${adaptiveContextSection}\n` : ''}
 # Output Format
 You MUST output a JSON array for ALL responses. Each element is an object with a \`type\` field:
 

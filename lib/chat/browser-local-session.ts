@@ -3,6 +3,10 @@ import type { BrowserLocalOpenAIMessage } from '@/lib/utils/browser-local-openai
 import type { ChatMessageMetadata, SessionConfig, SessionType } from '@/lib/types/chat';
 import type { Stage, Scene } from '@/lib/types/stage';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
+import {
+  buildClassroomLessonState,
+  buildClassroomTutorSystemPrompt,
+} from '@/lib/classroom/lesson-state';
 
 interface BrowserLocalPromptContext {
   sessionType: SessionType;
@@ -115,6 +119,16 @@ function buildSystemPrompt({
   if (stageContext) {
     sections.push(`Classroom context:\n${stageContext}`);
   }
+
+  sections.push(
+    buildClassroomTutorSystemPrompt(
+      buildClassroomLessonState({
+        stage,
+        scenes,
+        currentSceneId,
+      }),
+    ),
+  );
 
   const profileContext = buildUserProfileContext(userProfile);
   if (profileContext) {

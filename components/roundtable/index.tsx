@@ -781,6 +781,7 @@ export function Roundtable({
                         }
                       }}
                       placeholder={t('roundtable.inputPlaceholder')}
+                      aria-label={t('roundtable.inputPlaceholder')}
                       autoFocus
                       rows={1}
                       className="w-full resize-none bg-transparent border-none focus:ring-0 focus:outline-none outline-none shadow-none ring-0 text-gray-900 dark:text-white text-sm placeholder:text-gray-400 dark:placeholder:text-gray-400 py-0 leading-[40px] max-h-[80px]"
@@ -788,8 +789,10 @@ export function Roundtable({
                     />
                   </div>
                   <button
+                    type="button"
                     onClick={handleSendMessage}
                     disabled={isSendCooldown}
+                    aria-label={t('roundtable.sendMessage')}
                     className={cn(
                       'w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0',
                       isSendCooldown
@@ -1296,6 +1299,7 @@ export function Roundtable({
                           }
                         }}
                         placeholder={t('roundtable.inputPlaceholder')}
+                        aria-label={t('roundtable.inputPlaceholder')}
                         autoFocus
                         rows={1}
                         className="w-full resize-none bg-transparent border-none focus:ring-0 focus:outline-none outline-none shadow-none ring-0 text-gray-700 dark:text-gray-200 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 min-h-[40px] max-h-[120px]"
@@ -1303,8 +1307,10 @@ export function Roundtable({
                       />
                     </div>
                     <button
+                      type="button"
                       onClick={handleSendMessage}
                       disabled={isSendCooldown}
+                      aria-label={t('roundtable.sendMessage')}
                       className={cn(
                         'p-2.5 text-white rounded-xl transition shadow-md mb-0.5 shrink-0',
                         isSendCooldown

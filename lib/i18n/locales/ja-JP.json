@@ -177,7 +177,8 @@
   "roundtable": {
     "teacher": "教師",
     "you": "あなた",
-    "inputPlaceholder": "メッセージを入力...",
+    "inputPlaceholder": "Ask a question, answer the teacher, or say 'show another example'.",
+    "sendMessage": "Send message",
     "listening": "聞いています...",
     "processing": "処理中...",
     "noSpeechDetected": "音声が検出されませんでした。もう一度お試しください",
@@ -278,6 +279,27 @@
     "rename": "名前を変更",
     "renamePlaceholder": "教室名を入力",
     "renameFailed": "教室名の変更に失敗しました",
+    "lesson": {
+      "goalLabel": "Learning goal",
+      "progressAria": "Lesson progress",
+      "stagesAria": "Lesson stages",
+      "sceneProgress": "Scene {{current}} of {{total}}",
+      "pdfDocument": "document",
+      "pdfAttached": "PDF: {{name}}",
+      "pdfMissing": "No PDF",
+      "webAvailable": "Web search available",
+      "webDisabled": "Web search off",
+      "languageLabel": "Language: {{language}}",
+      "modelLabel": "Model: {{model}}",
+      "stages": {
+        "intro": "Introduction",
+        "explain": "Explanation",
+        "example": "Example",
+        "practice": "Practice",
+        "check": "Check",
+        "recap": "Recap"
+      }
+    },
     "mirofish": {
       "dialogTitle": "MiroFish classroom sidecar",
       "dialogDescription": "Attach a prepared MiroFish simulation or create one with AI, then manage classroom control and collaboration from one place.",

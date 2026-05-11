@@ -10,6 +10,7 @@ import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-present
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { SceneSidebar } from './stage/scene-sidebar';
 import { LiveClassroomCockpit } from './stage/live-classroom-cockpit';
+import { LessonFlowPanel } from './stage/lesson-flow-panel';
 import { Header } from './header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
 import { MiroFishManagerDialog } from '@/components/mirofish/mirofish-manager-dialog';
@@ -39,6 +40,8 @@ import type {
   SharedSimulationStatus,
 } from '@/lib/types/stage';
 import { cn } from '@/lib/utils';
+import { buildClassroomLessonState } from '@/lib/classroom/lesson-state';
+import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import {
   getSharedSimulationCollaborationMode,
   getSharedSimulationInteractionReason,
@@ -169,6 +172,7 @@ export function Stage({
   const setChatAreaWidth = useSettingsStore((s) => s.setChatAreaWidth);
   const chatAreaCollapsed = useSettingsStore((s) => s.chatAreaCollapsed);
   const setChatAreaCollapsed = useSettingsStore((s) => s.setChatAreaCollapsed);
+  const currentModelId = useSettingsStore((s) => s.modelId);
   const setTTSMuted = useSettingsStore((s) => s.setTTSMuted);
   const setTTSVolume = useSettingsStore((s) => s.setTTSVolume);
   const autoPlayLecture = useSettingsStore((s) => s.autoPlayLecture);
@@ -1465,6 +1469,16 @@ export function Stage({
     ? scenes.length
     : scenes.findIndex((s) => s.id === currentSceneId);
   const totalScenesCount = scenes.length + (hasNextPending ? 1 : 0);
+  const lessonState = useMemo(
+    () =>
+      buildClassroomLessonState({
+        stage,
+        scenes,
+        currentSceneId,
+        selectedModelFallback: getCurrentModelConfig().modelString,
+      }),
+    [currentModelId, currentSceneId, scenes, stage],
+  );
 
   // get action information
   const totalActions = currentScene?.actions?.length || 0;
@@ -1867,8 +1881,9 @@ export function Stage({
   // Calculate scene viewer height (subtract Header's 80px height)
   const sceneViewerHeight = (() => {
     const headerHeight = isPresenting ? 0 : 80; // Header h-20 = 80px
+    const lessonGuideHeight = isPresenting ? 0 : 126;
     const roundtableHeight = mode === 'playback' && !isPresenting ? 192 : 0;
-    return `calc(100% - ${headerHeight + roundtableHeight}px)`;
+    return `calc(100% - ${headerHeight + lessonGuideHeight + roundtableHeight}px)`;
   })();
 
   return (
@@ -1899,6 +1914,15 @@ export function Stage({
             onOpenMiroFishManager={openMiroFishManager}
           />
         )}
+
+        {!isPresenting ? (
+          <LessonFlowPanel
+            lessonState={lessonState}
+            currentSceneTitle={currentScene?.title}
+            currentSceneNumber={Math.max(currentSceneIndex + 1, 1)}
+            totalScenesCount={totalScenesCount}
+          />
+        ) : null}
 
         {!isPresenting && classroomNotice ? (
           <div className="px-6 pb-2">

@@ -45,6 +45,14 @@ export interface SharedSimulation {
   status: SharedSimulationStatus;
 }
 
+export interface ClassroomSourceContext {
+  pdfAttached: boolean;
+  pdfName?: string;
+  tavilyEnabled: boolean;
+  language: string;
+  selectedModel: string;
+}
+
 /**
  * Stage - Represents the entire classroom/course
  */
@@ -54,9 +62,11 @@ export interface Stage {
   description?: string;
   createdAt: number;
   updatedAt: number;
+  learningGoal?: string;
   // Stage metadata
   language?: string;
   style?: string;
+  sourceContext?: ClassroomSourceContext;
   // Whiteboard data
   whiteboard?: Whiteboard[];
   // Agent IDs selected when this classroom was created
