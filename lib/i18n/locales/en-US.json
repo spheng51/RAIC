@@ -186,6 +186,28 @@
     "discussionEnded": "Discussion ended",
     "qaEnded": "Q&A ended",
     "thinking": "Thinking",
+    "teacherStates": {
+      "preparingHint": "Preparing a hint...",
+      "adapting": "Adapting difficulty...",
+      "checking": "Checking understanding..."
+    },
+    "quickActionsLabel": "Learner actions",
+    "quickActions": {
+      "stuck": "I'm stuck",
+      "example": "Show another example",
+      "visual": "Make it visual",
+      "quiz": "Quiz me",
+      "harder": "Harder",
+      "easier": "Easier"
+    },
+    "quickActionMessages": {
+      "stuck": "I'm stuck. Please slow down and give me a hint.",
+      "example": "Show another example.",
+      "visual": "Make it visual. Use the board or a simple diagram.",
+      "quiz": "Quiz me with one short question.",
+      "harder": "Make it harder.",
+      "easier": "Make it easier."
+    },
     "yourTurn": "Your turn",
     "stopDiscussion": "Stop Discussion",
     "autoPlay": "Auto-play",
@@ -301,6 +323,13 @@
         "recap": "Recap"
       }
     },
+    "boardNotes": {
+      "ariaLabel": "Board notes",
+      "keyIdea": "Key idea",
+      "example": "Example",
+      "steps": "Steps",
+      "practice": "Practice prompt"
+    },
     "mirofish": {
       "dialogTitle": "MiroFish classroom sidecar",
       "dialogDescription": "Attach a prepared MiroFish simulation or create one with AI, then manage classroom control and collaboration from one place.",
@@ -323,10 +352,11 @@
       "updateAttachButton": "Update attached MiroFish",
       "attachButtonShort": "Attach",
       "manageButton": "Manage MiroFish",
-      "manageButtonShort": "MiroFish",
-      "simulationsButton": "Simulations",
-      "simulationsButtonShort": "Simulations",
-      "simulationsButtonTitle": "Open simulations",
+      "manageButtonShort": "Sim Lab",
+      "simulationsButton": "Sim Lab",
+      "simulationsButtonShort": "Sim Lab",
+      "simulationsButtonTitle": "Open Sim Lab",
+      "setupNeeded": "Sim Lab setup needed. Add the MiroFish environment variables in Vercel to enable simulation creation.",
       "attachFailed": "Failed to attach MiroFish.",
       "contextTitle": "Classroom context",
       "contextStage": "Stage",

@@ -186,6 +186,28 @@
     "discussionEnded": "讨论已结束",
     "qaEnded": "问答已结束",
     "thinking": "思考中",
+    "teacherStates": {
+      "preparingHint": "正在准备提示...",
+      "adapting": "正在调整难度...",
+      "checking": "正在检查理解..."
+    },
+    "quickActionsLabel": "学习操作",
+    "quickActions": {
+      "stuck": "我卡住了",
+      "example": "再举一个例子",
+      "visual": "可视化说明",
+      "quiz": "考考我",
+      "harder": "更难一点",
+      "easier": "简单一点"
+    },
+    "quickActionMessages": {
+      "stuck": "我卡住了。请慢一点，给我一个提示。",
+      "example": "请再举一个例子。",
+      "visual": "请可视化说明，用白板或简单图示。",
+      "quiz": "请用一个简短问题考考我。",
+      "harder": "请提高难度。",
+      "easier": "请降低难度。"
+    },
     "yourTurn": "轮到你发言了",
     "stopDiscussion": "结束讨论",
     "autoPlay": "自动播放",
@@ -301,6 +323,13 @@
         "recap": "回顾"
       }
     },
+    "boardNotes": {
+      "ariaLabel": "板书笔记",
+      "keyIdea": "核心概念",
+      "example": "示例",
+      "steps": "步骤",
+      "practice": "练习提示"
+    },
     "mirofish": {
       "dialogTitle": "MiroFish classroom sidecar",
       "dialogDescription": "Attach a prepared MiroFish simulation or create one with AI, then manage classroom control and collaboration from one place.",
@@ -323,10 +352,11 @@
       "updateAttachButton": "Update attached MiroFish",
       "attachButtonShort": "Attach",
       "manageButton": "Manage MiroFish",
-      "manageButtonShort": "MiroFish",
-      "simulationsButton": "Simulations",
-      "simulationsButtonShort": "Simulations",
-      "simulationsButtonTitle": "Open simulations",
+      "manageButtonShort": "Sim Lab",
+      "simulationsButton": "Sim Lab",
+      "simulationsButtonShort": "Sim Lab",
+      "simulationsButtonTitle": "Open Sim Lab",
+      "setupNeeded": "Sim Lab setup needed. Add the MiroFish environment variables in Vercel to enable simulation creation.",
       "attachFailed": "Failed to attach MiroFish.",
       "contextTitle": "Classroom context",
       "contextStage": "Stage",

@@ -10,7 +10,14 @@ function readLocaleMessages(code: string) {
       localDemoBadge?: string;
       localDemoNotice?: string;
       teacherBackedBadge?: string;
+      boardNotes?: Record<string, string | undefined>;
       mirofish?: Record<string, string | undefined>;
+    };
+    roundtable?: {
+      quickActionsLabel?: string;
+      quickActions?: Record<string, string | undefined>;
+      quickActionMessages?: Record<string, string | undefined>;
+      teacherStates?: Record<string, string | undefined>;
     };
     settings?: Record<string, string | undefined>;
     toolbar?: Record<string, string | undefined>;
@@ -88,6 +95,7 @@ describe('locale resource parity', () => {
       'generatePlanButton',
       'createAndAttachButton',
       'manageButton',
+      'setupNeeded',
       'surfaceLesson',
       'surfaceSimulation',
       'surfaceReport',
@@ -100,6 +108,45 @@ describe('locale resource parity', () => {
 
       for (const key of requiredKeys) {
         expect(mirofish[key], `${locale.code} missing classroom.mirofish.${key}`).toBeTruthy();
+      }
+    }
+  });
+
+  it('includes classroom action and board note strings in every supported locale', () => {
+    const actionKeys = ['stuck', 'example', 'visual', 'quiz', 'harder', 'easier'] as const;
+    const teacherStateKeys = ['preparingHint', 'adapting', 'checking'] as const;
+    const boardNoteKeys = ['ariaLabel', 'keyIdea', 'example', 'steps', 'practice'] as const;
+
+    for (const locale of supportedLocales) {
+      const messages = readLocaleMessages(locale.code);
+      const roundtable = messages.roundtable ?? {};
+      const boardNotes = messages.classroom?.boardNotes ?? {};
+
+      expect(
+        roundtable.quickActionsLabel,
+        `${locale.code} missing roundtable.quickActionsLabel`,
+      ).toBeTruthy();
+
+      for (const key of actionKeys) {
+        expect(
+          roundtable.quickActions?.[key],
+          `${locale.code} missing roundtable.quickActions.${key}`,
+        ).toBeTruthy();
+        expect(
+          roundtable.quickActionMessages?.[key],
+          `${locale.code} missing roundtable.quickActionMessages.${key}`,
+        ).toBeTruthy();
+      }
+
+      for (const key of teacherStateKeys) {
+        expect(
+          roundtable.teacherStates?.[key],
+          `${locale.code} missing roundtable.teacherStates.${key}`,
+        ).toBeTruthy();
+      }
+
+      for (const key of boardNoteKeys) {
+        expect(boardNotes[key], `${locale.code} missing classroom.boardNotes.${key}`).toBeTruthy();
       }
     }
   });

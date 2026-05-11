@@ -186,6 +186,28 @@
     "discussionEnded": "ディスカッションが終了しました",
     "qaEnded": "Q&Aが終了しました",
     "thinking": "思考中",
+    "teacherStates": {
+      "preparingHint": "ヒントを準備中...",
+      "adapting": "難易度を調整中...",
+      "checking": "理解を確認中..."
+    },
+    "quickActionsLabel": "学習アクション",
+    "quickActions": {
+      "stuck": "わからない",
+      "example": "別の例",
+      "visual": "図で見せて",
+      "quiz": "クイズして",
+      "harder": "もっと難しく",
+      "easier": "もっと簡単に"
+    },
+    "quickActionMessages": {
+      "stuck": "わからないので、ゆっくり説明してヒントをください。",
+      "example": "別の例を見せてください。",
+      "visual": "図や簡単なボードで視覚的に説明してください。",
+      "quiz": "短い質問を1つ出してください。",
+      "harder": "もっと難しくしてください。",
+      "easier": "もっと簡単にしてください。"
+    },
     "yourTurn": "あなたの番です",
     "stopDiscussion": "ディスカッションを終了",
     "autoPlay": "自動再生",
@@ -301,6 +323,13 @@
         "recap": "Recap"
       }
     },
+    "boardNotes": {
+      "ariaLabel": "Board notes",
+      "keyIdea": "Key idea",
+      "example": "Example",
+      "steps": "Steps",
+      "practice": "Practice prompt"
+    },
     "mirofish": {
       "dialogTitle": "MiroFish classroom sidecar",
       "dialogDescription": "Attach a prepared MiroFish simulation or create one with AI, then manage classroom control and collaboration from one place.",
@@ -323,10 +352,11 @@
       "updateAttachButton": "Update attached MiroFish",
       "attachButtonShort": "Attach",
       "manageButton": "Manage MiroFish",
-      "manageButtonShort": "MiroFish",
-      "simulationsButton": "Simulations",
-      "simulationsButtonShort": "Simulations",
-      "simulationsButtonTitle": "Open simulations",
+      "manageButtonShort": "Sim Lab",
+      "simulationsButton": "Sim Lab",
+      "simulationsButtonShort": "Sim Lab",
+      "simulationsButtonTitle": "Open Sim Lab",
+      "setupNeeded": "Sim Lab setup needed. Add the MiroFish environment variables in Vercel to enable simulation creation.",
       "attachFailed": "Failed to attach MiroFish.",
       "contextTitle": "Classroom context",
       "contextStage": "Stage",

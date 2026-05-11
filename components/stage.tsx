@@ -10,6 +10,7 @@ import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-present
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { SceneSidebar } from './stage/scene-sidebar';
 import { LiveClassroomCockpit } from './stage/live-classroom-cockpit';
+import { BoardNotesPanel } from './stage/board-notes-panel';
 import { LessonFlowPanel } from './stage/lesson-flow-panel';
 import { Header } from './header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
@@ -1666,9 +1667,20 @@ export function Stage({
   const reportAvailable =
     presentationState?.reportAvailable ?? hasSharedSimulationReport(sharedSimulation);
   const viewerCanManageSimulation = presentationState?.viewerCanManageSimulation ?? false;
-  const openMiroFishManager = viewerCanManageSimulation
-    ? () => setMiroFishManagerOpen(true)
-    : undefined;
+  const canManageMiroFish =
+    viewerCanManageSimulation ||
+    (classroomSource === 'teacher-server' && miroFishAuthoringAvailable);
+  const openMiroFishManager =
+    classroomSource === 'teacher-server' || canManageMiroFish
+      ? () => {
+          if (!canManageMiroFish) {
+            toast.info(t('classroom.mirofish.setupNeeded'));
+            return;
+          }
+
+          setMiroFishManagerOpen(true);
+        }
+      : undefined;
   const viewerCanControlPresentation = presentationState?.viewerCanControlPresentation ?? false;
   const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
   const presentationParticipants = useMemo(
@@ -1881,7 +1893,7 @@ export function Stage({
   // Calculate scene viewer height (subtract Header's 80px height)
   const sceneViewerHeight = (() => {
     const headerHeight = isPresenting ? 0 : 80; // Header h-20 = 80px
-    const lessonGuideHeight = isPresenting ? 0 : 126;
+    const lessonGuideHeight = isPresenting ? 0 : 194;
     const roundtableHeight = mode === 'playback' && !isPresenting ? 192 : 0;
     return `calc(100% - ${headerHeight + lessonGuideHeight + roundtableHeight}px)`;
   })();
@@ -1916,12 +1928,15 @@ export function Stage({
         )}
 
         {!isPresenting ? (
-          <LessonFlowPanel
-            lessonState={lessonState}
-            currentSceneTitle={currentScene?.title}
-            currentSceneNumber={Math.max(currentSceneIndex + 1, 1)}
-            totalScenesCount={totalScenesCount}
-          />
+          <>
+            <LessonFlowPanel
+              lessonState={lessonState}
+              currentSceneTitle={currentScene?.title}
+              currentSceneNumber={Math.max(currentSceneIndex + 1, 1)}
+              totalScenesCount={totalScenesCount}
+            />
+            <BoardNotesPanel lessonState={lessonState} currentScene={currentScene} />
+          </>
         ) : null}
 
         {!isPresenting && classroomNotice ? (
@@ -1981,7 +1996,7 @@ export function Stage({
                 participants={presentationParticipants}
                 controllerDisplayName={controllerDisplayName}
                 viewerCanControlPresentation={viewerCanControlPresentation}
-                viewerCanManageSimulation={viewerCanManageSimulation}
+                viewerCanManageSimulation={canManageMiroFish}
                 classPaused={engineMode !== 'playing' && engineMode !== 'live'}
                 ttsMuted={ttsMuted}
                 autoPlayEnabled={autoPlayLecture}
@@ -2044,7 +2059,7 @@ export function Stage({
             sharedSimulation={sharedSimulation}
             activeSurface={activePresentationSurface}
             reportAvailable={reportAvailable}
-            viewerCanManageSimulation={viewerCanManageSimulation}
+            viewerCanManageSimulation={canManageMiroFish}
             viewerCanControlPresentation={viewerCanControlPresentation}
             onSetPresentationSurface={handleSetPresentationSurface}
             onOpenMiroFishManager={openMiroFishManager}
@@ -2230,7 +2245,7 @@ export function Stage({
               sharedSimulation={sharedSimulation}
               activeSurface={activePresentationSurface}
               reportAvailable={reportAvailable}
-              viewerCanManageSimulation={viewerCanManageSimulation}
+              viewerCanManageSimulation={canManageMiroFish}
               viewerCanControlPresentation={viewerCanControlPresentation}
               onSetPresentationSurface={handleSetPresentationSurface}
               onOpenMiroFishManager={openMiroFishManager}

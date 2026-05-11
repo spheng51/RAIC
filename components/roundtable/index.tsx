@@ -13,9 +13,16 @@ import {
   ChevronRight,
   Repeat,
   BookOpen,
+  CircleHelp,
+  GraduationCap,
+  Lightbulb,
   Loader2,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
   Volume2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AudioIndicatorState } from './audio-indicator';
 import { CanvasToolbar } from '@/components/canvas/canvas-toolbar';
@@ -30,6 +37,11 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { ParticipantPresenceCard } from '@/components/participants/participant-presence-card';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { DEFAULT_TEACHER_AVATAR, DEFAULT_USER_AVATAR } from '@/components/roundtable/constants';
+import {
+  LEARNER_INTENT_ACTIONS,
+  getTeacherStateLabelKey,
+  type LearnerIntentId,
+} from '@/lib/classroom/learner-intents';
 import type { DiscussionAction } from '@/lib/types/action';
 import type { EngineMode, PlaybackView } from '@/lib/playback';
 import type { Participant } from '@/lib/types/roundtable';
@@ -116,6 +128,15 @@ const VOICE_WAVE_BARS = [
   { peak: 21, duration: 0.66 },
   { peak: 14, duration: 0.53 },
 ] as const;
+
+const LEARNER_INTENT_ICONS: Record<LearnerIntentId, LucideIcon> = {
+  stuck: CircleHelp,
+  example: Lightbulb,
+  visual: Sparkles,
+  quiz: GraduationCap,
+  harder: TrendingUp,
+  easier: TrendingDown,
+};
 
 function VoiceWaveformBars({ barClassName }: { readonly barClassName: string }) {
   return VOICE_WAVE_BARS.map((bar, i) => (
@@ -344,6 +365,32 @@ export function Roundtable({
   const teacherAvatar = teacherParticipant?.avatar || DEFAULT_TEACHER_AVATAR;
   const teacherName = teacherParticipant?.name || t('roundtable.teacher');
   const userAvatar = userParticipant?.avatar || DEFAULT_USER_AVATAR;
+  const teacherStateLabel = t(
+    getTeacherStateLabelKey({
+      isCueUser,
+      isSendCooldown,
+      thinkingStage: thinkingState?.stage,
+    }),
+  );
+
+  const sendLearnerMessage = useCallback(
+    (message: string) => {
+      const trimmed = message.trim();
+      if (!trimmed || isSendCooldownRef.current || isSendCooldown) {
+        return false;
+      }
+
+      showLocalUserMessage(trimmed);
+      onMessageSend?.(trimmed);
+      setIsSendCooldown(true);
+      isSendCooldownRef.current = true;
+      setInputValue('');
+      setIsInputOpen(false);
+      setIsVoiceOpen(false);
+      return true;
+    },
+    [isSendCooldown, onMessageSend, showLocalUserMessage],
+  );
 
   // Audio recording
   const { isRecording, isProcessing, startRecording, stopRecording, cancelRecording } =
@@ -359,11 +406,7 @@ export function Roundtable({
           setIsVoiceOpen(false);
           return;
         }
-        showLocalUserMessage(text);
-        onMessageSend?.(text);
-        setIsSendCooldown(true);
-        isSendCooldownRef.current = true;
-        setIsVoiceOpen(false);
+        sendLearnerMessage(text);
       },
       onError: (error) => {
         toast.error(error);
@@ -372,15 +415,8 @@ export function Roundtable({
     });
 
   const handleSendMessage = useCallback(() => {
-    if (!inputValue.trim() || isSendCooldown) return;
-
-    showLocalUserMessage(inputValue);
-    onMessageSend?.(inputValue);
-    setIsSendCooldown(true);
-    isSendCooldownRef.current = true;
-    setInputValue('');
-    setIsInputOpen(false);
-  }, [inputValue, isSendCooldown, onMessageSend, showLocalUserMessage]);
+    sendLearnerMessage(inputValue);
+  }, [inputValue, sendLearnerMessage]);
 
   const handleToggleInput = useCallback(() => {
     if (isSendCooldown) return;
@@ -417,6 +453,47 @@ export function Roundtable({
     stopRecording,
     startRecording,
   ]);
+
+  const renderLearnerIntentChips = useCallback(
+    (variant: 'stage' | 'presentation') => (
+      <div
+        className={cn(
+          'flex flex-wrap gap-1.5',
+          variant === 'presentation' ? 'justify-center px-2' : 'justify-end',
+        )}
+        aria-label={t('roundtable.quickActionsLabel')}
+      >
+        {LEARNER_INTENT_ACTIONS.map((action) => {
+          const Icon = LEARNER_INTENT_ICONS[action.id];
+          const label = t(action.labelKey);
+
+          return (
+            <button
+              key={action.id}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                sendLearnerMessage(t(action.messageKey));
+              }}
+              disabled={isSendCooldown}
+              aria-label={label}
+              title={label}
+              className={cn(
+                'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold shadow-sm transition-all active:scale-95',
+                'border-slate-200 bg-white/85 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700',
+                'dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/80 dark:hover:text-indigo-200',
+                isSendCooldown && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    ),
+    [isSendCooldown, sendLearnerMessage, t],
+  );
 
   // Keyboard shortcuts for roundtable interaction (#255)
   // T = toggle text input, V = toggle voice input, Escape = dismiss panels,
@@ -767,8 +844,9 @@ export function Roundtable({
                 initial={{ opacity: 0, scale: 0.95, y: 15, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, scale: 0.95, y: 15, filter: 'blur(4px)' }}
-                className="w-[min(480px,calc(100vw-3rem))] pointer-events-auto"
+                className="w-[min(560px,calc(100vw-3rem))] space-y-2 pointer-events-auto"
               >
+                {renderLearnerIntentChips('presentation')}
                 <div className="flex items-center gap-3 bg-white/70 dark:bg-black/60 backdrop-blur-xl rounded-full px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-200/60 dark:border-white/10">
                   <div className="flex-1 min-w-0 flex items-center">
                     <textarea
@@ -890,7 +968,7 @@ export function Roundtable({
                   ))}
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
-                  {t('roundtable.thinking')}
+                  {teacherStateLabel}
                 </span>
               </motion.div>
             )}
@@ -1285,8 +1363,9 @@ export function Roundtable({
                   animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0, scale: 0.95, y: 15, filter: 'blur(4px)' }}
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute inset-x-6 bottom-4 z-20 flex items-center justify-end"
+                  className="absolute inset-x-6 bottom-4 z-20 flex flex-col items-end gap-2"
                 >
+                  {renderLearnerIntentChips('stage')}
                   <div className="relative w-fit max-w-[85%] sm:max-w-[65%] min-w-[200px] sm:min-w-[300px] bg-white/90 dark:bg-gray-800/90 backdrop-blur-md p-2 pr-2 rounded-2xl rounded-br-none shadow-2xl border border-purple-200 dark:border-purple-700 flex items-end gap-2 ring-1 ring-purple-100/50 dark:ring-purple-800/50">
                     <div className="pl-4 flex-1 py-1 min-w-0">
                       <textarea
@@ -1410,7 +1489,7 @@ export function Roundtable({
                     />
                   </div>
                   <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                    {t('roundtable.thinking')}
+                    {teacherStateLabel}
                   </span>
                 </motion.div>
               )}
