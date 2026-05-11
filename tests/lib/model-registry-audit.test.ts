@@ -49,7 +49,9 @@ describe('model registry audit 2026-05-10', () => {
     expect(ids(VIDEO_PROVIDERS.veo.models)).toEqual(
       expect.arrayContaining(['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview']),
     );
-    expect(ids(VIDEO_PROVIDERS.sora.models)).toEqual(expect.arrayContaining(['sora-2', 'sora-2-pro']));
+    expect(ids(VIDEO_PROVIDERS.sora.models)).toEqual(
+      expect.arrayContaining(['sora-2', 'sora-2-pro']),
+    );
   });
 
   it('keeps non-model provider registries present for settings UI smoke', () => {

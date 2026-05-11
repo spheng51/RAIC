@@ -37,6 +37,8 @@ import type {
   ASRProviderConfig,
 } from './types';
 
+export const AUDIO_MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
+
 /**
  * Default supported languages for custom OpenAI-compatible ASR providers.
  * A practical subset of commonly used languages + auto-detect.
@@ -844,6 +846,8 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
     defaultBaseUrl: 'https://api.elevenlabs.io/v1',
     icon: '/logos/elevenlabs.svg',
     models: [
+      { id: 'eleven_v3', name: 'Eleven v3' },
+      { id: 'eleven_turbo_v2_5', name: 'Turbo v2.5' },
       { id: 'eleven_multilingual_v2', name: 'Multilingual v2' },
       { id: 'eleven_flash_v2_5', name: 'Flash v2.5' },
       { id: 'eleven_flash_v2', name: 'Flash v2' },

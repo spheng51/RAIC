@@ -49,6 +49,8 @@ export type { ProviderId, ProviderConfig, ModelInfo, ModelConfig };
 /** Provider IDs whose logos are monochrome-dark and need `dark:invert` in dark mode */
 export const MONO_LOGO_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'ollama', 'lmstudio']);
 
+export const MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
+
 /**
  * Provider registry
  */
@@ -61,6 +63,22 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     requiresApiKey: true,
     icon: '/logos/openai.svg',
     models: [
+      {
+        id: 'gpt-5.5',
+        name: 'GPT-5.5',
+        contextWindow: 1000000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
       {
         id: 'gpt-5.4',
         name: 'GPT-5.4',
@@ -307,6 +325,22 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/claude.svg',
     models: [
       {
+        id: 'claude-opus-4-7',
+        name: 'Claude Opus 4.7',
+        contextWindow: 1000000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
+      {
         id: 'claude-opus-4-6',
         name: 'Claude Opus 4.6',
         contextWindow: 200000,
@@ -381,6 +415,22 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     icon: '/logos/gemini.svg',
     models: [
+      {
+        id: 'gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash Lite',
+        contextWindow: 1048576,
+        outputWindow: 65536,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: false,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
       {
         id: 'gemini-3.1-pro-preview',
         name: 'Gemini 3.1 Pro Preview',
@@ -472,6 +522,22 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     requiresApiKey: true,
     icon: '/logos/glm.svg',
     models: [
+      {
+        id: 'glm-5.1',
+        name: 'GLM-5.1',
+        contextWindow: 198000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
       // GLM-5 Series - Latest flagship model
       {
         id: 'glm-5',
@@ -565,6 +631,54 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/qwen.svg',
     models: [
       {
+        id: 'qwen3.6-max-preview',
+        name: 'Qwen3.6 Max Preview',
+        contextWindow: 262144,
+        outputWindow: 65536,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'qwen3.6-plus',
+        name: 'Qwen3.6 Plus',
+        contextWindow: 1000000,
+        outputWindow: 65536,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'qwen3.6-flash',
+        name: 'Qwen3.6 Flash',
+        contextWindow: 1000000,
+        outputWindow: 65536,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
         id: 'qwen3.5-flash',
         name: 'Qwen3.5 Flash',
         contextWindow: 1000000,
@@ -603,6 +717,38 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     requiresApiKey: true,
     icon: '/logos/deepseek.svg',
     models: [
+      {
+        id: 'deepseek-v4-pro',
+        name: 'DeepSeek V4 Pro',
+        contextWindow: 1000000,
+        outputWindow: 384000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'deepseek-v4-flash',
+        name: 'DeepSeek V4 Flash',
+        contextWindow: 1000000,
+        outputWindow: 384000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: false,
+          },
+        },
+      },
       {
         id: 'deepseek-chat',
         name: 'DeepSeek-Chat',
@@ -646,6 +792,22 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     requiresApiKey: true,
     icon: '/logos/kimi.png',
     models: [
+      {
+        id: 'kimi-k2.6',
+        name: 'Kimi K2.6',
+        contextWindow: 256000,
+        outputWindow: 96000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
       // K2.5 Series (2026) - 1T MoE, 32B active parameters
       {
         id: 'kimi-k2.5',
@@ -925,6 +1087,36 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/grok.svg',
     models: [
       {
+        id: 'grok-4.3',
+        name: 'Grok 4.3',
+        contextWindow: 256000,
+        outputWindow: 32768,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
+        id: 'grok-4.20-0309-reasoning',
+        name: 'Grok 4.20 Reasoning',
+        contextWindow: 2000000,
+        outputWindow: 131072,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: false,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'grok-4.20-0309-non-reasoning',
+        name: 'Grok 4.20',
+        contextWindow: 2000000,
+        outputWindow: 131072,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
         id: 'grok-4.20-reasoning',
         name: 'Grok 4.20 Reasoning',
         contextWindow: 2000000,
@@ -1188,8 +1380,10 @@ function getCompatThinkingBodyParams(
 }
 
 const GROK_MODEL_ALIASES: Record<string, string> = {
-  'grok-4.20-beta-0309-reasoning': 'grok-4.20-reasoning',
-  'grok-4.20-beta-0309-non-reasoning': 'grok-4.20-beta-latest-non-reasoning',
+  'grok-4.20-reasoning': 'grok-4.20-0309-reasoning',
+  'grok-4.20-beta-0309-reasoning': 'grok-4.20-0309-reasoning',
+  'grok-4.20-beta-latest-non-reasoning': 'grok-4.20-0309-non-reasoning',
+  'grok-4.20-beta-0309-non-reasoning': 'grok-4.20-0309-non-reasoning',
   'grok-4-0709': 'grok-4',
 };
 

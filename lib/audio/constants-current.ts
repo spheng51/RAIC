@@ -24,19 +24,11 @@ import type {
   TTSVoiceInfo,
 } from './types';
 
-export {
-  ASR_PROVIDERS,
-  CUSTOM_ASR_DEFAULT_LANGUAGES,
-  DEFAULT_TTS_VOICES,
-  MINIMAX_TTS_MODELS,
-};
+export { ASR_PROVIDERS, CUSTOM_ASR_DEFAULT_LANGUAGES, DEFAULT_TTS_VOICES, MINIMAX_TTS_MODELS };
 
 export const AUDIO_MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
 
-function mergeModels<T extends { id: string; name: string }>(
-  existing: T[],
-  additions: T[],
-): T[] {
+function mergeModels<T extends { id: string; name: string }>(existing: T[], additions: T[]): T[] {
   const additionIds = new Set(additions.map((model) => model.id));
   return [...additions, ...existing.filter((model) => !additionIds.has(model.id))];
 }
