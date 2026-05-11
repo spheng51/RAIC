@@ -14,6 +14,7 @@
   "toolbar": {
     "languageHint": "Course will be generated in this language",
     "pdfParser": "Parser",
+    "uploadPdf": "Upload PDF",
     "pdfUpload": "Upload PDF",
     "removePdf": "Remove file",
     "webSearchOn": "Enabled",

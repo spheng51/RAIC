@@ -13,6 +13,7 @@ function readLocaleMessages(code: string) {
       mirofish?: Record<string, string | undefined>;
     };
     settings?: Record<string, string | undefined>;
+    toolbar?: Record<string, string | undefined>;
   };
 }
 
@@ -57,6 +58,23 @@ describe('locale resource parity', () => {
       expect(
         settings.modelsManagementDescription,
         `${locale.code} missing settings.modelsManagementDescription`,
+      ).toBeTruthy();
+    }
+  });
+
+  it('includes generation toolbar labels in every supported locale', () => {
+    for (const locale of supportedLocales) {
+      const messages = readLocaleMessages(locale.code);
+      const toolbar = messages.toolbar ?? {};
+
+      expect(toolbar.uploadPdf, `${locale.code} missing toolbar.uploadPdf`).toBeTruthy();
+      expect(
+        toolbar.configureProvider,
+        `${locale.code} missing toolbar.configureProvider`,
+      ).toBeTruthy();
+      expect(
+        toolbar.configureProviderHint,
+        `${locale.code} missing toolbar.configureProviderHint`,
       ).toBeTruthy();
     }
   });

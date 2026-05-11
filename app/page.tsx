@@ -347,7 +347,11 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     return date.toLocaleDateString();
   };
 
+  const needsModelSetup = launchMode === 'public-demo' && !currentModelId;
   const canGenerate = !!form.requirement.trim();
+  const primaryActionLabel = needsModelSetup
+    ? t('toolbar.configureProvider')
+    : t('toolbar.enterClassroom');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -585,7 +589,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                 onClick={handleGenerate}
                 disabled={!canGenerate}
                 type="button"
-                aria-label={t('toolbar.enterClassroom')}
+                aria-label={primaryActionLabel}
                 data-testid="enter-classroom-button"
                 className={cn(
                   'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
@@ -594,7 +598,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                     : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
                 )}
               >
-                <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
+                <span className="text-xs font-medium">{primaryActionLabel}</span>
                 <ArrowUp className="size-3.5" />
               </button>
             </div>
