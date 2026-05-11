@@ -715,7 +715,14 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
       {/* Footer — flows with content, at the very end */}
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
-        Open-RAIC Open Source Project
+        <a
+          href="https://github.com/spheng51/RAIC"
+          target="_blank"
+          rel="noreferrer"
+          className="transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Open-RAIC Open Source Project
+        </a>
       </div>
     </main>
   );
