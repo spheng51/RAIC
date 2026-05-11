@@ -8,6 +8,15 @@ const requireClassroomAccessMock = vi.fn();
 const requireRequestRoleMock = vi.fn();
 const recordAuditEventMock = vi.fn();
 const resolveSessionFromTokenMock = vi.fn();
+const randomUUIDMock = vi.fn(() => '11111111-1111-4111-8111-111111111111');
+
+vi.mock('crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('crypto')>();
+  return {
+    ...actual,
+    randomUUID: randomUUIDMock,
+  };
+});
 
 vi.mock('@/lib/server/classroom-storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/server/classroom-storage')>();
@@ -54,19 +63,21 @@ describe('POST /api/classroom', () => {
     requireRequestRoleMock.mockReset();
     persistClassroomMock.mockReset();
     readClassroomMock.mockReset();
+    randomUUIDMock.mockReset();
+    randomUUIDMock.mockReturnValue('11111111-1111-4111-8111-111111111111');
     buildRequestOriginMock.mockClear();
-    persistClassroomMock.mockResolvedValue({
-      id: 'safe-id',
-      url: 'https://app.example.com/classroom/safe-id',
-      stage: { id: 'safe-id' },
-      scenes: [],
+    persistClassroomMock.mockImplementation(async (record, baseUrl) => ({
+      id: record.id,
+      url: `${baseUrl}/classroom/${record.id}`,
+      stage: record.stage,
+      scenes: record.scenes,
       createdAt: new Date().toISOString(),
-    });
+    }));
     recordAuditEventMock.mockReset();
     resolveSessionFromTokenMock.mockReset();
   });
 
-  it('accepts valid caller-provided classroom IDs', async () => {
+  it('issues a server classroom ID and rewrites the stage ID before persisting', async () => {
     requireRequestRoleMock.mockResolvedValue({
       session: { id: 'session-1', kind: 'web', role: 'teacher', organizationId: 'org-1' },
       user: { id: 'teacher-1' },
@@ -112,11 +123,11 @@ describe('POST /api/classroom', () => {
     expect(response.status).toBe(201);
     expect(persistClassroomMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'safe-id',
+        id: '11111111-1111-4111-8111-111111111111',
         ownerUserId: 'teacher-1',
         organizationId: 'org-1',
         stage: expect.objectContaining({
-          id: 'safe-id',
+          id: '11111111-1111-4111-8111-111111111111',
           agentIds: ['default-1'],
           generatedAgentConfigs: [expect.objectContaining({ id: 'gen-server-1' })],
           sharedSimulation: expect.objectContaining({
@@ -131,11 +142,12 @@ describe('POST /api/classroom', () => {
     expect(recordAuditEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'classroom.created',
-        resourceId: 'safe-id',
+        resourceId: '11111111-1111-4111-8111-111111111111',
         actorRole: 'teacher',
       }),
     );
-    expect(json.id).toBe('safe-id');
+    expect(json.id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(json.url).toBe('https://app.example.com/classroom/11111111-1111-4111-8111-111111111111');
   });
 
   it('rejects POST when auth is missing', async () => {
@@ -190,7 +202,7 @@ describe('POST /api/classroom', () => {
     expect(persistClassroomMock).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid caller-provided classroom IDs', async () => {
+  it('ignores invalid caller-provided classroom IDs and uses a server-issued ID', async () => {
     requireRequestRoleMock.mockResolvedValue({
       session: { id: 'session-1', kind: 'web', role: 'teacher' },
       user: { id: 'teacher-1' },
@@ -208,9 +220,17 @@ describe('POST /api/classroom', () => {
     const response = await POST(request);
     const json = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(json.error).toBe('Invalid classroom id');
-    expect(persistClassroomMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(json.id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(persistClassroomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: '11111111-1111-4111-8111-111111111111',
+        stage: expect.objectContaining({
+          id: '11111111-1111-4111-8111-111111111111',
+        }),
+      }),
+      'https://app.example.com',
+    );
   });
 
   it('rejects GET access when classroom authorization fails', async () => {

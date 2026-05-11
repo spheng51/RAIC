@@ -1652,6 +1652,9 @@ export function Stage({
   const reportAvailable =
     presentationState?.reportAvailable ?? hasSharedSimulationReport(sharedSimulation);
   const viewerCanManageSimulation = presentationState?.viewerCanManageSimulation ?? false;
+  const openMiroFishManager = viewerCanManageSimulation
+    ? () => setMiroFishManagerOpen(true)
+    : undefined;
   const viewerCanControlPresentation = presentationState?.viewerCanControlPresentation ?? false;
   const viewerHasSimulationControl = presentationState?.viewerHasSimulationControl ?? false;
   const presentationParticipants = useMemo(
@@ -1893,6 +1896,7 @@ export function Stage({
             currentSceneTitle={currentScene?.title || ''}
             classroomSource={classroomSource}
             homePath={homePath}
+            onOpenMiroFishManager={openMiroFishManager}
           />
         )}
 
@@ -2019,9 +2023,7 @@ export function Stage({
             viewerCanManageSimulation={viewerCanManageSimulation}
             viewerCanControlPresentation={viewerCanControlPresentation}
             onSetPresentationSurface={handleSetPresentationSurface}
-            onOpenMiroFishManager={
-              viewerCanManageSimulation ? () => setMiroFishManagerOpen(true) : undefined
-            }
+            onOpenMiroFishManager={openMiroFishManager}
             runUrl={miroFishRunUrl}
             reportUrl={miroFishReportUrl}
             viewerHasSimulationControl={viewerHasSimulationControl}
@@ -2207,9 +2209,7 @@ export function Stage({
               viewerCanManageSimulation={viewerCanManageSimulation}
               viewerCanControlPresentation={viewerCanControlPresentation}
               onSetPresentationSurface={handleSetPresentationSurface}
-              onOpenMiroFishManager={
-                viewerCanManageSimulation ? () => setMiroFishManagerOpen(true) : undefined
-              }
+              onOpenMiroFishManager={openMiroFishManager}
               fullscreenContainerRef={stageRef}
             />
           </div>

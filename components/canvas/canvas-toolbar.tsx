@@ -18,7 +18,6 @@ import {
   Repeat,
   Maximize2,
   Minimize2,
-  Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store';
@@ -473,11 +472,10 @@ export function CanvasToolbar({
             type="button"
             onClick={onOpenMiroFishManager}
             className={cn(
-              ctrlBtn,
-              'w-auto px-2.5 text-[11px] font-medium',
+              'inline-flex h-7 items-center justify-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold shadow-sm transition-all active:scale-95',
               sharedSimulation
-                ? 'text-slate-700 dark:text-slate-200'
-                : 'text-slate-500 dark:text-slate-400',
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200 dark:hover:bg-emerald-900/70'
+                : 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/70 dark:text-sky-200 dark:hover:bg-sky-900/70',
             )}
             aria-label={
               sharedSimulation
@@ -490,12 +488,8 @@ export function CanvasToolbar({
                 : t('classroom.mirofish.attachButton')
             }
           >
-            <Settings2 className="h-3.5 w-3.5" />
-            <span>
-              {sharedSimulation
-                ? t('classroom.mirofish.manageButtonShort')
-                : t('classroom.mirofish.attachButtonShort')}
-            </span>
+            <FlaskConical className="h-3.5 w-3.5" />
+            <span>{t('classroom.mirofish.simulationsButtonShort')}</span>
           </button>
         )}
         {onTogglePresentation && (

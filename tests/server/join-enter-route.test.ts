@@ -8,6 +8,7 @@ const createClassroomGuestUserMock = vi.fn();
 const ensureMembershipMock = vi.fn();
 const createClassroomSessionMock = vi.fn();
 const resolveAuthContextFromTokenMock = vi.fn();
+const readClassroomMock = vi.fn();
 
 vi.mock('@/lib/db/repositories/join-tokens', () => ({
   findJoinTokenByHash: findJoinTokenByHashMock,
@@ -33,6 +34,10 @@ vi.mock('@/lib/auth/current-user', () => ({
   resolveAuthContextFromToken: resolveAuthContextFromTokenMock,
 }));
 
+vi.mock('@/lib/server/classroom-storage', () => ({
+  readClassroom: readClassroomMock,
+}));
+
 vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
@@ -46,6 +51,13 @@ describe('GET /join/[joinCode]/enter', () => {
     ensureMembershipMock.mockReset();
     createClassroomSessionMock.mockReset();
     resolveAuthContextFromTokenMock.mockReset();
+    readClassroomMock.mockReset();
+    readClassroomMock.mockResolvedValue({
+      id: 'room-1',
+      stage: { id: 'room-1', name: 'Physics' },
+      scenes: [],
+      createdAt: new Date().toISOString(),
+    });
     createClassroomGuestUserMock.mockResolvedValue({
       id: 'student-1',
       displayName: 'Physics',
@@ -79,6 +91,7 @@ describe('GET /join/[joinCode]/enter', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/classroom/room-1');
+    expect(readClassroomMock).toHaveBeenCalledWith('room-1');
     expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe(
       'classroom-session-token',
     );
@@ -123,6 +136,7 @@ describe('GET /join/[joinCode]/enter', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/join/raw-token');
     expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe('');
+    expect(readClassroomMock).not.toHaveBeenCalled();
     expect(recordAuditEventMock).not.toHaveBeenCalled();
     expect(createClassroomGuestUserMock).not.toHaveBeenCalled();
     expect(createClassroomSessionMock).not.toHaveBeenCalled();
@@ -164,9 +178,35 @@ describe('GET /join/[joinCode]/enter', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/classroom/room-1');
+    expect(readClassroomMock).toHaveBeenCalledWith('room-1');
     expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe(
       'existing-classroom-token',
     );
+    expect(createClassroomGuestUserMock).not.toHaveBeenCalled();
+    expect(ensureMembershipMock).not.toHaveBeenCalled();
+    expect(createClassroomSessionMock).not.toHaveBeenCalled();
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it('redirects back without creating a session when the classroom record is missing', async () => {
+    findJoinTokenByHashMock.mockResolvedValue({
+      id: 'join-1',
+      classroomId: 'room-1',
+      organizationId: 'org-1',
+      displayName: 'Physics',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    readClassroomMock.mockResolvedValue(null);
+
+    const { GET } = await import('@/app/(student)/join/[joinCode]/enter/route');
+    const response = await GET(new NextRequest('http://localhost/join/raw-token/enter'), {
+      params: Promise.resolve({ joinCode: 'raw-token' }),
+    });
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/join/raw-token');
+    expect(response.cookies.get(CLASSROOM_ACCESS_COOKIE_NAME)?.value).toBe('');
+    expect(readClassroomMock).toHaveBeenCalledWith('room-1');
     expect(createClassroomGuestUserMock).not.toHaveBeenCalled();
     expect(ensureMembershipMock).not.toHaveBeenCalled();
     expect(createClassroomSessionMock).not.toHaveBeenCalled();

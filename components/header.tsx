@@ -10,6 +10,7 @@ import {
   Download,
   FileDown,
   Package,
+  FlaskConical,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
@@ -27,9 +28,15 @@ interface HeaderProps {
   readonly currentSceneTitle: string;
   readonly classroomSource?: 'public-demo' | 'teacher-server' | null;
   readonly homePath?: string;
+  readonly onOpenMiroFishManager?: () => void;
 }
 
-export function Header({ currentSceneTitle, classroomSource, homePath }: HeaderProps) {
+export function Header({
+  currentSceneTitle,
+  classroomSource,
+  homePath,
+  onOpenMiroFishManager,
+}: HeaderProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
@@ -115,6 +122,19 @@ export function Header({ currentSceneTitle, classroomSource, homePath }: HeaderP
             </div>
           </div>
         </div>
+
+        {onOpenMiroFishManager ? (
+          <button
+            type="button"
+            onClick={onOpenMiroFishManager}
+            aria-label={t('classroom.mirofish.simulationsButtonTitle')}
+            title={t('classroom.mirofish.simulationsButtonTitle')}
+            className="shrink-0 inline-flex h-10 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/60"
+          >
+            <FlaskConical className="h-4 w-4" />
+            <span>{t('classroom.mirofish.simulationsButton')}</span>
+          </button>
+        ) : null}
 
         <div className="flex items-center gap-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-md px-2 py-1.5 rounded-full border border-gray-100/50 dark:border-gray-700/50 shadow-sm shrink-0">
           {/* Language Selector */}
