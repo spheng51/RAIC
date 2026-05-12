@@ -23,7 +23,10 @@ export function BoardNotesPanel({ lessonState, currentScene }: BoardNotesPanelPr
     >
       <div className="mx-auto grid max-w-[1600px] gap-2 text-xs text-slate-600 dark:text-slate-300 lg:grid-cols-[0.9fr_1.1fr_1.2fr_1fr]">
         <div className="flex min-w-0 items-start gap-2">
-          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+          <Lightbulb
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 drop-shadow-[0_1px_1px_rgba(120,53,15,0.3)] dark:text-amber-300"
+            aria-hidden="true"
+          />
           <div className="min-w-0">
             <p className="font-semibold text-slate-900 dark:text-slate-100">
               {t('classroom.boardNotes.keyIdea')}

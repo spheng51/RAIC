@@ -37,6 +37,10 @@ const EMPTY_PLATFORM_STORE: PlatformStore = {
   organizationAiPolicies: [],
   organizationProviderConfigs: [],
   userProviderOverrides: [],
+  classroomSessionContexts: [],
+  classroomReflections: [],
+  benchmarkArtifacts: [],
+  scheduledClassEvents: [],
 };
 const TEST_SLIDE_THEME = {
   backgroundColor: '#ffffff',
@@ -334,6 +338,10 @@ export async function writePlatformStore(params: {
     organizationAiPolicies: [...(params.organizationAiPolicies ?? [])],
     organizationProviderConfigs: [...(params.organizationProviderConfigs ?? [])],
     userProviderOverrides: [...(params.userProviderOverrides ?? [])],
+    classroomSessionContexts: [],
+    classroomReflections: [],
+    benchmarkArtifacts: [],
+    scheduledClassEvents: [],
   };
 
   await fs.mkdir(path.dirname(PLATFORM_STORE_PATH), { recursive: true });

@@ -27,21 +27,24 @@ export function useClassroomCollaborationState({
     async () => undefined,
   );
 
-  const applyIfChanged = (nextState: ClassroomCollaborationStatePayload | null) => {
-    if (!nextState) {
-      lastStateRef.current = null;
-      onStateChange(null);
-      return;
-    }
+  const applyIfChanged = useCallback(
+    (nextState: ClassroomCollaborationStatePayload | null) => {
+      if (!nextState) {
+        lastStateRef.current = null;
+        onStateChange(null);
+        return;
+      }
 
-    const payloadKey = JSON.stringify(nextState);
-    if (payloadKey === lastStateRef.current) {
-      return;
-    }
+      const payloadKey = JSON.stringify(nextState);
+      if (payloadKey === lastStateRef.current) {
+        return;
+      }
 
-    lastStateRef.current = payloadKey;
-    onStateChange(nextState);
-  };
+      lastStateRef.current = payloadKey;
+      onStateChange(nextState);
+    },
+    [onStateChange],
+  );
 
   const refreshCollaborationState = useCallback(
     async (silent = false) => {
@@ -99,7 +102,7 @@ export function useClassroomCollaborationState({
         }
       }
     },
-    [classroomId, enabled, onFatalError, onStateChange],
+    [applyIfChanged, classroomId, enabled, onFatalError],
   );
 
   refreshCollaborationStateRef.current = refreshCollaborationState;
@@ -219,7 +222,7 @@ export function useClassroomCollaborationState({
       stopPolling();
       closeEventSource();
     };
-  }, [classroomId, enabled, onStateChange, refreshCollaborationState]);
+  }, [applyIfChanged, classroomId, enabled, refreshCollaborationState]);
 
   return {
     refreshCollaborationState,

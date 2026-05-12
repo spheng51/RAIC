@@ -15,6 +15,7 @@ import type {
   ToolCallRequest,
 } from '@/lib/types/chat';
 import type { SceneOutline } from '@/lib/types/generation';
+import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 import type { UIMessage } from 'ai';
 import { createLogger } from '@/lib/logger';
 import { LOCALSTORAGE_KEY_DISCARDED_DB } from '@/configs/storage';
@@ -176,6 +177,8 @@ export interface GeneratedAgentRecord {
   createdAt: number;
 }
 
+export type ScheduledClassEventRecord = ScheduledClassEvent;
+
 /** Build the compound primary key for mediaFiles: `${stageId}:${elementId}` */
 export function mediaFileKey(stageId: string, elementId: string): string {
   return `${stageId}:${elementId}`;
@@ -184,7 +187,7 @@ export function mediaFileKey(stageId: string, elementId: string): string {
 // ==================== Database Definition ====================
 
 const DATABASE_NAME = 'RAIC-Database';
-const _DATABASE_VERSION = 8;
+const _DATABASE_VERSION = 9;
 
 function updateDiscardedDatabaseMarker(nextValue: string | null): void {
   if (typeof localStorage === 'undefined') {
@@ -218,6 +221,7 @@ class RAICDatabase extends Dexie {
   stageOutlines!: EntityTable<StageOutlinesRecord, 'stageId'>;
   mediaFiles!: EntityTable<MediaFileRecord, 'id'>;
   generatedAgents!: EntityTable<GeneratedAgentRecord, 'id'>;
+  scheduledClassEvents!: EntityTable<ScheduledClassEventRecord, 'id'>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -334,6 +338,21 @@ class RAICDatabase extends Dexie {
       stageOutlines: 'stageId',
       mediaFiles: 'id, stageId, [stageId+type]',
       generatedAgents: 'id, stageId',
+    });
+
+    // Version 9: Local home-page class schedule.
+    this.version(9).stores({
+      stages: 'id, updatedAt',
+      scenes: 'id, stageId, order, [stageId+order]',
+      audioFiles: 'id, createdAt',
+      imageFiles: 'id, createdAt',
+      snapshots: '++id',
+      chatSessions: 'id, stageId, [stageId+createdAt]',
+      playbackState: 'stageId',
+      stageOutlines: 'stageId',
+      mediaFiles: 'id, stageId, [stageId+type]',
+      generatedAgents: 'id, stageId',
+      scheduledClassEvents: 'id, startsAt, classroomId',
     });
   }
 }

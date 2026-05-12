@@ -11,6 +11,8 @@ import {
   FileDown,
   Package,
   FlaskConical,
+  Share2,
+  Video,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
@@ -23,12 +25,15 @@ import { useStageStore } from '@/lib/store/stage';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useExportPPTX } from '@/lib/export/use-export-pptx';
 import { Badge } from './ui/badge';
+import type { ClassroomLiveMeeting } from '@/lib/types/stage';
 
 interface HeaderProps {
   readonly currentSceneTitle: string;
   readonly classroomSource?: 'public-demo' | 'teacher-server' | null;
   readonly homePath?: string;
   readonly onOpenMiroFishManager?: () => void;
+  readonly onOpenClassroomShare?: () => void;
+  readonly liveMeeting?: ClassroomLiveMeeting | null;
 }
 
 export function Header({
@@ -36,6 +41,8 @@ export function Header({
   classroomSource,
   homePath,
   onOpenMiroFishManager,
+  onOpenClassroomShare,
+  liveMeeting,
 }: HeaderProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -64,6 +71,7 @@ export function Header({
       : classroomSource === 'public-demo'
         ? t('classroom.localDemoBadge')
         : null;
+  const zoomJoinLabel = t('classroom.liveMeeting.joinZoom');
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -134,6 +142,33 @@ export function Header({
             <FlaskConical className="h-4 w-4" />
             <span>{t('classroom.mirofish.simulationsButton')}</span>
           </button>
+        ) : null}
+
+        {onOpenClassroomShare ? (
+          <button
+            type="button"
+            onClick={onOpenClassroomShare}
+            aria-label={t('classroom.share.open')}
+            title={t('classroom.share.open')}
+            className="shrink-0 inline-flex h-10 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-100 hover:text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-200 dark:hover:border-blue-700 dark:hover:bg-blue-900/60"
+          >
+            <Share2 className="h-4 w-4" />
+            <span>{t('classroom.share.button')}</span>
+          </button>
+        ) : null}
+
+        {liveMeeting ? (
+          <a
+            href={liveMeeting.joinUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={zoomJoinLabel}
+            title={liveMeeting.label || zoomJoinLabel}
+            className="shrink-0 inline-flex h-10 items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 text-sm font-semibold text-indigo-700 shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-900/60 dark:bg-indigo-950/60 dark:text-indigo-200 dark:hover:border-indigo-700 dark:hover:bg-indigo-900/60"
+          >
+            <Video className="h-4 w-4" />
+            <span>{zoomJoinLabel}</span>
+          </a>
         ) : null}
 
         <div className="flex items-center gap-4 bg-white/60 dark:bg-gray-800/60 backdrop-blur-md px-2 py-1.5 rounded-full border border-gray-100/50 dark:border-gray-700/50 shadow-sm shrink-0">

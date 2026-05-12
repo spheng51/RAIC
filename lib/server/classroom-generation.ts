@@ -30,8 +30,10 @@ import type {
   SceneOutcome,
   UserRequirements,
 } from '@/lib/types/generation';
+import type { ScheduledClassGenerationInput } from '@/lib/types/scheduled-classes';
 import type { Scene, Stage } from '@/lib/types/stage';
 import { AGENT_COLOR_PALETTE, AGENT_DEFAULT_AVATARS } from '@/lib/constants/agent-defaults';
+import { SPECIALIST_AVATAR_GENERATION_REQUEST } from '@/lib/constants/specialist-avatar-catalog';
 
 const log = createLogger('Classroom');
 
@@ -55,6 +57,7 @@ export interface GenerateClassroomInput {
   enableTTS?: boolean;
   agentMode?: 'default' | 'generate';
   imageProviderOverride?: ImageProviderOverride;
+  scheduledClass?: ScheduledClassGenerationInput;
 }
 
 export type ClassroomGenerationStep =
@@ -129,6 +132,28 @@ function stripCodeFences(text: string): string {
   return cleaned.trim();
 }
 
+function buildSpecialistAvatarOptionsForPrompt() {
+  const guidanceByPath = new Map(
+    SPECIALIST_AVATAR_GENERATION_REQUEST.avatarNameGuidance.map((avatar) => [avatar.path, avatar]),
+  );
+
+  return SPECIALIST_AVATAR_GENERATION_REQUEST.avatarDescriptions.map(({ path, desc }) => {
+    const guidance = guidanceByPath.get(path);
+
+    return {
+      path,
+      description: desc,
+      ...(guidance ? { nameGender: guidance.nameGender, nameGuidance: guidance.nameGuidance } : {}),
+    };
+  });
+}
+
+function normalizeGeneratedAgentAvatar(avatar?: string) {
+  return avatar && (AGENT_DEFAULT_AVATARS as readonly string[]).includes(avatar)
+    ? avatar
+    : undefined;
+}
+
 async function generateAgentProfiles(
   requirement: string,
   language: string,
@@ -136,6 +161,8 @@ async function generateAgentProfiles(
 ): Promise<AgentInfo[]> {
   const systemPrompt =
     'You are an expert instructional designer. Generate agent profiles for a multi-agent classroom simulation. Return ONLY valid JSON, no markdown or explanation.';
+
+  const avatarOptionsForPrompt = buildSpecialistAvatarOptionsForPrompt();
 
   const userPrompt = `Generate agent profiles for a course with this requirement:
 ${requirement}
@@ -145,6 +172,14 @@ Requirements:
 - Exactly 1 agent must have role "teacher", the rest can be "assistant" or "student"
 - Each agent needs: name, role, persona (2-3 sentences describing personality and teaching/learning style)
 - Names and personas must be in language: ${language}
+- Each agent must be assigned one avatar from this list: ${JSON.stringify(avatarOptionsForPrompt)}
+  - Pick an avatar that visually matches the agent's personality and role
+  - Try to use different avatars for each agent
+  - Use the "path" value as the avatar field in the output
+- Avatar naming guidance is included with the avatar list:
+  - If nameGender is "masculine" or "feminine", choose a culturally appropriate name in ${language} that generally matches the selected avatar's visual presentation.
+  - If nameGender is "neutral", use a gender-neutral, professional, role-based, or character-style name.
+  - Do not mention gender in personas unless it naturally belongs to the lesson context.
 
 Return a JSON object with this exact structure:
 {
@@ -152,7 +187,8 @@ Return a JSON object with this exact structure:
     {
       "name": "string",
       "role": "teacher" | "assistant" | "student",
-      "persona": "string (2-3 sentences)"
+      "persona": "string (2-3 sentences)",
+      "avatar": "string (from available list)"
     }
   ]
 }`;
@@ -160,7 +196,7 @@ Return a JSON object with this exact structure:
   const response = await aiCall(systemPrompt, userPrompt);
   const rawText = stripCodeFences(response);
   const parsed = JSON.parse(rawText) as {
-    agents: Array<{ name: string; role: string; persona: string }>;
+    agents: Array<{ name: string; role: string; persona: string; avatar?: string }>;
   };
 
   if (!parsed.agents || !Array.isArray(parsed.agents) || parsed.agents.length < 2) {
@@ -172,12 +208,17 @@ Return a JSON object with this exact structure:
     throw new Error(`Expected exactly 1 teacher, got ${teacherCount}`);
   }
 
-  return parsed.agents.map((a, i) => ({
-    id: `gen-server-${i}`,
-    name: a.name,
-    role: a.role,
-    persona: a.persona,
-  }));
+  return parsed.agents.map((a, i) => {
+    const avatar = normalizeGeneratedAgentAvatar(a.avatar);
+
+    return {
+      id: `gen-server-${i}`,
+      name: a.name,
+      role: a.role,
+      persona: a.persona,
+      ...(avatar ? { avatar } : {}),
+    };
+  });
 }
 
 export async function generateClassroom(
@@ -387,7 +428,7 @@ export async function generateClassroom(
             name: a.name,
             role: a.role,
             persona: a.persona || '',
-            avatar: AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
+            avatar: a.avatar || AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
             color: AGENT_COLOR_PALETTE[i % AGENT_COLOR_PALETTE.length],
             priority: a.role === 'teacher' ? 10 : a.role === 'assistant' ? 7 : 5,
           })),

@@ -7,6 +7,7 @@ import type {
   ImageMapping,
   GenerationCompletionStatus,
 } from '@/lib/types/generation';
+import type { ScheduledClassGenerationInput } from '@/lib/types/scheduled-classes';
 import type { ClassroomLaunchMode } from '@/lib/utils/classroom-launch';
 
 export interface ClassroomGenerationPollResult {
@@ -73,6 +74,7 @@ export interface GenerationSessionState {
   researchSources?: Array<{ title: string; url: string }>;
   launchMode?: ClassroomLaunchMode;
   homePath?: string;
+  scheduledClass?: ScheduledClassGenerationInput;
 }
 
 export type GenerationStep = {

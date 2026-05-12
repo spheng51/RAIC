@@ -255,7 +255,6 @@ export function ProviderConfigPanel({
     }
   }, [
     apiKey,
-    baseUrl,
     browserLocalMode,
     currentModelId,
     currentProviderId,

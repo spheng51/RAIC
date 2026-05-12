@@ -9,7 +9,7 @@ import type {
   ClassroomPresentationParticipant,
   ClassroomPresentationStatePayload,
 } from '@/lib/types/classroom-presentation';
-import type { SharedSimulation } from '@/lib/types/stage';
+import type { ClassroomLiveMeeting, SharedSimulation } from '@/lib/types/stage';
 import {
   canSessionInteractWithSharedSimulation,
   getSharedSimulationCollaborationMode,
@@ -25,6 +25,7 @@ import {
 export interface ClassroomPresentationSnapshot {
   classroom: PersistedClassroomData;
   sharedSimulation: SharedSimulation | null;
+  liveMeeting: ClassroomLiveMeeting | null;
   participants: ClassroomPresentationParticipant[];
   reportAvailable: boolean;
   runUrl: string | null;
@@ -134,6 +135,7 @@ export async function getClassroomPresentationSnapshot(
   return {
     classroom,
     sharedSimulation: normalizedSharedSimulation,
+    liveMeeting: classroom.stage.liveMeeting ?? null,
     participants,
     reportAvailable: hasSharedSimulationReport(normalizedSharedSimulation),
     runUrl,
@@ -170,6 +172,7 @@ export function buildClassroomPresentationStatePayload(
           reportUrl: snapshot.reportUrl ?? snapshot.sharedSimulation.reportUrl,
         }
       : null,
+    liveMeeting: snapshot.liveMeeting,
     runUrl: snapshot.runUrl,
     reportUrl: snapshot.reportUrl,
     viewerSessionId: session.id,
@@ -195,6 +198,7 @@ export function getClassroomPresentationFingerprint(
     runUrl: payload.runUrl,
     reportUrl: payload.reportUrl,
     sharedSimulation: getSharedSimulationFingerprint(payload.sharedSimulation),
+    liveMeeting: payload.liveMeeting ?? null,
     viewerSessionId: payload.viewerSessionId,
     viewerRole: payload.viewerRole,
     viewerKind: payload.viewerKind,

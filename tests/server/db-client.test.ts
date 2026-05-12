@@ -85,6 +85,7 @@ describe('db client persistence helpers', () => {
   it('writes JSON fallback state into the hosted temp data root on serverless runtimes', async () => {
     vi.stubEnv('DATABASE_URL', '');
     vi.stubEnv('VERCEL', '1');
+    vi.stubEnv('TMPDIR', hostedTempRoot);
     vi.stubEnv('TMP', hostedTempRoot);
     vi.stubEnv('TEMP', hostedTempRoot);
 

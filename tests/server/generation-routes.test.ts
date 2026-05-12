@@ -178,6 +178,67 @@ describe('generation routes', () => {
     );
   });
 
+  it('includes avatar naming guidance in the agent profile prompt', async () => {
+    callLLMMock.mockResolvedValue({
+      text: JSON.stringify({
+        agents: [
+          {
+            name: 'Mr. Rivera',
+            role: 'teacher',
+            persona: 'Guides the class with calm structure.',
+            avatar: '/avatars/principal.png',
+            color: '#123456',
+            priority: 10,
+          },
+          {
+            name: 'Ms. Park',
+            role: 'student',
+            persona: 'Asks practical follow-up questions.',
+            avatar: '/avatars/librarian.png',
+            color: '#654321',
+            priority: 5,
+          },
+        ],
+      }),
+    });
+
+    const { POST } = await import('@/app/api/generate/agent-profiles/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/agent-profiles', {
+        method: 'POST',
+        body: JSON.stringify({
+          stageInfo: { name: 'Physics 101' },
+          language: 'en-US',
+          availableAvatars: ['/avatars/principal.png', '/avatars/librarian.png'],
+          avatarDescriptions: [
+            { path: '/avatars/principal.png', desc: 'Confident principal portrait' },
+            { path: '/avatars/librarian.png', desc: 'Friendly librarian portrait' },
+          ],
+          avatarNameGuidance: [
+            {
+              path: '/avatars/principal.png',
+              nameGender: 'masculine',
+              nameGuidance: 'Use a masculine educator name.',
+            },
+            {
+              path: '/avatars/librarian.png',
+              nameGender: 'feminine',
+              nameGuidance: 'Use a feminine professional name.',
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+
+    const request = callLLMMock.mock.calls[0][0] as { prompt: string };
+    expect(request.prompt).toContain('Avatar naming guidance is included');
+    expect(request.prompt).toContain('"nameGender":"masculine"');
+    expect(request.prompt).toContain('"nameGender":"feminine"');
+    expect(request.prompt).toContain('Do not mention gender in personas');
+  });
+
   it('validates required input for scene content generation', async () => {
     const { POST } = await import('@/app/api/generate/scene-content/route');
     const response = await POST(

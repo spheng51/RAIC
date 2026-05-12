@@ -1,4 +1,5 @@
 import { createLogger } from '@/lib/logger';
+import type { PlatformRole } from '@/lib/db/schema';
 import { generateClassroom, type GenerateClassroomInput } from '@/lib/server/classroom-generation';
 import {
   markClassroomGenerationJobFailed,
@@ -6,6 +7,8 @@ import {
   markClassroomGenerationJobSucceeded,
   updateClassroomGenerationJobProgress,
 } from '@/lib/server/classroom-job-store';
+import { createScheduledClassForAccess } from '@/lib/server/scheduled-classes';
+import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 
 const log = createLogger('ClassroomJob');
 const runningJobs = new Map<string, Promise<void>>();
@@ -17,6 +20,7 @@ export function runClassroomGenerationJob(
   scope: {
     organizationId: string | null;
     userId: string | null;
+    actorRole?: PlatformRole | null;
   },
 ): Promise<void> {
   const existing = runningJobs.get(jobId);
@@ -37,7 +41,37 @@ export function runClassroomGenerationJob(
         },
       });
 
-      await markClassroomGenerationJobSucceeded(jobId, result);
+      let scheduledClassEvent: ScheduledClassEvent | undefined;
+      let scheduledClassError: string | undefined;
+      if (input.scheduledClass) {
+        try {
+          if (!scope.userId) {
+            throw new Error('Cannot create a scheduled class without a teacher user.');
+          }
+
+          scheduledClassEvent = await createScheduledClassForAccess(
+            {
+              role: scope.actorRole ?? 'teacher',
+              userId: scope.userId,
+              organizationId: scope.organizationId,
+            },
+            {
+              ...input.scheduledClass,
+              classroomId: result.id,
+            },
+            { requireFutureStart: false },
+          );
+        } catch (scheduleError) {
+          scheduledClassError =
+            scheduleError instanceof Error ? scheduleError.message : String(scheduleError);
+          log.warn(`Classroom generation job ${jobId} schedule link failed:`, scheduleError);
+        }
+      }
+
+      await markClassroomGenerationJobSucceeded(jobId, result, {
+        ...(scheduledClassEvent ? { scheduledClassEvent } : {}),
+        ...(scheduledClassError ? { scheduledClassError } : {}),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log.error(`Classroom generation job ${jobId} failed:`, error);

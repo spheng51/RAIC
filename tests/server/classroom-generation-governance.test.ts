@@ -99,6 +99,7 @@ describe('classroom generation governance wiring', () => {
       }),
       'http://localhost:3000',
       {
+        actorRole: 'teacher',
         organizationId: 'org-1',
         userId: 'teacher-1',
       },

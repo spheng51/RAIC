@@ -89,6 +89,106 @@ describe('POST /api/chat', () => {
     expect(resolveModelMock).not.toHaveBeenCalled();
   });
 
+  it('keeps explicit teacher-server chat behind classroom access', async () => {
+    requireClassroomAccessMock.mockResolvedValue(
+      NextResponse.json(
+        {
+          success: false,
+          errorCode: 'INVALID_REQUEST',
+          error: 'Classroom not found',
+        },
+        { status: 404 },
+      ),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'missing-room' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          classroomSource: 'teacher-server',
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(requireClassroomAccessMock).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      'missing-room',
+    );
+    expect(resolveModelMock).not.toHaveBeenCalled();
+  });
+
+  it('allows public-demo chat without server classroom access or adaptive context', async () => {
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'client-key',
+    });
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'local-room' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          classroomSource: 'public-demo',
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: 'client-key',
+          baseUrl: 'https://example.com/v1',
+          providerType: 'openai',
+          model: 'openai:gpt-4o',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireClassroomAccessMock).not.toHaveBeenCalled();
+    expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
+    expect(resolveModelMock).toHaveBeenCalledWith({
+      modelString: 'openai:gpt-4o',
+      apiKey: 'client-key',
+      baseUrl: 'https://example.com/v1',
+      providerType: 'openai',
+      auth: null,
+      organizationId: null,
+      userId: null,
+    });
+    expect(statelessGenerateMock).toHaveBeenCalledTimes(1);
+    expect(statelessGenerateMock.mock.calls[0]?.[0]).toMatchObject({
+      adaptiveContext: null,
+      classroomSource: 'public-demo',
+    });
+  });
+
   it('returns a governance 4xx when model resolution is denied by policy', async () => {
     requireClassroomAccessMock.mockResolvedValue({
       auth: {
@@ -177,6 +277,7 @@ describe('POST /api/chat', () => {
           config: {
             agentIds: ['agent-1'],
           },
+          classroomSource: 'teacher-server',
           apiKey: 'client-key',
           baseUrl: 'https://example.com/v1',
           providerType: 'openai',

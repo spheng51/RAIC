@@ -3,9 +3,11 @@
 import {
   act,
   createElement,
+  type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
   type ComponentProps,
   type HTMLAttributes,
+  type ReactElement,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react';
@@ -13,14 +15,32 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LiveClassroomApprovalItem } from '@/lib/utils/live-classroom-cockpit';
 
+vi.mock('@/lib/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) =>
+      ({
+        'classroom.liveMeeting.joinZoom': 'Join Zoom',
+      })[key] ?? key,
+  }),
+}));
+
 vi.mock('@/components/ui/button', async () => {
   const React = await import('react');
   return {
     Button: ({
+      asChild,
       children,
       ...props
-    }: ButtonHTMLAttributes<HTMLButtonElement> & { children?: ReactNode }) =>
-      React.createElement('button', props, children),
+    }: ButtonHTMLAttributes<HTMLButtonElement> &
+      AnchorHTMLAttributes<HTMLAnchorElement> & {
+        asChild?: boolean;
+        children?: ReactNode;
+      }) => {
+      if (asChild && React.isValidElement(children)) {
+        return React.cloneElement(children as ReactElement<Record<string, unknown>>, props);
+      }
+      return React.createElement('button', props, children);
+    },
   };
 });
 
@@ -262,5 +282,20 @@ describe('LiveClassroomCockpit', () => {
     expect(container.textContent).toContain('active');
     expect(container.textContent).toContain('just now');
     vi.useRealTimers();
+  });
+
+  it('renders a Zoom join action when a live meeting is attached', async () => {
+    const { container } = await mountCockpit({
+      liveMeeting: {
+        provider: 'zoom',
+        source: 'manual-link',
+        joinUrl: 'https://zoom.us/j/123456789',
+        attachedAt: '2026-04-13T00:00:00.000Z',
+        attachedByUserId: 'teacher-1',
+      },
+    });
+
+    expect(container.textContent).toContain('Join Zoom');
+    expect(container.querySelector('a[href="https://zoom.us/j/123456789"]')).toBeTruthy();
   });
 });

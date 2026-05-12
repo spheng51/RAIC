@@ -57,6 +57,9 @@ function normalizePlatformStore(value: unknown): PlatformStore {
   const benchmarkArtifacts = Array.isArray(value.benchmarkArtifacts)
     ? value.benchmarkArtifacts
     : [];
+  const scheduledClassEvents = Array.isArray(value.scheduledClassEvents)
+    ? value.scheduledClassEvents
+    : [];
 
   return {
     users,
@@ -71,6 +74,7 @@ function normalizePlatformStore(value: unknown): PlatformStore {
     classroomSessionContexts,
     classroomReflections,
     benchmarkArtifacts,
+    scheduledClassEvents,
   } as PlatformStore;
 }
 

@@ -74,6 +74,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       completionStatus: job.completionStatus ?? job.result?.completionStatus ?? null,
       warnings: job.warnings ?? [],
       sceneOutcomes: job.sceneOutcomes ?? [],
+      scheduledClassEvent: job.scheduledClassEvent ?? null,
+      scheduledClassError: job.scheduledClassError ?? null,
       result: job.result
         ? {
             id: job.result.classroomId,

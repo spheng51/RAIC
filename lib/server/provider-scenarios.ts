@@ -83,7 +83,10 @@ function parseCandidateList(rawValue: string | undefined): ProviderScenarioCandi
 
 function loadYamlProfiles(): Record<string, ProviderScenarioProfile> {
   try {
-    const filePath = path.join(process.cwd(), 'server-provider-scenarios.yml');
+    const filePath = path.join(
+      /*turbopackIgnore: true*/ process.cwd(),
+      'server-provider-scenarios.yml',
+    );
     if (!fs.existsSync(filePath)) {
       return {};
     }

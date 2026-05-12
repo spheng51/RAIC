@@ -3,7 +3,7 @@ import { buildGenerationPreviewAgentProfilesRequest } from '@/app/generation-pre
 import { SPECIALIST_AVATAR_GENERATION_REQUEST } from '@/lib/constants/specialist-avatar-catalog';
 
 describe('generation preview agent-profile avatar request', () => {
-  it('uses the shared specialist avatar paths and descriptions', () => {
+  it('uses the shared specialist avatar paths, descriptions, and naming guidance', () => {
     const availableVoices = [
       {
         providerId: 'test-provider',

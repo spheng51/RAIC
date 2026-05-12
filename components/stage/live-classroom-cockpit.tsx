@@ -22,6 +22,7 @@ import {
   FileBarChart2,
   PenSquare,
   RotateCcw,
+  Video,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,13 +30,14 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { ParticipantPresenceCard } from '@/components/participants/participant-presence-card';
 import type { ClassroomPresentationParticipant } from '@/lib/types/classroom-presentation';
-import type { PresentationSurface } from '@/lib/types/stage';
+import type { ClassroomLiveMeeting, PresentationSurface } from '@/lib/types/stage';
 import type { LiveClassroomApprovalItem } from '@/lib/utils/live-classroom-cockpit';
 import {
   getParticipantActivityLabel,
   sortParticipantsByPresence,
 } from '@/lib/utils/participant-presence';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/hooks/use-i18n';
 
 interface LiveClassroomCockpitProps {
   readonly className?: string;
@@ -64,6 +66,7 @@ interface LiveClassroomCockpitProps {
   readonly autoPlayEnabled: boolean;
   readonly promptsLocked: boolean;
   readonly reportAvailable: boolean;
+  readonly liveMeeting?: ClassroomLiveMeeting | null;
   readonly onTogglePause: () => void;
   readonly onPreviousScene: () => void;
   readonly onNextScene: () => void;
@@ -230,6 +233,7 @@ export function LiveClassroomCockpit({
   autoPlayEnabled,
   promptsLocked,
   reportAvailable,
+  liveMeeting,
   onTogglePause,
   onPreviousScene,
   onNextScene,
@@ -247,6 +251,7 @@ export function LiveClassroomCockpit({
   onEditApproval,
   onSendTeacherPrompt,
 }: LiveClassroomCockpitProps) {
+  const { t } = useI18n();
   const [interventionDraft, setInterventionDraft] = useState('');
   const [presenceNowMs] = useState(() => Date.now());
 
@@ -293,7 +298,7 @@ export function LiveClassroomCockpit({
               {pendingApprovalCount} approvals
             </Badge>
             {promptsLocked ? (
-              <Badge className="bg-amber-500 text-white">
+              <Badge className="bg-amber-700 text-white shadow-sm shadow-amber-900/15 dark:bg-amber-600">
                 <Shield />
                 Safety lock
               </Badge>
@@ -316,6 +321,14 @@ export function LiveClassroomCockpit({
             {open ? <PanelTopClose /> : <PanelTopOpen />}
             {open ? 'Hide controls' : 'Open controls'}
           </Button>
+          {liveMeeting ? (
+            <Button type="button" variant="outline" size="sm" asChild>
+              <a href={liveMeeting.joinUrl} target="_blank" rel="noreferrer">
+                <Video />
+                {t('classroom.liveMeeting.joinZoom')}
+              </a>
+            </Button>
+          ) : null}
         </div>
       </div>
 

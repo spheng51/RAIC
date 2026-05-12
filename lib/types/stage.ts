@@ -19,6 +19,15 @@ export type SharedSimulationCollaborationState =
   | 'closed'
   | 'error';
 
+export interface ClassroomLiveMeeting {
+  provider: 'zoom';
+  source: 'manual-link';
+  joinUrl: string;
+  label?: string;
+  attachedAt?: string;
+  attachedByUserId?: string;
+}
+
 export interface SharedSimulation {
   provider: 'mirofish';
   simulationId: string;
@@ -89,6 +98,7 @@ export interface Stage {
   generationCompletionStatus?: Exclude<GenerationCompletionStatus, 'failed'>;
   generationWarnings?: GenerationWarning[];
   sharedSimulation?: SharedSimulation;
+  liveMeeting?: ClassroomLiveMeeting;
 }
 
 /**

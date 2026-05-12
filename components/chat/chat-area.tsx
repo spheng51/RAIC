@@ -1,8 +1,7 @@
 'use client';
 
 import { useImperativeHandle, forwardRef, useRef, useCallback, useState, useMemo } from 'react';
-import type { SessionType } from '@/lib/types/chat';
-import type { LectureNoteEntry } from '@/lib/types/chat';
+import type { ChatClassroomSource, LectureNoteEntry, SessionType } from '@/lib/types/chat';
 import type { DiscussionRequest } from '@/components/roundtable';
 import type { Action, SpeechAction, DiscussionAction } from '@/lib/types/action';
 import { cn } from '@/lib/utils';
@@ -37,6 +36,7 @@ interface ChatAreaProps {
   /** When provided and returns true, StreamBuffer holds on the current text item after reveal. */
   shouldHoldAfterReveal?: () => { holding: boolean; segmentDone: number } | boolean;
   currentSceneId?: string | null;
+  classroomSource?: ChatClassroomSource | null;
 }
 
 export interface ChatAreaRef {
@@ -82,6 +82,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       onSegmentSealed,
       shouldHoldAfterReveal,
       currentSceneId,
+      classroomSource,
     },
     ref,
   ) => {
@@ -117,6 +118,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       onStopSession,
       onSegmentSealed,
       shouldHoldAfterReveal,
+      classroomSource,
     });
 
     const [activeTab, setActiveTab] = useState<'lecture' | 'chat'>('lecture');
@@ -274,7 +276,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
             : 'width var(--motion-duration-enter) var(--motion-ease-standard)',
         }}
         className={cn(
-          'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-gray-100 dark:border-gray-800 shadow-[-2px_0_24px_rgba(0,0,0,0.02)] flex flex-col shrink-0 z-20 relative overflow-visible',
+          'relative z-20 flex h-full min-h-0 shrink-0 flex-col overflow-hidden overscroll-contain border-l border-gray-100 bg-white/80 shadow-[-2px_0_24px_rgba(0,0,0,0.02)] backdrop-blur-xl dark:border-gray-800 dark:bg-gray-900/80',
           className,
         )}
       >
@@ -294,11 +296,16 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
           </button>
         )}
 
-        <div className={cn('flex flex-col w-full h-full overflow-hidden', collapsed && 'hidden')}>
+        <div
+          className={cn(
+            'flex h-full min-h-0 w-full flex-col overflow-hidden',
+            collapsed && 'hidden',
+          )}
+        >
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as 'lecture' | 'chat')}
-            className="flex flex-col h-full gap-0"
+            className="flex h-full min-h-0 flex-col gap-0 overflow-hidden"
           >
             {/* Tab header row */}
             <div className="h-10 flex items-center gap-1 shrink-0 mt-3 mb-1 px-3">
@@ -334,13 +341,13 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
             </div>
 
             {/* Notes Tab */}
-            <TabsContent value="lecture" className="flex-1 overflow-hidden flex flex-col">
+            <TabsContent value="lecture" className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <LectureNotesView notes={lectureNotes} currentSceneId={currentSceneId} />
             </TabsContent>
 
             {/* Chat Tab */}
-            <TabsContent value="chat" className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 scrollbar-hide">
+            <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain scroll-pb-24 p-3 pb-24 [touch-action:pan-y] scrollbar-hide">
                 {chatSessions.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-50">
                     <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3 text-gray-300 dark:text-gray-600">

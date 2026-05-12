@@ -178,6 +178,16 @@ describe('GET /api/generate-classroom/[jobId]', () => {
           message: 'Scene content generation returned no content',
         },
       ],
+      scheduledClassEvent: {
+        id: 'event-1',
+        title: 'Teach gravity',
+        startsAt: '2099-05-12T17:00:00.000Z',
+        durationMinutes: 45,
+        classroomId: 'classroom-1',
+        createdAt: '2026-04-19T00:00:00.000Z',
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      },
+      scheduledClassError: 'schedule warning',
       result: {
         classroomId: 'classroom-1',
         url: 'http://localhost:3000/classroom/classroom-1',
@@ -237,6 +247,11 @@ describe('GET /api/generate-classroom/[jobId]', () => {
           code: 'content_empty',
         }),
       ],
+      scheduledClassEvent: expect.objectContaining({
+        id: 'event-1',
+        classroomId: 'classroom-1',
+      }),
+      scheduledClassError: 'schedule warning',
       result: {
         id: 'classroom-1',
         url: 'http://localhost:3000/classroom/classroom-1',

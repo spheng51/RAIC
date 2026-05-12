@@ -23,6 +23,7 @@ interface RequestBody {
   language: string;
   availableAvatars: string[];
   avatarDescriptions?: Array<{ path: string; desc: string }>;
+  avatarNameGuidance?: Array<{ path: string; nameGender: string; nameGuidance: string }>;
   availableVoices?: Array<{ providerId: string; voiceId: string; voiceName: string }>;
 }
 
@@ -33,6 +34,34 @@ function stripCodeFences(text: string): string {
     cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
   }
   return cleaned.trim();
+}
+
+function buildAvatarOptionsForPrompt(
+  availableAvatars: string[],
+  avatarDescriptions?: Array<{ path: string; desc: string }>,
+  avatarNameGuidance?: Array<{ path: string; nameGender: string; nameGuidance: string }>,
+) {
+  const descriptionsByPath = new Map(
+    (avatarDescriptions ?? []).map((avatar) => [avatar.path, avatar.desc]),
+  );
+  const guidanceByPath = new Map((avatarNameGuidance ?? []).map((avatar) => [avatar.path, avatar]));
+
+  const options = availableAvatars.map((path) => {
+    const description = descriptionsByPath.get(path);
+    const guidance = guidanceByPath.get(path);
+
+    return {
+      path,
+      ...(description ? { description } : {}),
+      ...(guidance?.nameGender ? { nameGender: guidance.nameGender } : {}),
+      ...(guidance?.nameGuidance ? { nameGuidance: guidance.nameGuidance } : {}),
+    };
+  });
+
+  const hasMetadata = options.some(
+    (option) => option.description || option.nameGender || option.nameGuidance,
+  );
+  return hasMetadata ? options : availableAvatars;
 }
 
 export async function POST(req: NextRequest) {
@@ -46,6 +75,7 @@ export async function POST(req: NextRequest) {
       language,
       availableAvatars,
       avatarDescriptions,
+      avatarNameGuidance,
       availableVoices,
     } = body;
     stageName = stageInfo?.name;
@@ -99,6 +129,20 @@ export async function POST(req: NextRequest) {
       ? ',\n      "voice": "string (voice id from available list, e.g. \'qwen-tts::Cherry\')"'
       : '';
 
+    const avatarOptionsForPrompt = buildAvatarOptionsForPrompt(
+      availableAvatars,
+      avatarDescriptions,
+      avatarNameGuidance,
+    );
+    const avatarNamingPrompt =
+      avatarNameGuidance && avatarNameGuidance.length > 0
+        ? `- Avatar naming guidance is included with the avatar list:
+  - If nameGender is "masculine" or "feminine", choose a culturally appropriate name in ${language} that generally matches the selected avatar's visual presentation.
+  - If nameGender is "neutral", use a gender-neutral, professional, role-based, or character-style name.
+  - Do not mention gender in personas unless it naturally belongs to the lesson context.`
+        : `- Avatar naming guidance: choose names that generally match the selected avatar's visual presentation when it suggests gender; for ambiguous avatars, prefer gender-neutral, professional, role-based, or character-style names.
+  - Do not mention gender in personas unless it naturally belongs to the lesson context.`;
+
     const userPrompt = `Generate agent profiles for the following course:
 
 Course name: ${stageInfo.name}
@@ -110,10 +154,11 @@ Requirements:
 - Priority values: teacher=10 (highest), assistant=7, student=4-6
 - Each agent needs: name, role, persona (2-3 sentences describing personality and teaching/learning style)
 - Names and personas must be in language: ${language}
-- Each agent must be assigned one avatar from this list: ${JSON.stringify(avatarDescriptions && avatarDescriptions.length > 0 ? avatarDescriptions.map((a) => ({ path: a.path, description: a.desc })) : availableAvatars)}
+- Each agent must be assigned one avatar from this list: ${JSON.stringify(avatarOptionsForPrompt)}
   - Pick an avatar that visually matches the agent's personality and role
   - Try to use different avatars for each agent
   - Use the "path" value as the avatar field in the output
+${avatarNamingPrompt}
 - Each agent must be assigned one color from this list: ${JSON.stringify(AGENT_COLOR_PALETTE)}
   - Each agent must have a different color
 ${voicePrompt}
@@ -150,7 +195,7 @@ Return a JSON object with this exact structure:
         name: string;
         role: string;
         persona: string;
-        avatar: string;
+        avatar?: string;
         color: string;
         priority: number;
         voice?: string;
@@ -195,12 +240,16 @@ Return a JSON object with this exact structure:
         }
       }
 
+      const fallbackAvatar = availableAvatars[index % availableAvatars.length];
+      const avatar =
+        agent.avatar && availableAvatars.includes(agent.avatar) ? agent.avatar : fallbackAvatar;
+
       return {
         id: `gen-${nanoid(8)}`,
         name: agent.name,
         role: agent.role,
         persona: agent.persona,
-        avatar: agent.avatar || availableAvatars[index % availableAvatars.length],
+        avatar,
         color: agent.color || AGENT_COLOR_PALETTE[index % AGENT_COLOR_PALETTE.length],
         priority:
           agent.priority ?? (agent.role === 'teacher' ? 10 : agent.role === 'assistant' ? 7 : 5),

@@ -25,6 +25,7 @@ const PRESENTATION_EVENT_KINDS = new Set<ClassroomRoomEventKind>([
   'presentation.updated',
   'collaboration.updated',
   'control.updated',
+  'live_meeting.updated',
   'mirofish.attached',
   'mirofish.session.updated',
 ]);

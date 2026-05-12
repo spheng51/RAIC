@@ -42,6 +42,8 @@ import {
   writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
+import { toast } from 'sonner';
+import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 
 const log = createLogger('GenerationPreview');
 
@@ -77,6 +79,8 @@ interface ClassroomGenerationJobResponse {
     readonly completionStatus?: 'complete' | 'partial' | 'failed' | null;
     readonly warnings?: ReadonlyArray<{ readonly message?: string | null } | string> | null;
   } | null;
+  readonly scheduledClassEvent?: ScheduledClassEvent | null;
+  readonly scheduledClassError?: string | null;
   readonly error?: string | null;
   readonly details?: string | null;
   readonly done?: boolean;
@@ -269,6 +273,7 @@ function GenerationPreviewContent() {
         enableVideoGeneration: !!settings.videoGenerationEnabled,
         enableTTS,
         agentMode: settings.agentMode === 'auto' ? 'generate' : 'default',
+        ...(currentSession.scheduledClass ? { scheduledClass: currentSession.scheduledClass } : {}),
       };
       const getFailureMessage = (data: { error?: string | null; details?: string | null } | null) =>
         data?.details || data?.error || t('upload.generateFailed');
@@ -329,6 +334,9 @@ function GenerationPreviewContent() {
             details: pollData.details ?? null,
           });
           if (pollData.status === 'succeeded') {
+            if (pollData.scheduledClassError) {
+              toast.warning(pollData.scheduledClassError || t('home.schedule.linkFailed'));
+            }
             const destination = new URL(completedJob.classroomUrl, window.location.origin);
             clearClassroomLaunchContext();
             writeClassroomLaunchContext({
@@ -972,6 +980,21 @@ function GenerationPreviewContent() {
       });
       sessionStorage.removeItem('generationSession');
       await store.saveToStorage();
+      if (currentSession.scheduledClass) {
+        try {
+          const { createLocalScheduledClassEvent } =
+            await import('@/lib/utils/scheduled-classes-storage');
+          await createLocalScheduledClassEvent({
+            ...currentSession.scheduledClass,
+            classroomId: stage.id,
+          });
+        } catch (scheduleError) {
+          log.warn('Failed to link generated classroom to local schedule:', scheduleError);
+          toast.warning(
+            scheduleError instanceof Error ? scheduleError.message : t('home.schedule.linkFailed'),
+          );
+        }
+      }
       router.push(`/classroom/${stage.id}`);
     } catch (err) {
       // AbortError is expected when navigating away — don't show as error

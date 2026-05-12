@@ -230,6 +230,8 @@ export interface DirectorState {
   whiteboardLedger: WhiteboardActionRecord[];
 }
 
+export type ChatClassroomSource = 'public-demo' | 'teacher-server';
+
 /**
  * Request body for the stateless chat API
  * All state is sent from the client on each request
@@ -271,6 +273,8 @@ export interface StatelessChatRequest {
   };
   /** Accumulated director state from previous per-agent requests */
   directorState?: DirectorState;
+  /** Runtime classroom source. Missing values are treated as server-backed. */
+  classroomSource?: ChatClassroomSource;
   /** User profile for personalization */
   userProfile?: {
     nickname?: string;

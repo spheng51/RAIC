@@ -27,21 +27,24 @@ export function useClassroomPresentationState({
     async () => undefined,
   );
 
-  const applyIfChanged = (nextState: ClassroomPresentationStatePayload | null) => {
-    if (!nextState) {
-      lastStateRef.current = null;
-      onStateChange(null);
-      return;
-    }
+  const applyIfChanged = useCallback(
+    (nextState: ClassroomPresentationStatePayload | null) => {
+      if (!nextState) {
+        lastStateRef.current = null;
+        onStateChange(null);
+        return;
+      }
 
-    const payloadKey = JSON.stringify(nextState);
-    if (payloadKey === lastStateRef.current) {
-      return;
-    }
+      const payloadKey = JSON.stringify(nextState);
+      if (payloadKey === lastStateRef.current) {
+        return;
+      }
 
-    lastStateRef.current = payloadKey;
-    onStateChange(nextState);
-  };
+      lastStateRef.current = payloadKey;
+      onStateChange(nextState);
+    },
+    [onStateChange],
+  );
 
   const refreshPresentationState = useCallback(
     async (silent = false) => {
@@ -99,7 +102,7 @@ export function useClassroomPresentationState({
         }
       }
     },
-    [classroomId, enabled, onFatalError, onStateChange],
+    [applyIfChanged, classroomId, enabled, onFatalError],
   );
 
   refreshPresentationStateRef.current = refreshPresentationState;
@@ -219,7 +222,7 @@ export function useClassroomPresentationState({
       stopPolling();
       closeEventSource();
     };
-  }, [classroomId, enabled, onStateChange, refreshPresentationState]);
+  }, [applyIfChanged, classroomId, enabled, refreshPresentationState]);
 
   return {
     refreshPresentationState,

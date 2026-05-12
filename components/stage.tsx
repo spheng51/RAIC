@@ -35,6 +35,7 @@ import type {
   MiroFishCreationSpec,
 } from '@/lib/types/mirofish-authoring';
 import type {
+  ClassroomLiveMeeting,
   PresentationSurface,
   SharedSimulation,
   SharedSimulationCollaborationMode,
@@ -42,7 +43,6 @@ import type {
 } from '@/lib/types/stage';
 import { cn } from '@/lib/utils';
 import { buildClassroomLessonState } from '@/lib/classroom/lesson-state';
-import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import {
   getSharedSimulationCollaborationMode,
   getSharedSimulationInteractionReason,
@@ -70,6 +70,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
 import { toast } from 'sonner';
@@ -96,6 +97,7 @@ function getInitialPresentationState(
     simulationStatus: sharedSimulation.status,
     reportAvailable: hasSharedSimulationReport(sharedSimulation),
     sharedSimulation,
+    liveMeeting: null,
     runUrl: sharedSimulation.runUrl,
     reportUrl: sharedSimulation.reportUrl ?? null,
     viewerSessionId: '',
@@ -146,6 +148,9 @@ export function Stage({
   homePath,
   onSceneCompleted,
   onSceneSelected,
+  onOpenClassroomShare,
+  onMakeShareable,
+  makeShareablePending,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
   classroomSource?: 'public-demo' | 'teacher-server' | null;
@@ -157,6 +162,9 @@ export function Stage({
     toSceneId: string;
     reason: 'manual' | 'auto' | 'pending';
   }) => void;
+  onOpenClassroomShare?: () => void;
+  onMakeShareable?: () => void;
+  makeShareablePending?: boolean;
 }) {
   const { t } = useI18n();
   const stage = useStageStore.use.stage();
@@ -173,7 +181,7 @@ export function Stage({
   const setChatAreaWidth = useSettingsStore((s) => s.setChatAreaWidth);
   const chatAreaCollapsed = useSettingsStore((s) => s.chatAreaCollapsed);
   const setChatAreaCollapsed = useSettingsStore((s) => s.setChatAreaCollapsed);
-  const currentModelId = useSettingsStore((s) => s.modelId);
+  const selectedModelFallback = useSettingsStore((s) => `${s.providerId}:${s.modelId}`);
   const setTTSMuted = useSettingsStore((s) => s.setTTSMuted);
   const setTTSVolume = useSettingsStore((s) => s.setTTSVolume);
   const autoPlayLecture = useSettingsStore((s) => s.autoPlayLecture);
@@ -439,24 +447,45 @@ export function Stage({
     }
   }, [setChatAreaCollapsed, setSidebarCollapsed]);
 
-  const syncSharedSimulationInStore = useCallback((sharedSimulation: SharedSimulation | null) => {
-    useStageStore.setState((state) => {
-      if (!state.stage) {
-        return state;
-      }
+  const syncPresentationContextInStore = useCallback(
+    (input: {
+      sharedSimulation: SharedSimulation | null;
+      liveMeeting?: ClassroomLiveMeeting | null;
+    }) => {
+      useStageStore.setState((state) => {
+        if (!state.stage) {
+          return state;
+        }
 
-      return {
-        stage: preserveStageSharedSimulation(state.stage, sharedSimulation),
-      };
-    });
-  }, []);
+        const stageWithSharedSimulation = preserveStageSharedSimulation(
+          state.stage,
+          input.sharedSimulation,
+        );
+        const { liveMeeting: _previousLiveMeeting, ...stageWithoutLiveMeeting } =
+          stageWithSharedSimulation;
+
+        return {
+          stage: input.liveMeeting
+            ? {
+                ...stageWithSharedSimulation,
+                liveMeeting: input.liveMeeting,
+              }
+            : stageWithoutLiveMeeting,
+        };
+      });
+    },
+    [],
+  );
 
   const syncPresentationState = useCallback(
     (nextState: ClassroomPresentationStatePayload | null) => {
       setPresentationState(nextState);
-      syncSharedSimulationInStore(nextState?.sharedSimulation ?? null);
+      syncPresentationContextInStore({
+        sharedSimulation: nextState?.sharedSimulation ?? null,
+        liveMeeting: nextState?.liveMeeting ?? null,
+      });
     },
-    [syncSharedSimulationInStore],
+    [syncPresentationContextInStore],
   );
 
   const syncCollaborationState = useCallback(
@@ -1476,9 +1505,9 @@ export function Stage({
         stage,
         scenes,
         currentSceneId,
-        selectedModelFallback: getCurrentModelConfig().modelString,
+        selectedModelFallback,
       }),
-    [currentModelId, currentSceneId, scenes, stage],
+    [currentSceneId, scenes, selectedModelFallback, stage],
   );
 
   // get action information
@@ -1651,6 +1680,7 @@ export function Stage({
   }, [togglePresentation]);
 
   const sharedSimulation = presentationState?.sharedSimulation ?? stage?.sharedSimulation ?? null;
+  const liveMeeting = presentationState?.liveMeeting ?? stage?.liveMeeting ?? null;
   const collaborationMode =
     collaborationState?.collaborationMode ?? getSharedSimulationCollaborationMode(sharedSimulation);
   const isMultiUserSimulation = collaborationMode === 'multi-user';
@@ -1902,7 +1932,7 @@ export function Stage({
     <div
       ref={stageRef}
       className={cn(
-        'flex-1 flex overflow-hidden bg-gray-50 dark:bg-gray-900',
+        'flex h-full min-h-0 flex-1 overflow-hidden overscroll-none bg-gray-50 dark:bg-gray-900',
         isPresenting && !controlsVisible && 'cursor-none',
       )}
     >
@@ -1916,7 +1946,7 @@ export function Stage({
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
         {!isPresenting && (
           <Header
@@ -1924,6 +1954,8 @@ export function Stage({
             classroomSource={classroomSource}
             homePath={homePath}
             onOpenMiroFishManager={openMiroFishManager}
+            onOpenClassroomShare={onOpenClassroomShare}
+            liveMeeting={liveMeeting}
           />
         )}
 
@@ -1944,7 +1976,23 @@ export function Stage({
             <Alert className="border-blue-200/70 bg-white/80 dark:border-blue-900/50 dark:bg-slate-950/80">
               <AlertTriangle className="size-4 text-blue-500 dark:text-blue-300" />
               <AlertTitle>{t('classroom.localDemoBadge')}</AlertTitle>
-              <AlertDescription>{classroomNotice}</AlertDescription>
+              <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>{classroomNotice}</span>
+                {onMakeShareable ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={onMakeShareable}
+                    disabled={makeShareablePending}
+                  >
+                    {makeShareablePending
+                      ? t('classroom.share.publishing')
+                      : t('classroom.share.makeShareable')}
+                  </Button>
+                ) : null}
+              </AlertDescription>
             </Alert>
           </div>
         ) : null}
@@ -2002,6 +2050,7 @@ export function Stage({
                 autoPlayEnabled={autoPlayLecture}
                 promptsLocked={livePromptsLocked}
                 reportAvailable={reportAvailable}
+                liveMeeting={liveMeeting}
                 onTogglePause={() => {
                   void handlePlayPause();
                 }}
@@ -2265,6 +2314,7 @@ export function Stage({
         activeBubbleId={activeBubbleId}
         onActiveBubble={(id) => setActiveBubbleId(id)}
         currentSceneId={currentSceneId}
+        classroomSource={classroomSource}
         onLiveSpeech={(text, agentId) => {
           // Capture epoch at call time — discard if scene has changed since
           const epoch = sceneEpochRef.current;

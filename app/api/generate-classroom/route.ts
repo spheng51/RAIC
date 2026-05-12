@@ -13,6 +13,8 @@ import {
 } from '@/lib/server/classroom-job-store';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
+import { normalizeScheduledClassInput } from '@/lib/utils/scheduled-classes';
+import type { ScheduledClassGenerationInput } from '@/lib/types/scheduled-classes';
 
 const log = createLogger('GenerateClassroom API');
 
@@ -30,6 +32,26 @@ type GenerateClassroomRequestBody = Partial<GenerateClassroomInput> & {
   requestKey?: string;
 };
 
+function readScheduledClassGenerationInput(value: unknown): ScheduledClassGenerationInput | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as {
+    title?: unknown;
+    startsAt?: unknown;
+    durationMinutes?: unknown;
+  };
+  return {
+    title: typeof candidate.title === 'string' ? candidate.title : '',
+    startsAt: typeof candidate.startsAt === 'string' ? candidate.startsAt : '',
+    durationMinutes:
+      candidate.durationMinutes === undefined || candidate.durationMinutes === null
+        ? undefined
+        : Number(candidate.durationMinutes),
+  };
+}
+
 export async function POST(req: NextRequest) {
   let requirementSnippet: string | undefined;
   try {
@@ -40,6 +62,19 @@ export async function POST(req: NextRequest) {
 
     const rawBody = (await req.json()) as GenerateClassroomRequestBody;
     requirementSnippet = rawBody.requirement?.substring(0, 60);
+    const rawScheduledClass = readScheduledClassGenerationInput(rawBody.scheduledClass);
+    const normalizedScheduledClass = rawScheduledClass
+      ? normalizeScheduledClassInput(rawScheduledClass, { requireFutureStart: true })
+      : null;
+    if (normalizedScheduledClass && !normalizedScheduledClass.ok) {
+      return apiErrorWithRequestSession(
+        req,
+        'INVALID_REQUEST',
+        400,
+        normalizedScheduledClass.error,
+      );
+    }
+
     const body: GenerateClassroomInput & {
       readonly imageProviderOverride?: ImageProviderOverride;
     } = {
@@ -58,6 +93,7 @@ export async function POST(req: NextRequest) {
         : {}),
       ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
       ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
+      ...(normalizedScheduledClass?.ok ? { scheduledClass: normalizedScheduledClass.value } : {}),
       ...(rawBody.enableImageGeneration && rawBody.imageProviderOverride?.providerId
         ? {
             imageProviderOverride: {
@@ -107,6 +143,7 @@ export async function POST(req: NextRequest) {
         runClassroomGenerationJob(jobId, body, baseUrl, {
           organizationId: auth.organization?.id ?? null,
           userId: auth.user.id,
+          actorRole: auth.session.role,
         }),
       );
     }

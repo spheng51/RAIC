@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { runPostgresQuery, runPostgresTransaction } from '@/lib/db/client';
+import type { PlatformRole } from '@/lib/db/schema';
 import type { Scene, Stage } from '@/lib/types/stage';
 
 export interface ClassroomRecord {
@@ -64,6 +65,38 @@ export async function readClassroomRecord(id: string): Promise<ClassroomRecord |
 
   if (!rows) return null;
   return rows[0] ? mapClassroomRow(rows[0]) : null;
+}
+
+export async function listClassroomRecordsForAccess(input: {
+  role: PlatformRole;
+  userId: string;
+  organizationId?: string | null;
+}): Promise<ClassroomRecord[]> {
+  let whereClause = '';
+  const params: unknown[] = [];
+
+  if (input.role === 'system_admin') {
+    whereClause = '';
+  } else if (input.role === 'org_admin') {
+    if (!input.organizationId) return [];
+    params.push(input.organizationId);
+    whereClause = 'WHERE organization_id = $1';
+  } else if (input.role === 'teacher') {
+    params.push(input.userId);
+    whereClause = 'WHERE owner_user_id = $1';
+  } else {
+    return [];
+  }
+
+  const rows = await runPostgresQuery<ClassroomRow>(
+    `SELECT ${CLASSROOM_COLUMNS}
+     FROM classrooms
+     ${whereClause}
+     ORDER BY updated_at DESC`,
+    params,
+  );
+
+  return rows?.map(mapClassroomRow) ?? [];
 }
 
 export async function upsertClassroomRecord(

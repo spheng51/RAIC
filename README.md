@@ -51,6 +51,9 @@ Open-RAIC's first tagged release introduced:
 
 See the full release notes in [CHANGELOG.md](CHANGELOG.md).
 
+For the teacher-facing public classroom sharing flow, see
+[Public Classroom Release Notes](docs/public-classroom-release.md).
+
 ---
 
 ## 📖 Overview

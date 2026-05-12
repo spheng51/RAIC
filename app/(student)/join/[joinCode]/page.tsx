@@ -9,7 +9,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { StudentJoinLiveMeetingCard } from '@/components/classroom/student-join-live-meeting-card';
 import { findValidJoinToken } from '@/lib/auth/classroom-access';
+import { readClassroom } from '@/lib/server/classroom-storage';
 
 export default async function JoinClassroomPage({
   params,
@@ -35,6 +37,8 @@ export default async function JoinClassroomPage({
   }
 
   const classroomHref = `/join/${encodeURIComponent(joinCode)}/enter`;
+  const classroom = await readClassroom(joinToken.classroomId).catch(() => null);
+  const liveMeeting = classroom?.stage.liveMeeting ?? null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/20 px-6 py-12">
@@ -59,6 +63,7 @@ export default async function JoinClassroomPage({
             while the shared presentation and MiroFish sidecar stay aligned with the rest of the
             room.
           </p>
+          {liveMeeting ? <StudentJoinLiveMeetingCard liveMeeting={liveMeeting} /> : null}
         </CardContent>
         <CardFooter className="border-t">
           <Button asChild className="w-full">

@@ -156,10 +156,78 @@ describe('POST /api/generate-classroom', () => {
       }),
       'http://localhost:3000',
       {
+        actorRole: 'teacher',
         organizationId: 'org-1',
         userId: 'teacher-1',
       },
     );
+  });
+
+  it('accepts scheduled class metadata and strips client classroom ids', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Physics lab',
+          scheduledClass: {
+            title: 'Physics lab',
+            startsAt: '2099-05-12T17:00:00.000Z',
+            durationMinutes: 45,
+            classroomId: 'client-should-not-win',
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(createClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        scheduledClass: {
+          title: 'Physics lab',
+          startsAt: '2099-05-12T17:00:00.000Z',
+          durationMinutes: 45,
+        },
+      }),
+      expect.any(Object),
+    );
+    expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        scheduledClass: {
+          title: 'Physics lab',
+          startsAt: '2099-05-12T17:00:00.000Z',
+          durationMinutes: 45,
+        },
+      }),
+      'http://localhost:3000',
+      expect.objectContaining({
+        actorRole: 'teacher',
+      }),
+    );
+  });
+
+  it('rejects invalid scheduled class metadata before queuing generation', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Physics lab',
+          scheduledClass: {
+            title: 'Physics lab',
+            startsAt: '2020-05-12T17:00:00.000Z',
+          },
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('Choose a future start time.');
+    expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
   });
 
   it('reuses an existing queued job without scheduling a second runner', async () => {

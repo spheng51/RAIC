@@ -7,6 +7,7 @@ import type {
   SessionStatus,
   ChatMessageMetadata,
   DirectorState,
+  ChatClassroomSource,
 } from '@/lib/types/chat';
 import type { DiscussionRequest } from '@/components/roundtable';
 import type { Action, SpotlightAction, DiscussionAction } from '@/lib/types/action';
@@ -29,6 +30,7 @@ import {
   buildBrowserLocalChatMessages,
   getBrowserLocalAgentId,
 } from '@/lib/chat/browser-local-session';
+import { formatChatApiError, getUserFacingChatErrorMessage } from '@/lib/chat/chat-api-error';
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
 
@@ -51,6 +53,7 @@ interface UseChatSessionsOptions {
   ) => void;
   /** When provided and returns true, StreamBuffer holds on the current text item after reveal. */
   shouldHoldAfterReveal?: () => { holding: boolean; segmentDone: number } | boolean;
+  classroomSource?: ChatClassroomSource | null;
 }
 
 interface AgentLoopRequestTemplate {
@@ -63,6 +66,7 @@ interface AgentLoopRequestTemplate {
     [key: string]: unknown;
   };
   userProfile?: { nickname?: string; bio?: string };
+  classroomSource?: ChatClassroomSource;
   apiKey: string;
   baseUrl?: string;
   model?: string;
@@ -77,6 +81,7 @@ interface BrowserLocalRequestTemplate extends AgentLoopRequestTemplate {
 }
 
 export function useChatSessions(options: UseChatSessionsOptions = {}) {
+  const classroomSource = options.classroomSource ?? undefined;
   const onLiveSpeechRef = useRef(options.onLiveSpeech);
   const onSpeechProgressRef = useRef(options.onSpeechProgress);
   const onThinkingRef = useRef(options.onThinking);
@@ -525,8 +530,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API error: ${response.status} - ${errorText}`);
+          throw new Error(await formatChatApiError(response));
         }
 
         const buffer = createBufferForSession(sessionId, sessionType);
@@ -1026,6 +1030,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             nickname: userProfileState.nickname || undefined,
             bio: userProfileState.bio || undefined,
           },
+          classroomSource,
           apiKey: mc.apiKey,
           baseUrl: mc.baseUrl,
           model: mc.modelString,
@@ -1054,10 +1059,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           return;
         }
         log.error('[ChatArea] Resume error:', error);
-        clearLiveSessionAfterError(
-          sessionId,
-          `Error: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        clearLiveSessionAfterError(sessionId, getUserFacingChatErrorMessage(error));
       } finally {
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
@@ -1066,7 +1068,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         }
       }
     },
-    [clearLiveSessionAfterError, runAgentLoop, runBrowserLocalTurn],
+    [classroomSource, clearLiveSessionAfterError, runAgentLoop, runBrowserLocalTurn],
   );
 
   /**
@@ -1256,6 +1258,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             nickname: userProfileState.nickname || undefined,
             bio: userProfileState.bio || undefined,
           },
+          classroomSource,
           apiKey: mc.apiKey,
           baseUrl: mc.baseUrl,
           model: mc.modelString,
@@ -1286,10 +1289,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         }
 
         log.error('[ChatArea] Error:', error);
-        clearLiveSessionAfterError(
-          sessionId!,
-          `Error: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        clearLiveSessionAfterError(sessionId!, getUserFacingChatErrorMessage(error));
       } finally {
         // Only clean up if this is still the active controller (avoid race with interrupt)
         if (abortControllerRef.current === controller) {
@@ -1301,6 +1301,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     },
     [
       activeSessionId,
+      classroomSource,
       clearLiveSessionAfterError,
       isStreaming,
       createSession,
@@ -1416,6 +1417,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             nickname: userProfileState.nickname || undefined,
             bio: userProfileState.bio || undefined,
           },
+          classroomSource,
           apiKey: mc.apiKey,
           baseUrl: mc.baseUrl,
           model: mc.modelString,
@@ -1446,10 +1448,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         }
 
         log.error('[ChatArea] Discussion error:', error);
-        clearLiveSessionAfterError(
-          sessionId,
-          `Error starting discussion: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        clearLiveSessionAfterError(sessionId, getUserFacingChatErrorMessage(error));
       } finally {
         // Only clean up if this is still the active controller (avoid race with interrupt)
         if (abortControllerRef.current === controller) {
@@ -1460,7 +1459,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable from i18n context
-    [clearLiveSessionAfterError, endSession, runAgentLoop, runBrowserLocalTurn],
+    [classroomSource, clearLiveSessionAfterError, endSession, runAgentLoop, runBrowserLocalTurn],
   );
 
   /**

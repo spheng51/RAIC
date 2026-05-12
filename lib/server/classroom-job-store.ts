@@ -14,6 +14,7 @@ import type {
   GenerationWarning,
   SceneOutcome,
 } from '@/lib/types/generation';
+import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 import {
   CLASSROOM_JOBS_DIR,
   ensureClassroomJobsDir,
@@ -56,6 +57,8 @@ export interface ClassroomGenerationJob {
   completionStatus?: GenerationCompletionStatus;
   warnings?: GenerationWarning[];
   sceneOutcomes?: SceneOutcome[];
+  scheduledClassEvent?: ScheduledClassEvent;
+  scheduledClassError?: string;
   result?: {
     classroomId: string;
     url: string;
@@ -66,6 +69,11 @@ export interface ClassroomGenerationJob {
     sceneOutcomes: SceneOutcome[];
   };
   error?: string;
+}
+
+export interface ClassroomGenerationJobSuccessMetadata {
+  scheduledClassEvent?: ScheduledClassEvent;
+  scheduledClassError?: string;
 }
 
 interface ReadClassroomGenerationJobOptions {
@@ -514,6 +522,7 @@ export async function updateClassroomGenerationJobProgress(
 export async function markClassroomGenerationJobSucceeded(
   jobId: string,
   result: GenerateClassroomResult,
+  metadata: ClassroomGenerationJobSuccessMetadata = {},
 ): Promise<ClassroomGenerationJob> {
   return updateClassroomGenerationJob(jobId, {
     status: 'succeeded',
@@ -527,6 +536,8 @@ export async function markClassroomGenerationJobSucceeded(
     completionStatus: result.completionStatus,
     warnings: result.warnings,
     sceneOutcomes: result.sceneOutcomes,
+    ...(metadata.scheduledClassEvent ? { scheduledClassEvent: metadata.scheduledClassEvent } : {}),
+    ...(metadata.scheduledClassError ? { scheduledClassError: metadata.scheduledClassError } : {}),
     canRetry: false,
     result: {
       classroomId: result.id,

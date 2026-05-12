@@ -345,50 +345,63 @@ describe('classroom generation job store', () => {
         'request-1',
       );
 
-      await store.markClassroomGenerationJobSucceeded('job-1', {
-        id: 'classroom-1',
-        url: 'http://localhost:3000/classroom/classroom-1',
-        stage: {} as never,
-        scenes: [],
-        scenesCount: 1,
-        totalScenes: 2,
-        completionStatus: 'partial',
-        warnings: [
-          {
-            stage: 'scene',
-            code: 'content_empty',
-            message: 'Scene content generation returned no content',
-            sceneIndex: 1,
-            sceneTitle: 'Scene 2',
-            retryable: false,
-            attempts: 1,
+      await store.markClassroomGenerationJobSucceeded(
+        'job-1',
+        {
+          id: 'classroom-1',
+          url: 'http://localhost:3000/classroom/classroom-1',
+          stage: {} as never,
+          scenes: [],
+          scenesCount: 1,
+          totalScenes: 2,
+          completionStatus: 'partial',
+          warnings: [
+            {
+              stage: 'scene',
+              code: 'content_empty',
+              message: 'Scene content generation returned no content',
+              sceneIndex: 1,
+              sceneTitle: 'Scene 2',
+              retryable: false,
+              attempts: 1,
+            },
+          ],
+          sceneOutcomes: [
+            {
+              index: 0,
+              title: 'Scene 1',
+              status: 'generated',
+              stage: 'create',
+              sceneId: 'scene-1',
+              attempts: 1,
+              retryable: false,
+              code: 'scene_generated',
+              message: 'ok',
+            },
+            {
+              index: 1,
+              title: 'Scene 2',
+              status: 'failed',
+              stage: 'content',
+              attempts: 1,
+              retryable: false,
+              code: 'content_empty',
+              message: 'Scene content generation returned no content',
+            },
+          ],
+          createdAt: '2026-04-19T00:00:00.000Z',
+        },
+        {
+          scheduledClassEvent: {
+            id: 'event-1',
+            title: 'Teach gravity',
+            startsAt: '2099-05-12T17:00:00.000Z',
+            classroomId: 'classroom-1',
+            createdAt: '2026-04-19T00:00:00.000Z',
+            updatedAt: '2026-04-19T00:00:00.000Z',
           },
-        ],
-        sceneOutcomes: [
-          {
-            index: 0,
-            title: 'Scene 1',
-            status: 'generated',
-            stage: 'create',
-            sceneId: 'scene-1',
-            attempts: 1,
-            retryable: false,
-            code: 'scene_generated',
-            message: 'ok',
-          },
-          {
-            index: 1,
-            title: 'Scene 2',
-            status: 'failed',
-            stage: 'content',
-            attempts: 1,
-            retryable: false,
-            code: 'content_empty',
-            message: 'Scene content generation returned no content',
-          },
-        ],
-        createdAt: '2026-04-19T00:00:00.000Z',
-      });
+        },
+      );
 
       const raw = JSON.parse(await readFile(path.join(tempDir, 'job-1.json'), 'utf-8'));
       expect(raw).toMatchObject({
@@ -399,6 +412,10 @@ describe('classroom generation job store', () => {
         result: {
           totalScenes: 2,
           completionStatus: 'partial',
+        },
+        scheduledClassEvent: {
+          id: 'event-1',
+          classroomId: 'classroom-1',
         },
         warnings: [
           expect.objectContaining({

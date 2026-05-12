@@ -6,6 +6,7 @@ import type {
   BenchmarkArtifactStatus,
   ClassroomRevisitIntent,
 } from '@/lib/types/classroom-intelligence';
+import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 import type { Scene, Stage } from '@/lib/types/stage';
 
 export type PlatformRole = 'teacher' | 'student' | 'org_admin' | 'system_admin';
@@ -181,6 +182,11 @@ export interface BenchmarkArtifactRecord {
   createdAt: string;
 }
 
+export interface ScheduledClassEventRecord extends ScheduledClassEvent {
+  ownerUserId: string | null;
+  organizationId: string | null;
+}
+
 export interface PlatformStore {
   users: UserRecord[];
   organizations: OrganizationRecord[];
@@ -194,6 +200,7 @@ export interface PlatformStore {
   classroomSessionContexts: ClassroomSessionContextRecord[];
   classroomReflections: ClassroomReflectionRecord[];
   benchmarkArtifacts: BenchmarkArtifactRecord[];
+  scheduledClassEvents: ScheduledClassEventRecord[];
 }
 
 export const EMPTY_PLATFORM_STORE: PlatformStore = {
@@ -209,6 +216,7 @@ export const EMPTY_PLATFORM_STORE: PlatformStore = {
   classroomSessionContexts: [],
   classroomReflections: [],
   benchmarkArtifacts: [],
+  scheduledClassEvents: [],
 };
 
 export const PLATFORM_SCHEMA_SQL = [
@@ -373,6 +381,17 @@ export const PLATFORM_SCHEMA_SQL = [
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS scheduled_class_events (
+    id TEXT PRIMARY KEY,
+    owner_user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,
+    duration_minutes INTEGER,
+    classroom_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_classroom_id ON sessions (classroom_id)`,
@@ -386,4 +405,6 @@ export const PLATFORM_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_classroom_session_contexts_requirement ON classroom_session_contexts (organization_id, user_id, requirement_fingerprint, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_classroom_reflections_classroom_created ON classroom_reflections (classroom_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_benchmark_artifacts_scope_created ON benchmark_artifacts (scope, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_owner_start ON scheduled_class_events (owner_user_id, starts_at ASC)`,
+  `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_org_start ON scheduled_class_events (organization_id, starts_at ASC)`,
 ];

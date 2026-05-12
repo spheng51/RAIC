@@ -3,11 +3,13 @@ import path from 'path';
 import type { NextRequest } from 'next/server';
 import { isPostgresConfigured } from '@/lib/db/client';
 import {
+  listClassroomRecordsForAccess,
   readClassroomRecord,
   updateClassroomRecord,
   upsertClassroomRecord,
   type ClassroomRecord,
 } from '@/lib/db/repositories/classrooms';
+import type { PlatformRole } from '@/lib/db/schema';
 import { createLogger } from '@/lib/logger';
 import { ensureDirPath, writeJsonFileAtomic } from '@/lib/server/json-file';
 import type { Scene, Stage } from '@/lib/types/stage';
@@ -79,18 +81,38 @@ export interface PersistedClassroomData {
   stage: Stage;
   scenes: Scene[];
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassroomSummary {
+  id: string;
+  name: string;
+  description?: string;
+  sceneCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 type PersistedClassroomLike =
   | PersistedClassroomData
   | ClassroomRecord
-  | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId'> & {
+  | (Omit<PersistedClassroomData, 'ownerUserId' | 'organizationId' | 'updatedAt'> & {
       ownerUserId?: string | null;
       organizationId?: string | null;
       updatedAt?: string;
     });
 
 function normalizePersistedClassroomData(value: PersistedClassroomLike): PersistedClassroomData {
+  const createdAt =
+    typeof value.createdAt === 'string' && value.createdAt
+      ? value.createdAt
+      : new Date().toISOString();
+  const updatedAt =
+    typeof (value as { updatedAt?: unknown }).updatedAt === 'string' &&
+    (value as { updatedAt?: string }).updatedAt
+      ? (value as { updatedAt: string }).updatedAt
+      : createdAt;
+
   return {
     id: value.id,
     ownerUserId: typeof value.ownerUserId === 'string' ? value.ownerUserId : null,
@@ -102,7 +124,8 @@ function normalizePersistedClassroomData(value: PersistedClassroomLike): Persist
         : 0,
     stage: preserveStageSharedSimulation(value.stage, value.stage.sharedSimulation ?? null),
     scenes: Array.isArray(value.scenes) ? value.scenes : [],
-    createdAt: value.createdAt,
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -182,6 +205,93 @@ function buildClassroomComparablePayload(data: PersistedClassroomData) {
   });
 }
 
+function canListClassroom(
+  classroom: PersistedClassroomData,
+  scope: { role: PlatformRole; userId: string; organizationId?: string | null },
+) {
+  if (scope.role === 'system_admin') return true;
+  if (scope.role === 'org_admin') {
+    return !!scope.organizationId && classroom.organizationId === scope.organizationId;
+  }
+  if (scope.role === 'teacher') {
+    return classroom.ownerUserId === scope.userId;
+  }
+  return false;
+}
+
+function stageTimestampToIso(value: unknown, fallback: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+  const timestamp = value > 0 ? value : Date.parse(fallback);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : fallback;
+}
+
+function summarizeClassroom(classroom: PersistedClassroomData): ClassroomSummary {
+  return {
+    id: classroom.id,
+    name: classroom.stage.name || 'Untitled classroom',
+    description: classroom.stage.description,
+    sceneCount: classroom.scenes.length,
+    createdAt:
+      classroom.createdAt || stageTimestampToIso(classroom.stage.createdAt, classroom.updatedAt),
+    updatedAt:
+      classroom.updatedAt ||
+      stageTimestampToIso(
+        classroom.stage.updatedAt,
+        classroom.createdAt || new Date().toISOString(),
+      ),
+  };
+}
+
+export async function listAccessibleClassroomSummaries(scope: {
+  role: PlatformRole;
+  userId: string;
+  organizationId?: string | null;
+}): Promise<ClassroomSummary[]> {
+  if (isPostgresConfigured()) {
+    const records = await listClassroomRecordsForAccess(scope);
+    return records.map((record) => summarizeClassroom(normalizePersistedClassroomData(record)));
+  }
+
+  let entries: string[];
+  try {
+    entries = await fs.readdir(CLASSROOMS_DIR);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  const summaries: ClassroomSummary[] = [];
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith('.json'))
+      .map(async (entry) => {
+        const classroomId = entry.slice(0, -'.json'.length);
+        if (!isValidClassroomId(classroomId)) return;
+
+        try {
+          const content = await fs.readFile(resolveClassroomJsonPath(classroomId), 'utf-8');
+          const classroom = normalizePersistedClassroomData(
+            JSON.parse(content) as PersistedClassroomLike,
+          );
+          if (canListClassroom(classroom, scope)) {
+            summaries.push(summarizeClassroom(classroom));
+          }
+        } catch (error) {
+          log.warn('Skipping unreadable classroom while listing', {
+            classroomId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }),
+  );
+
+  return summaries.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
 function buildUpdatedClassroom(
   existing: PersistedClassroomData,
   updater: (current: PersistedClassroomData) => PersistedClassroomData,
@@ -252,6 +362,7 @@ export async function persistClassroom(
   baseUrl: string,
 ): Promise<PersistedClassroomData & { url: string }> {
   const canonicalStage = { ...data.stage, id: data.id };
+  const now = new Date().toISOString();
   const classroomData: PersistedClassroomData = {
     id: data.id,
     ownerUserId: data.ownerUserId ?? null,
@@ -259,7 +370,8 @@ export async function persistClassroom(
     roomVersion: 0,
     stage: preserveStageSharedSimulation(canonicalStage, canonicalStage.sharedSimulation),
     scenes: data.scenes,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 
   log.info('Classroom persist start', {
@@ -319,7 +431,11 @@ export async function updateClassroom(
     }
 
     const finalNext = buildUpdatedClassroom(existing, updater);
-    await writePersistedClassroomData(finalNext);
-    return finalNext;
+    const updated = {
+      ...finalNext,
+      updatedAt: new Date().toISOString(),
+    };
+    await writePersistedClassroomData(updated);
+    return updated;
   });
 }

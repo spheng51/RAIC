@@ -14,11 +14,15 @@ export function getDataRootDir() {
     return path.join(os.tmpdir(), 'openraic-data');
   }
 
-  return path.join(process.cwd(), 'data');
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), 'data');
 }
 
 export function getDataPath(...segments: string[]) {
-  return path.join(getDataRootDir(), ...segments);
+  if (isHostedServerlessRuntime()) {
+    return path.join(os.tmpdir(), 'openraic-data', ...segments);
+  }
+
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', ...segments);
 }
 
 export function isHostedEphemeralDataRoot() {

@@ -277,7 +277,7 @@ describe('classroom intelligence persistence', () => {
       created_at: '2026-04-17T00:00:00.000Z',
     };
 
-    const unsafeMock = vi.fn(async (query: string, params?: unknown[]) => {
+    const unsafeMock = vi.fn(async (query: string, _params?: unknown[]) => {
       const normalized = query.replace(/\s+/g, ' ').trim();
 
       if (

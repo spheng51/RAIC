@@ -30,7 +30,7 @@ describe('#353: generatedAgentConfigs conditional on agentMode', () => {
   // Replicate the Stage construction logic from classroom-generation.ts L322-349
   function buildStageAgentFields(
     agentMode: 'default' | 'generate',
-    agents: Array<{ id: string; name: string; role: string; persona?: string }>,
+    agents: Array<{ id: string; name: string; role: string; persona?: string; avatar?: string }>,
   ): DefaultModeFields | GenerateModeFields {
     return agentMode === 'generate'
       ? {
@@ -39,7 +39,7 @@ describe('#353: generatedAgentConfigs conditional on agentMode', () => {
             name: a.name,
             role: a.role,
             persona: a.persona || '',
-            avatar: AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
+            avatar: a.avatar || AGENT_DEFAULT_AVATARS[i % AGENT_DEFAULT_AVATARS.length],
             color: AGENT_COLOR_PALETTE[i % AGENT_COLOR_PALETTE.length],
             priority: a.role === 'teacher' ? 10 : a.role === 'assistant' ? 7 : 5,
           })),
@@ -83,6 +83,24 @@ describe('#353: generatedAgentConfigs conditional on agentMode', () => {
 
     // Should NOT have agentIds
     expect(fields).not.toHaveProperty('agentIds');
+  });
+
+  test('generate mode should preserve generated avatar paths before falling back to defaults', () => {
+    const agents = [
+      {
+        id: 'gen-server-0',
+        name: 'Prof. Rivera',
+        role: 'teacher',
+        persona: 'An expert',
+        avatar: '/avatars/librarian.png',
+      },
+      { id: 'gen-server-1', name: 'Assistant', role: 'assistant', persona: 'Helpful' },
+    ];
+    const fields = buildStageAgentFields('generate', agents);
+    const generatedAgentConfigs = (fields as GenerateModeFields).generatedAgentConfigs;
+
+    expect(generatedAgentConfigs[0].avatar).toBe('/avatars/librarian.png');
+    expect(generatedAgentConfigs[1].avatar).toBe(AGENT_DEFAULT_AVATARS[1]);
   });
 
   test('generate mode with LLM fallback should behave like default mode', () => {

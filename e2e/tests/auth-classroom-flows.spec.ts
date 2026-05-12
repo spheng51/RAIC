@@ -1,6 +1,7 @@
-import type { Browser, BrowserContext } from '@playwright/test';
+import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../fixtures/base';
 import { ClassroomPage } from '../pages/classroom.page';
+import { createSettingsStorage } from '../fixtures/test-data/settings';
 import {
   APP_BASE_URL,
   addSessionCookie,
@@ -30,6 +31,190 @@ async function createAuthedPage(browser: Browser, token: string) {
 async function getCookieValue(context: BrowserContext, name: string) {
   const cookies = await context.cookies(APP_BASE_URL);
   return cookies.find((cookie) => cookie.name === name)?.value ?? null;
+}
+
+async function createJoinLinkFromOpenShareDialog(page: Page) {
+  const joinTokenResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/classroom/join-token') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Create link' }).click();
+  const joinTokenResponse = await joinTokenResponsePromise;
+  expect(joinTokenResponse.ok()).toBeTruthy();
+  const joinTokenBody = (await joinTokenResponse.json()) as { joinUrl?: string };
+  expect(joinTokenBody.joinUrl).toContain('/join/');
+  await expect(page.getByText(joinTokenBody.joinUrl!)).toBeVisible();
+  return joinTokenBody.joinUrl!;
+}
+
+async function enterClassroomFromJoinUrl(browser: Browser, joinUrl: string, classroomId: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const classroom = new ClassroomPage(page);
+
+  await page.goto(joinUrl);
+  await expect(page.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
+  await page.getByRole('link', { name: 'Enter classroom' }).click();
+  await page.waitForURL(new RegExp(`/classroom/${classroomId}$`));
+  await classroom.waitForLoaded();
+
+  return { context, page, classroom };
+}
+
+async function seedLocalClassroom(page: Page, classroomId: string) {
+  await page.goto(`${APP_BASE_URL}/`);
+  await expect(
+    page.getByRole('heading', { name: 'Responsive Assistance Interactive Classroom' }),
+  ).toBeVisible();
+
+  await page.evaluate(
+    async ({ classroomId: seededClassroomId }) => {
+      function ensureStores(db: IDBDatabase) {
+        const createStore = (
+          name: string,
+          options: IDBObjectStoreParameters,
+        ): IDBObjectStore | null => {
+          if (db.objectStoreNames.contains(name)) return null;
+          return db.createObjectStore(name, options);
+        };
+
+        const stages = createStore('stages', { keyPath: 'id' });
+        stages?.createIndex('updatedAt', 'updatedAt');
+
+        const scenes = createStore('scenes', { keyPath: 'id' });
+        scenes?.createIndex('stageId', 'stageId');
+        scenes?.createIndex('order', 'order');
+        scenes?.createIndex('[stageId+order]', ['stageId', 'order']);
+
+        const audioFiles = createStore('audioFiles', { keyPath: 'id' });
+        audioFiles?.createIndex('createdAt', 'createdAt');
+
+        const imageFiles = createStore('imageFiles', { keyPath: 'id' });
+        imageFiles?.createIndex('createdAt', 'createdAt');
+
+        createStore('snapshots', { keyPath: 'id', autoIncrement: true });
+
+        const chatSessions = createStore('chatSessions', { keyPath: 'id' });
+        chatSessions?.createIndex('stageId', 'stageId');
+        chatSessions?.createIndex('[stageId+createdAt]', ['stageId', 'createdAt']);
+
+        createStore('playbackState', { keyPath: 'stageId' });
+        createStore('stageOutlines', { keyPath: 'stageId' });
+
+        const mediaFiles = createStore('mediaFiles', { keyPath: 'id' });
+        mediaFiles?.createIndex('stageId', 'stageId');
+        mediaFiles?.createIndex('[stageId+type]', ['stageId', 'type']);
+
+        const generatedAgents = createStore('generatedAgents', { keyPath: 'id' });
+        generatedAgents?.createIndex('stageId', 'stageId');
+      }
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('RAIC-Database');
+        request.onupgradeneeded = () => ensureStores(request.result);
+        request.onerror = () => reject(request.error ?? new Error('Failed to open IndexedDB'));
+        request.onsuccess = () => resolve(request.result);
+      });
+
+      const now = Date.now();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(['stages', 'scenes', 'mediaFiles', 'audioFiles'], 'readwrite');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to seed local classroom'));
+
+        tx.objectStore('stages').put({
+          id: seededClassroomId,
+          name: 'Local Share Lab',
+          description: 'Local classroom that will become shareable',
+          createdAt: now,
+          updatedAt: now,
+          language: 'en-US',
+          style: 'professional',
+        });
+        tx.objectStore('scenes').put({
+          id: `${seededClassroomId}-scene-1`,
+          stageId: seededClassroomId,
+          type: 'slide',
+          title: 'Local intro',
+          order: 0,
+          content: {
+            type: 'slide',
+            canvas: {
+              id: `${seededClassroomId}-slide-1`,
+              viewportSize: 1000,
+              viewportRatio: 0.5625,
+              theme: {
+                backgroundColor: '#ffffff',
+                themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4'],
+                fontColor: '#333333',
+                fontName: 'Inter',
+              },
+              elements: [
+                {
+                  type: 'text',
+                  id: 'local-title',
+                  content: 'Local intro',
+                  left: 50,
+                  top: 50,
+                  width: 900,
+                  height: 100,
+                },
+                {
+                  type: 'image',
+                  id: 'local-image',
+                  src: 'gen_img_local',
+                  left: 80,
+                  top: 180,
+                  width: 320,
+                  height: 180,
+                },
+              ],
+            },
+          },
+          actions: [
+            {
+              id: 'speech-local-1',
+              type: 'speech',
+              text: 'Welcome to the local share lab.',
+              audioId: 'tts-local-1',
+            },
+          ],
+          createdAt: now,
+          updatedAt: now,
+        });
+        tx.objectStore('mediaFiles').put({
+          id: `${seededClassroomId}:gen_img_local`,
+          stageId: seededClassroomId,
+          type: 'image',
+          blob: new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+          mimeType: 'image/png',
+          size: 4,
+          prompt: 'A simple local demo image',
+          params: '{}',
+          createdAt: now,
+        });
+        tx.objectStore('audioFiles').put({
+          id: 'tts-local-1',
+          blob: new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' }),
+          format: 'mpeg',
+          text: 'Welcome to the local share lab.',
+          createdAt: now,
+        });
+      });
+      db.close();
+
+      sessionStorage.setItem(
+        'classroomLaunchContext',
+        JSON.stringify({
+          classroomId: seededClassroomId,
+          launchMode: 'public-demo',
+          homePath: '/',
+        }),
+      );
+    },
+    { classroomId },
+  );
 }
 
 function countClassroomSessions(
@@ -247,5 +432,457 @@ test('teacher classroom access and join links use reusable classroom sessions un
     await teacherContext?.close();
     await studentContext?.close();
     await secondStudentContext?.close();
+  }
+});
+
+test('teacher shares from a Studio classroom card and a student enters through the join URL', async ({
+  browser,
+}) => {
+  let teacherContext: BrowserContext | undefined;
+  let studentContext: BrowserContext | undefined;
+
+  const classroomId = 'classroom-studio-share';
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-studio-share',
+      email: 'teacher-studio-share@example.com',
+      displayName: 'Teacher Studio Share',
+      organizationId: 'org-studio-share',
+      organizationName: 'Studio Share Academy',
+      organizationSlug: 'studio-share-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+    await writeClassroomData({
+      classroomId,
+      ownerUserId: teacherSession.user.id,
+      organizationId: teacherSession.organization.id,
+      stageName: 'Studio Share Lab',
+      sceneTitles: ['Studio share intro', 'Student activity'],
+    });
+
+    const teacher = await createAuthedPage(browser, teacherSession.token);
+    teacherContext = teacher.context;
+    await teacher.page.goto(`${APP_BASE_URL}/studio`);
+    await expect(teacher.page.getByText('Teacher Studio', { exact: true })).toBeVisible();
+    await expect(teacher.page.getByText('Studio Share Lab')).toBeVisible();
+
+    const classroomCard = teacher.page.getByRole('button', {
+      name: 'Open classroom Studio Share Lab',
+    });
+    await classroomCard.hover();
+    await classroomCard.getByRole('button', { name: 'Share classroom' }).click();
+    await expect(teacher.page.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
+
+    const joinUrl = await createJoinLinkFromOpenShareDialog(teacher.page);
+    const student = await enterClassroomFromJoinUrl(browser, joinUrl, classroomId);
+    studentContext = student.context;
+    await expect(student.classroom.sidebarScenes).toHaveCount(2);
+    await expect(student.classroom.getSceneTitle(0)).toContainText('Studio share intro');
+  } finally {
+    await teacherContext?.close();
+    await studentContext?.close();
+  }
+});
+
+test('teacher shares from the classroom header and a student enters through the join URL', async ({
+  browser,
+}) => {
+  let teacherContext: BrowserContext | undefined;
+  let studentContext: BrowserContext | undefined;
+
+  const classroomId = 'classroom-header-share';
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-header-share',
+      email: 'teacher-header-share@example.com',
+      displayName: 'Teacher Header Share',
+      organizationId: 'org-header-share',
+      organizationName: 'Header Share Academy',
+      organizationSlug: 'header-share-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+    await writeClassroomData({
+      classroomId,
+      ownerUserId: teacherSession.user.id,
+      organizationId: teacherSession.organization.id,
+      stageName: 'Header Share Lab',
+      sceneTitles: ['Header share intro', 'Exit ticket'],
+    });
+
+    const teacher = await createAuthedPage(browser, teacherSession.token);
+    teacherContext = teacher.context;
+    const teacherClassroom = new ClassroomPage(teacher.page);
+    await teacher.page.goto(`${APP_BASE_URL}/classroom/${classroomId}`);
+    await teacherClassroom.waitForLoaded();
+
+    await teacher.page.getByRole('button', { name: 'Share classroom' }).click();
+    await expect(teacher.page.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
+
+    const joinUrl = await createJoinLinkFromOpenShareDialog(teacher.page);
+    const student = await enterClassroomFromJoinUrl(browser, joinUrl, classroomId);
+    studentContext = student.context;
+    await expect(student.classroom.sidebarScenes).toHaveCount(2);
+    await expect(student.classroom.getSceneTitle(1)).toContainText('Exit ticket');
+  } finally {
+    await teacherContext?.close();
+    await studentContext?.close();
+  }
+});
+
+test('local demo Make shareable resumes after sign-in and opens the share dialog', async ({
+  browser,
+}) => {
+  let teacherContext: BrowserContext | undefined;
+  let studentContext: BrowserContext | undefined;
+
+  const localClassroomId = 'local-shareable-e2e';
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-local-publish',
+      email: 'teacher-local-publish@example.com',
+      displayName: 'Teacher Local Publish',
+      organizationId: 'org-local-publish',
+      organizationName: 'Local Publish Academy',
+      organizationSlug: 'local-publish-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+
+    teacherContext = await browser.newContext();
+    const teacherPage = await teacherContext.newPage();
+    await seedLocalClassroom(teacherPage, localClassroomId);
+    const localClassroom = new ClassroomPage(teacherPage);
+    await teacherPage.goto(`${APP_BASE_URL}/classroom/${localClassroomId}`);
+    await localClassroom.waitForLoaded();
+    await expect(teacherPage.getByRole('button', { name: 'Make shareable' })).toBeVisible();
+
+    await teacherPage.getByRole('button', { name: 'Make shareable' }).click();
+    await teacherPage.waitForURL(
+      new RegExp(`/sign-in\\?next=${encodeURIComponent(`/classroom/${localClassroomId}`)}$`),
+    );
+    await expect(teacherPage.getByText('Teacher sign-in')).toBeVisible();
+
+    await addSessionCookie(teacherContext, teacherSession.token);
+    const publishResponsePromise = teacherPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/classroom/publish-local') &&
+        response.request().method() === 'POST',
+    );
+    await teacherPage.goto(
+      `${APP_BASE_URL}/sign-in?next=${encodeURIComponent(`/classroom/${localClassroomId}`)}`,
+    );
+    const publishResponse = await publishResponsePromise;
+    expect(publishResponse.ok()).toBeTruthy();
+    const publishBody = (await publishResponse.json()) as { id?: string; url?: string };
+    expect(publishBody.id).toBeTruthy();
+    await teacherPage.waitForURL(new RegExp(`/classroom/${publishBody.id}$`));
+    await localClassroom.waitForLoaded();
+    await expect(teacherPage.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
+
+    const publishedClassroomResponse = await teacherPage.request.get(
+      `${APP_BASE_URL}/api/classroom?id=${encodeURIComponent(publishBody.id!)}`,
+    );
+    expect(publishedClassroomResponse.ok()).toBeTruthy();
+    const publishedClassroomBody = (await publishedClassroomResponse.json()) as {
+      classroom?: {
+        scenes?: Array<{
+          content?: { canvas?: { elements?: Array<{ src?: string }> } };
+          actions?: Array<{ audioUrl?: string }>;
+        }>;
+      };
+    };
+    const publishedScene = publishedClassroomBody.classroom?.scenes?.[0];
+    expect(
+      publishedScene?.content?.canvas?.elements?.some((element) =>
+        element.src?.includes(`/api/classroom-media/${publishBody.id}/media/gen_img_local.png`),
+      ),
+    ).toBe(true);
+    expect(
+      publishedScene?.actions?.some((action) =>
+        action.audioUrl?.includes(`/api/classroom-media/${publishBody.id}/audio/tts-local-1.mp3`),
+      ),
+    ).toBe(true);
+
+    const joinUrl = await createJoinLinkFromOpenShareDialog(teacherPage);
+    const student = await enterClassroomFromJoinUrl(browser, joinUrl, publishBody.id!);
+    studentContext = student.context;
+    await expect(student.classroom.getSceneTitle(0)).toContainText('Local intro');
+  } finally {
+    await teacherContext?.close();
+    await studentContext?.close();
+  }
+});
+
+test('local public-demo classroom chat sends public-demo source and avoids classroom lookup errors', async ({
+  browser,
+}) => {
+  let context: BrowserContext | undefined;
+  const localClassroomId = 'local-chat-e2e';
+
+  try {
+    context = await browser.newContext();
+    const page = await context.newPage();
+    await page.addInitScript(
+      (settings) => {
+        localStorage.setItem('settings-storage', settings);
+      },
+      createSettingsStorage({ asrEnabled: false }),
+    );
+
+    await seedLocalClassroom(page, localClassroomId);
+
+    const classroom = new ClassroomPage(page);
+    await page.goto(`${APP_BASE_URL}/classroom/${localClassroomId}`);
+    await classroom.waitForLoaded();
+
+    const chatRequestPromise = page.waitForRequest(
+      (request) => request.url().endsWith('/api/chat') && request.method() === 'POST',
+    );
+    await page.route('**/api/chat', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+        body: [
+          `data: ${JSON.stringify({
+            type: 'agent_start',
+            data: {
+              messageId: 'assistant-public-demo-chat',
+              agentId: 'default-1',
+              agentName: 'Teacher',
+            },
+          })}`,
+          `data: ${JSON.stringify({
+            type: 'text_delta',
+            data: {
+              messageId: 'assistant-public-demo-chat',
+              content: 'Here is one short question.',
+            },
+          })}`,
+          `data: ${JSON.stringify({
+            type: 'agent_end',
+            data: { messageId: 'assistant-public-demo-chat', agentId: 'default-1' },
+          })}`,
+          `data: ${JSON.stringify({
+            type: 'done',
+            data: {
+              totalActions: 0,
+              totalAgents: 1,
+              agentHadContent: true,
+            },
+          })}`,
+          '',
+        ].join('\n\n'),
+      });
+    });
+
+    await page.keyboard.press('t');
+    await page.getByRole('button', { name: 'Quiz me' }).click();
+
+    const chatRequest = await chatRequestPromise;
+    const chatBody = chatRequest.postDataJSON() as {
+      classroomSource?: string;
+      storeState?: { stage?: { id?: string } | null };
+      messages?: Array<{ parts?: Array<{ text?: string }> }>;
+    };
+
+    expect(chatBody.classroomSource).toBe('public-demo');
+    expect(chatBody.storeState?.stage?.id).toBe(localClassroomId);
+    expect(JSON.stringify(chatBody.messages)).toContain('Quiz me with one short question.');
+    await expect(page.getByText('Here is one short question.')).toBeVisible();
+    await expect(page.getByText('Classroom not found')).toHaveCount(0);
+  } finally {
+    await context?.close();
+  }
+});
+
+test('teacher shares a classroom invite with an attached Zoom join link', async ({ browser }) => {
+  let teacherContext: BrowserContext | undefined;
+  let studentContext: BrowserContext | undefined;
+
+  const classroomId = 'classroom-zoom-share';
+  const zoomJoinUrl = 'https://zoom.us/j/123456789?pwd=phase1';
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-zoom',
+      email: 'teacher-zoom@example.com',
+      displayName: 'Teacher Zoom',
+      organizationId: 'org-zoom',
+      organizationName: 'Zoom Academy',
+      organizationSlug: 'zoom-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+    await writeClassroomData({
+      classroomId,
+      ownerUserId: teacherSession.user.id,
+      organizationId: teacherSession.organization.id,
+      stageName: 'Live Discussion Lab',
+      sceneTitles: ['Invite setup', 'Live discussion'],
+    });
+
+    const teacher = await createAuthedPage(browser, teacherSession.token);
+    teacherContext = teacher.context;
+    const teacherClassroom = new ClassroomPage(teacher.page);
+    await teacher.page.goto(`${APP_BASE_URL}/classroom/${classroomId}`);
+    await teacherClassroom.waitForLoaded();
+
+    await teacher.page.getByRole('button', { name: 'Share classroom' }).click();
+    await expect(teacher.page.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
+
+    await teacher.page.getByLabel('Zoom join link').fill('https://zoom.us/profile');
+    const invalidZoomResponsePromise = teacher.page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/classroom/${classroomId}/live-meeting`) &&
+        response.request().method() === 'PUT',
+    );
+    await teacher.page.getByRole('button', { name: 'Save Zoom link' }).click();
+    const invalidZoomResponse = await invalidZoomResponsePromise;
+    expect(invalidZoomResponse.status()).toBe(400);
+    await expect(
+      teacher.page.getByText(
+        'Use an attendee Zoom invite link in the format https://zoom.us/j/{meetingId}.',
+      ),
+    ).toBeVisible();
+
+    await teacher.page.getByLabel('Zoom join link').fill(zoomJoinUrl);
+    await teacher.page.getByLabel('Room label').fill('Live discussion room');
+
+    const saveZoomResponsePromise = teacher.page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/classroom/${classroomId}/live-meeting`) &&
+        response.request().method() === 'PUT',
+    );
+    await teacher.page.getByRole('button', { name: 'Save Zoom link' }).click();
+    const saveZoomResponse = await saveZoomResponsePromise;
+    expect(saveZoomResponse.ok()).toBeTruthy();
+    await expect(teacher.page.getByText(`Attached Zoom link: ${zoomJoinUrl}`)).toBeVisible();
+
+    const joinTokenResponsePromise = teacher.page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/classroom/join-token') &&
+        response.request().method() === 'POST',
+    );
+    await teacher.page.getByRole('button', { name: 'Create link' }).click();
+    const joinTokenResponse = await joinTokenResponsePromise;
+    expect(joinTokenResponse.ok()).toBeTruthy();
+    const joinTokenBody = (await joinTokenResponse.json()) as { joinUrl?: string };
+    expect(joinTokenBody.joinUrl).toContain('/join/');
+    await expect(teacher.page.getByText(joinTokenBody.joinUrl!)).toBeVisible();
+
+    await teacher.page.getByRole('button', { name: 'Close' }).first().click();
+    const headerZoomLink = teacher.page.locator('header').getByRole('link', { name: 'Join Zoom' });
+    await expect(headerZoomLink).toHaveAttribute('href', zoomJoinUrl);
+
+    const joinCode = new URL(joinTokenBody.joinUrl!).pathname.split('/').filter(Boolean).pop();
+    expect(joinCode).toBeTruthy();
+    studentContext = await browser.newContext();
+    const studentPage = await studentContext.newPage();
+    await studentPage.goto(`${APP_BASE_URL}/join/${joinCode}`);
+
+    await expect(studentPage.getByText('Live Discussion Lab')).toBeVisible();
+    await expect(studentPage.getByText('Live discussion room')).toBeVisible();
+    await expect(studentPage.getByRole('link', { name: 'Join Zoom' })).toHaveAttribute(
+      'href',
+      zoomJoinUrl,
+    );
+    await expect(studentPage.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
+
+    await teacher.page.getByRole('button', { name: 'Share classroom' }).click();
+    const removeZoomResponsePromise = teacher.page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/classroom/${classroomId}/live-meeting`) &&
+        response.request().method() === 'DELETE',
+    );
+    await teacher.page.getByRole('button', { name: 'Remove' }).click();
+    const removeZoomResponse = await removeZoomResponsePromise;
+    expect(removeZoomResponse.ok()).toBeTruthy();
+    await teacher.page.getByRole('button', { name: 'Close' }).first().click();
+    await expect(headerZoomLink).toHaveCount(0);
+  } finally {
+    await teacherContext?.close();
+    await studentContext?.close();
+  }
+});
+
+test('teacher schedules a linked class from the studio and opens its classroom', async ({
+  browser,
+}) => {
+  let teacherContext: BrowserContext | undefined;
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-schedule',
+      email: 'teacher-schedule@example.com',
+      displayName: 'Teacher Schedule',
+      organizationId: 'org-schedule',
+      organizationName: 'Schedule Academy',
+      organizationSlug: 'schedule-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+    await writeClassroomData({
+      classroomId: 'classroom-scheduled',
+      ownerUserId: teacherSession.user.id,
+      organizationId: teacherSession.organization.id,
+      stageName: 'Scheduled Room',
+      sceneTitles: ['Schedule intro'],
+    });
+
+    const teacher = await createAuthedPage(browser, teacherSession.token);
+    teacherContext = teacher.context;
+    await teacher.page.goto(`${APP_BASE_URL}/studio`);
+
+    const schedule = teacher.page.getByTestId('schedule-classes-box');
+    await expect(schedule).toBeVisible();
+    await schedule.getByRole('button', { name: 'Add' }).click();
+    await teacher.page.getByLabel('Class title').fill('Teacher linked class');
+
+    const start = new Date();
+    start.setDate(start.getDate() + 1);
+    start.setHours(14, 0, 0, 0);
+    await teacher.page
+      .getByLabel('Date')
+      .fill(
+        `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
+          start.getDate(),
+        ).padStart(2, '0')}`,
+      );
+    await teacher.page.getByLabel('Time').fill('14:00');
+    await teacher.page.getByText('No classroom').click();
+    await teacher.page.getByRole('option', { name: 'Scheduled Room' }).click();
+    await teacher.page.getByRole('button', { name: 'Create' }).click();
+
+    await expect(schedule.getByText('Teacher linked class')).toBeVisible();
+    await schedule.getByRole('button', { name: /Teacher linked class/ }).click();
+    await teacher.page.waitForURL(/\/classroom\/classroom-scheduled$/);
+    const teacherClassroom = new ClassroomPage(teacher.page);
+    await teacherClassroom.waitForLoaded();
+  } finally {
+    await teacherContext?.close();
   }
 });

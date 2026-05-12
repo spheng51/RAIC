@@ -22,10 +22,13 @@ import {
   isTeacherServerLaunchContext,
   readClassroomLaunchContext,
   type ClassroomLaunchMode,
+  writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
 import { Button } from '@/components/ui/button';
 import { SessionReflectionDialog } from '@/components/stage/session-reflection-dialog';
+import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
 import { toast } from 'sonner';
+import { publishLocalClassroom } from '@/lib/utils/classroom-publish';
 import {
   applyPersistedSessionContextFloor,
   applySceneSelectionSignal,
@@ -36,10 +39,43 @@ import {
 import type { ClassroomRevisitIntent } from '@/lib/types/classroom-intelligence';
 
 const log = createLogger('Classroom');
+const LOCAL_PUBLISH_INTENT_KEY = 'localClassroomPublishIntent';
+const OPEN_SHARE_DIALOG_KEY = 'openClassroomShareDialog';
 
 interface ClassroomErrorAction {
   readonly href: string;
   readonly label: string;
+}
+
+function writeLocalPublishIntent(classroomId: string) {
+  sessionStorage.setItem(LOCAL_PUBLISH_INTENT_KEY, JSON.stringify({ classroomId }));
+  writeClassroomLaunchContext({
+    classroomId,
+    launchMode: 'public-demo',
+    homePath: getHomePathForLaunchMode('public-demo'),
+  });
+}
+
+function shouldResumeLocalPublish(classroomId: string) {
+  try {
+    const raw = sessionStorage.getItem(LOCAL_PUBLISH_INTENT_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { classroomId?: unknown };
+    return parsed.classroomId === classroomId;
+  } catch {
+    return false;
+  }
+}
+
+function shouldOpenShareDialog(classroomId: string) {
+  try {
+    const raw = sessionStorage.getItem(OPEN_SHARE_DIALOG_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { classroomId?: unknown };
+    return parsed.classroomId === classroomId;
+  } catch {
+    return false;
+  }
 }
 
 function isPersistedSessionContextSnapshot(
@@ -67,7 +103,10 @@ export default function ClassroomDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorAction, setErrorAction] = useState<ClassroomErrorAction | null>(null);
   const [classroomSource, setClassroomSource] = useState<ClassroomLaunchMode | null>(null);
+  const [viewerCanShare, setViewerCanShare] = useState(false);
   const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [publishPending, setPublishPending] = useState(false);
 
   const generationStartedRef = useRef(false);
   const retryButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -203,6 +242,7 @@ export default function ClassroomDetailPage() {
       const hasLocalStage = await stageExists(classroomId);
       let shouldFallbackToStorage = preferLocalDemo && hasLocalStage;
       let resolvedSource: ClassroomLaunchMode | null = null;
+      let resolvedViewerCanShare = false;
 
       if (preferLocalDemo && hasLocalStage) {
         log.info('Classroom launch context prefers local IndexedDB for:', classroomId);
@@ -249,6 +289,7 @@ export default function ClassroomDetailPage() {
               });
               hasServerRecord = true;
               resolvedSource = 'teacher-server';
+              resolvedViewerCanShare = Boolean(json.viewer?.canShare);
               log.info('Loaded from server-side storage:', classroomId);
 
               // Hydrate server-generated agents into IndexedDB + registry.
@@ -339,7 +380,16 @@ export default function ClassroomDetailPage() {
       }
 
       setClassroomSource(resolvedSource);
+      setViewerCanShare(resolvedViewerCanShare);
       setErrorAction(null);
+      if (
+        resolvedSource === 'teacher-server' &&
+        resolvedViewerCanShare &&
+        shouldOpenShareDialog(classroomId)
+      ) {
+        sessionStorage.removeItem(OPEN_SHARE_DIALOG_KEY);
+        setShareDialogOpen(true);
+      }
       if (
         launchContext?.generationCompletionStatus === 'partial' &&
         launchContext.generationWarnings?.length
@@ -362,6 +412,7 @@ export default function ClassroomDetailPage() {
       );
       setErrorAction(nextErrorState.action);
       setClassroomSource(null);
+      setViewerCanShare(false);
     } finally {
       setLoading(false);
     }
@@ -373,6 +424,66 @@ export default function ClassroomDetailPage() {
     setLoading(true);
     void loadClassroom();
   }, [loadClassroom]);
+
+  const redirectToSignInForPublish = useCallback(() => {
+    writeLocalPublishIntent(classroomId);
+    router.push(`/sign-in?next=${encodeURIComponent(`/classroom/${classroomId}`)}`);
+  }, [classroomId, router]);
+
+  const handleMakeShareable = useCallback(async () => {
+    if (publishPending) return;
+
+    const current = useStageStore.getState();
+    if (!current.stage || current.scenes.length === 0) {
+      toast.error(t('classroom.share.publishMissing'));
+      return;
+    }
+
+    setPublishPending(true);
+    try {
+      const result = await publishLocalClassroom({
+        stage: current.stage,
+        scenes: current.scenes,
+      });
+
+      if (!result.success || !result.id || !result.url) {
+        if (result.status === 401 || result.status === 403) {
+          toast.message(t('classroom.share.signInToPublish'));
+          redirectToSignInForPublish();
+          return;
+        }
+
+        throw new Error(result.details || result.error || t('classroom.share.publishFailed'));
+      }
+
+      sessionStorage.removeItem(LOCAL_PUBLISH_INTENT_KEY);
+      sessionStorage.setItem(OPEN_SHARE_DIALOG_KEY, JSON.stringify({ classroomId: result.id }));
+      clearClassroomLaunchContext();
+      writeClassroomLaunchContext({
+        classroomId: result.id,
+        launchMode: 'teacher-server',
+        homePath: getHomePathForLaunchMode('teacher-server'),
+      });
+
+      if (result.warnings?.length) {
+        toast.warning(t('classroom.share.publishWarnings', { count: result.warnings.length }));
+      } else {
+        toast.success(t('classroom.share.published'));
+      }
+
+      const destination = new URL(result.url, window.location.origin);
+      if (destination.origin === window.location.origin) {
+        router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+      } else {
+        window.location.assign(destination.toString());
+      }
+    } catch (err) {
+      log.error('Failed to publish local classroom:', err);
+      toast.error(err instanceof Error ? err.message : t('classroom.share.publishFailed'));
+    } finally {
+      setPublishPending(false);
+    }
+  }, [publishPending, redirectToSignInForPublish, router, t]);
 
   const postSessionContext = useCallback(
     (
@@ -514,7 +625,9 @@ export default function ClassroomDetailPage() {
     setError(null);
     setErrorAction(null);
     setClassroomSource(null);
+    setViewerCanShare(false);
     setReflectionOpen(false);
+    setShareDialogOpen(false);
     generationStartedRef.current = false;
     lastSessionContextPayloadRef.current = null;
     persistedSessionContextRef.current = null;
@@ -544,6 +657,21 @@ export default function ClassroomDetailPage() {
       retryButtonRef.current?.focus();
     }
   }, [error]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      error ||
+      publishPending ||
+      classroomSource !== 'public-demo' ||
+      !shouldResumeLocalPublish(classroomId)
+    ) {
+      return;
+    }
+
+    sessionStorage.removeItem(LOCAL_PUBLISH_INTENT_KEY);
+    void handleMakeShareable();
+  }, [classroomId, classroomSource, error, handleMakeShareable, loading, publishPending]);
 
   // Auto-resume generation for pending outlines
   useEffect(() => {
@@ -592,12 +720,12 @@ export default function ClassroomDetailPage() {
         log.warn('[Classroom] Media generation resume error:', err);
       });
     }
-  }, [loading, error, generateRemaining]);
+  }, [classroomId, classroomSource, loading, error, generateRemaining]);
 
   return (
     <ThemeProvider>
       <MediaStageProvider value={classroomId}>
-        <div className="h-screen flex flex-col overflow-hidden">
+        <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-none">
           {loading ? (
             <div
               className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900"
@@ -634,7 +762,7 @@ export default function ClassroomDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="relative flex-1">
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
               {classroomSource === 'teacher-server' ? (
                 <div className="absolute right-4 top-4 z-30">
                   <Button size="sm" variant="secondary" onClick={() => setReflectionOpen(true)}>
@@ -649,12 +777,27 @@ export default function ClassroomDetailPage() {
                 homePath={homePath}
                 onSceneCompleted={handleSceneCompleted}
                 onSceneSelected={handleSceneSelected}
+                onOpenClassroomShare={
+                  classroomSource === 'teacher-server' && viewerCanShare
+                    ? () => setShareDialogOpen(true)
+                    : undefined
+                }
+                onMakeShareable={
+                  classroomSource === 'public-demo' ? handleMakeShareable : undefined
+                }
+                makeShareablePending={publishPending}
               />
               <SessionReflectionDialog
                 classroomId={classroomId}
                 open={reflectionOpen}
                 onOpenChange={setReflectionOpen}
                 onSaved={handleReflectionSaved}
+              />
+              <ClassroomShareDialog
+                open={shareDialogOpen}
+                onOpenChange={setShareDialogOpen}
+                classroomId={viewerCanShare ? classroomId : null}
+                classroomName={stage?.name}
               />
             </div>
           )}

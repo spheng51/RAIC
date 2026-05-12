@@ -12,6 +12,7 @@ export interface AgentInfo {
   name: string;
   role: string;
   persona?: string;
+  avatar?: string;
 }
 
 // ==================== Cross-Page Context ====================

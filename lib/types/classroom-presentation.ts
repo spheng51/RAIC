@@ -1,4 +1,5 @@
 import type {
+  ClassroomLiveMeeting,
   PresentationSurface,
   SharedSimulation,
   SharedSimulationStatus,
@@ -26,6 +27,7 @@ export interface ClassroomPresentationStatePayload {
   simulationStatus: SharedSimulationStatus | null;
   reportAvailable: boolean;
   sharedSimulation: SharedSimulation | null;
+  liveMeeting?: ClassroomLiveMeeting | null;
   runUrl: string | null;
   reportUrl: string | null;
   viewerSessionId: string;

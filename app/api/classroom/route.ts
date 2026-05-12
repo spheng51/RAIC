@@ -124,7 +124,14 @@ export async function GET(request: NextRequest) {
       return apiError(API_ERROR_CODES.INVALID_REQUEST, 404, 'Classroom not found');
     }
 
-    return apiSuccessWithRequestSession(request, { classroom });
+    return apiSuccessWithRequestSession(request, {
+      classroom,
+      viewer: {
+        source: access.source,
+        role: access.auth.session.role,
+        canShare: access.source === 'web' && access.auth.session.role !== 'student',
+      },
+    });
   } catch (error) {
     log.error(
       `Classroom retrieval failed [id=${request.nextUrl.searchParams.get('id') ?? 'unknown'}]:`,

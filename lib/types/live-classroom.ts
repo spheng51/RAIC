@@ -4,6 +4,7 @@ export type ClassroomRoomEventKind =
   | 'presentation.updated'
   | 'collaboration.updated'
   | 'control.updated'
+  | 'live_meeting.updated'
   | 'mirofish.attached'
   | 'mirofish.session.updated';
 

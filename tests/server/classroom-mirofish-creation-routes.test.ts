@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import type { MiroFishCreationSpec } from '@/lib/types/mirofish-authoring';
 
 const requireRequestRoleMock = vi.fn();

@@ -6,6 +6,7 @@ const markClassroomGenerationJobRunningMock = vi.fn();
 const markClassroomGenerationJobSucceededMock = vi.fn();
 const markClassroomGenerationJobFailedMock = vi.fn();
 const updateClassroomGenerationJobProgressMock = vi.fn();
+const createScheduledClassForAccessMock = vi.fn();
 
 function createGenerationResult(id = 'classroom-1'): GenerateClassroomResult {
   return {
@@ -33,6 +34,10 @@ vi.mock('@/lib/server/classroom-job-store', () => ({
   updateClassroomGenerationJobProgress: updateClassroomGenerationJobProgressMock,
 }));
 
+vi.mock('@/lib/server/scheduled-classes', () => ({
+  createScheduledClassForAccess: createScheduledClassForAccessMock,
+}));
+
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -50,12 +55,21 @@ describe('classroom job runner scope forwarding', () => {
     markClassroomGenerationJobSucceededMock.mockReset();
     markClassroomGenerationJobFailedMock.mockReset();
     updateClassroomGenerationJobProgressMock.mockReset();
+    createScheduledClassForAccessMock.mockReset();
 
     generateClassroomMock.mockResolvedValue(createGenerationResult());
     markClassroomGenerationJobRunningMock.mockResolvedValue(undefined);
     markClassroomGenerationJobSucceededMock.mockResolvedValue(undefined);
     markClassroomGenerationJobFailedMock.mockResolvedValue(undefined);
     updateClassroomGenerationJobProgressMock.mockResolvedValue(undefined);
+    createScheduledClassForAccessMock.mockResolvedValue({
+      id: 'event-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'classroom-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
   });
 
   it('passes org-bound background scope into generateClassroom', async () => {
@@ -92,6 +106,7 @@ describe('classroom job runner scope forwarding', () => {
       expect.objectContaining({
         id: 'classroom-1',
       }),
+      {},
     );
   });
 
@@ -134,6 +149,84 @@ describe('classroom job runner scope forwarding', () => {
 
     await Promise.all([first, second]);
     expect(markClassroomGenerationJobSucceededMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('links generated classrooms to pending scheduled classes', async () => {
+    const { runClassroomGenerationJob } = await import('@/lib/server/classroom-job-runner');
+
+    await runClassroomGenerationJob(
+      'job-123',
+      {
+        requirement: 'Physics lab',
+        scheduledClass: {
+          title: 'Physics lab',
+          startsAt: '2099-05-12T17:00:00.000Z',
+          durationMinutes: 45,
+        },
+      },
+      'http://localhost:3000',
+      {
+        actorRole: 'teacher',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(createScheduledClassForAccessMock).toHaveBeenCalledWith(
+      {
+        role: 'teacher',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+      {
+        title: 'Physics lab',
+        startsAt: '2099-05-12T17:00:00.000Z',
+        durationMinutes: 45,
+        classroomId: 'classroom-1',
+      },
+      { requireFutureStart: false },
+    );
+    expect(markClassroomGenerationJobSucceededMock).toHaveBeenCalledWith(
+      'job-123',
+      expect.objectContaining({ id: 'classroom-1' }),
+      {
+        scheduledClassEvent: expect.objectContaining({
+          id: 'event-1',
+          classroomId: 'classroom-1',
+        }),
+      },
+    );
+  });
+
+  it('keeps classroom generation successful when schedule linking fails', async () => {
+    createScheduledClassForAccessMock.mockRejectedValueOnce(new Error('schedule write failed'));
+    const { runClassroomGenerationJob } = await import('@/lib/server/classroom-job-runner');
+
+    await runClassroomGenerationJob(
+      'job-123',
+      {
+        requirement: 'Physics lab',
+        scheduledClass: {
+          title: 'Physics lab',
+          startsAt: '2099-05-12T17:00:00.000Z',
+        },
+      },
+      'http://localhost:3000',
+      {
+        actorRole: 'teacher',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(markClassroomGenerationJobFailedMock).not.toHaveBeenCalled();
+    expect(markClassroomGenerationJobSucceededMock).toHaveBeenCalledWith(
+      'job-123',
+      expect.objectContaining({ id: 'classroom-1' }),
+      {
+        scheduledClassError: 'schedule write failed',
+      },
+    );
   });
 
   it('marks failures and clears in-memory state for a later rerun', async () => {

@@ -798,7 +798,12 @@ export function Roundtable({
           )}
           style={{ right: chatCollapsed === false ? (chatAreaWidth ?? 320) : 0 }}
         >
-          <div className="mb-3 px-2 py-1 rounded-full bg-white/70 dark:bg-black/60 backdrop-blur-xl border border-gray-200/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] pointer-events-auto">
+          <div
+            className={cn(
+              'mb-3 rounded-full border border-gray-200/60 bg-white/70 px-2 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-black/60 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+              controlsVisible ? 'pointer-events-auto' : 'pointer-events-none',
+            )}
+          >
             {toolbar}
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -18,6 +18,7 @@ import {
   Monitor,
   BotOff,
   ChevronUp,
+  Share2,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -56,6 +57,19 @@ import {
 } from '@/lib/utils/classroom-launch';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
+import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
+import { ScheduleClassesBox } from '@/components/schedule/schedule-classes-box';
+import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
+import {
+  createLocalScheduledClassEvent,
+  deleteLocalScheduledClassEvent,
+  listLocalScheduledClassEvents,
+  updateLocalScheduledClassEvent,
+} from '@/lib/utils/scheduled-classes-storage';
+import {
+  normalizeScheduledClassInput,
+  sortScheduledClassEvents,
+} from '@/lib/utils/scheduled-classes';
 
 const log = createLogger('Home');
 
@@ -70,12 +84,33 @@ interface FormState {
   webSearch: boolean;
 }
 
+interface ServerClassroomSummary {
+  id: string;
+  name: string;
+  description?: string;
+  sceneCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ScheduledClassesApiBody {
+  events?: ScheduledClassEvent[];
+  event?: ScheduledClassEvent | null;
+  error?: string;
+  details?: string;
+}
+
 const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
   language: 'zh-CN',
   webSearch: false,
 };
+
+function parseServerTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
 
 interface HomePageProps {
   readonly launchMode?: ClassroomLaunchMode;
@@ -100,7 +135,6 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const [recentOpen, setRecentOpen] = useState(true);
 
   // Hydrate client-only state after mount (avoids SSR mismatch)
-  /* eslint-disable react-hooks/set-state-in-effect -- Hydration from localStorage must happen in effect */
   useEffect(() => {
     try {
       const saved = localStorage.getItem(RECENT_OPEN_STORAGE_KEY);
@@ -126,7 +160,6 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       /* localStorage unavailable */
     }
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Restore requirement draft from cache (derived state pattern — no effect needed)
   const [prevCachedRequirement, setPrevCachedRequirement] = useState(cachedRequirement);
@@ -140,8 +173,10 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const [themeOpen, setThemeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<StageListItem[]>([]);
+  const [scheduledClassEvents, setScheduledClassEvents] = useState<ScheduledClassEvent[]>([]);
   const [thumbnails, setThumbnails] = useState<Record<string, Slide>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [shareClassroom, setShareClassroom] = useState<StageListItem | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -157,8 +192,31 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [themeOpen]);
 
-  const loadClassrooms = async () => {
+  const loadClassrooms = useCallback(async () => {
     try {
+      if (launchMode === 'teacher-server') {
+        const response = await fetch('/api/classrooms', { cache: 'no-store' });
+        const body = (await response.json().catch(() => null)) as {
+          classrooms?: ServerClassroomSummary[];
+          error?: string;
+        } | null;
+        if (!response.ok) {
+          throw new Error(body?.error || 'Failed to load classrooms');
+        }
+
+        const serverClassrooms = (body?.classrooms ?? []).map((classroom) => ({
+          id: classroom.id,
+          name: classroom.name,
+          description: classroom.description,
+          sceneCount: classroom.sceneCount,
+          createdAt: parseServerTimestamp(classroom.createdAt),
+          updatedAt: parseServerTimestamp(classroom.updatedAt),
+        }));
+        setClassrooms(serverClassrooms);
+        setThumbnails({});
+        return;
+      }
+
       const list = await listStages();
       setClassrooms(list);
       // Load first slide thumbnails
@@ -169,7 +227,25 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     } catch (err) {
       log.error('Failed to load classrooms:', err);
     }
-  };
+  }, [launchMode]);
+
+  const loadScheduledClassEvents = useCallback(async () => {
+    try {
+      if (launchMode === 'teacher-server') {
+        const response = await fetch('/api/scheduled-classes', { cache: 'no-store' });
+        const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
+        if (!response.ok) {
+          throw new Error(body?.details || body?.error || 'Failed to load scheduled classes');
+        }
+        setScheduledClassEvents(sortScheduledClassEvents(body?.events ?? []));
+        return;
+      }
+
+      setScheduledClassEvents(await listLocalScheduledClassEvents());
+    } catch (err) {
+      log.error('Failed to load scheduled classes:', err);
+    }
+  }, [launchMode]);
 
   useEffect(() => {
     // Clear stale media store to prevent cross-course thumbnail contamination.
@@ -178,9 +254,159 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     useMediaGenerationStore.getState().revokeObjectUrls();
     useMediaGenerationStore.setState({ tasks: {} });
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Store hydration on mount
     loadClassrooms();
-  }, []);
+    loadScheduledClassEvents();
+  }, [loadClassrooms, loadScheduledClassEvents]);
+
+  const handleScheduleRequestFailure = async (response: Response) => {
+    const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
+    throw new Error(body?.details || body?.error || 'Failed to save scheduled class');
+  };
+
+  const startScheduledClassGeneration = (input: ScheduledClassEventInput) => {
+    const normalized = normalizeScheduledClassInput(input, { requireFutureStart: true });
+    if (!normalized.ok) {
+      throw new Error(normalized.error);
+    }
+
+    if (launchMode === 'public-demo' && !currentModelId) {
+      showSetupToast(
+        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
+        t('settings.modelNotConfigured'),
+        t('settings.setupNeeded'),
+      );
+      setSettingsOpen(true);
+      throw new Error(t('settings.setupNeeded'));
+    }
+
+    const browserLocalGuardMessage = getBrowserLocalUnsupportedFlowGuard(
+      getCurrentModelConfig(),
+      'classroom-generation',
+    );
+    if (browserLocalGuardMessage) {
+      throw new Error(browserLocalGuardMessage);
+    }
+
+    clearClassroomLaunchContext();
+
+    const userProfile = useUserProfileStore.getState();
+    const requirements: UserRequirements = {
+      requirement: normalized.value.title,
+      language: form.language,
+      userNickname: userProfile.nickname || undefined,
+      userBio: userProfile.bio || undefined,
+      webSearch: form.webSearch || undefined,
+    };
+    const scheduledClass = {
+      title: normalized.value.title,
+      startsAt: normalized.value.startsAt,
+      ...(normalized.value.durationMinutes
+        ? { durationMinutes: normalized.value.durationMinutes }
+        : {}),
+    };
+
+    sessionStorage.setItem(
+      'generationSession',
+      JSON.stringify({
+        sessionId: nanoid(),
+        requirements,
+        pdfText: '',
+        pdfImages: [],
+        imageStorageIds: [],
+        sceneOutlines: null,
+        currentStep: 'generating' as const,
+        launchMode,
+        homePath: getHomePathForLaunchMode(launchMode),
+        scheduledClass,
+      }),
+    );
+
+    router.push('/generation-preview');
+  };
+
+  const handleCreateScheduledClass = async (input: ScheduledClassEventInput) => {
+    if (!input.classroomId) {
+      startScheduledClassGeneration(input);
+      return;
+    }
+
+    if (launchMode === 'teacher-server') {
+      const response = await fetch('/api/scheduled-classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) {
+        await handleScheduleRequestFailure(response);
+      }
+      const body = (await response.json()) as ScheduledClassesApiBody;
+      if (!body.event) {
+        throw new Error('Failed to save scheduled class');
+      }
+      setScheduledClassEvents((prev) => sortScheduledClassEvents([...prev, body.event!]));
+      return;
+    }
+
+    const event = await createLocalScheduledClassEvent(input);
+    setScheduledClassEvents((prev) => sortScheduledClassEvents([...prev, event]));
+  };
+
+  const handleUpdateScheduledClass = async (id: string, input: ScheduledClassEventInput) => {
+    if (launchMode === 'teacher-server') {
+      const response = await fetch('/api/scheduled-classes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...input }),
+      });
+      if (!response.ok) {
+        await handleScheduleRequestFailure(response);
+      }
+      const body = (await response.json()) as ScheduledClassesApiBody;
+      if (!body.event) {
+        throw new Error('Failed to save scheduled class');
+      }
+      setScheduledClassEvents((prev) =>
+        sortScheduledClassEvents(prev.map((event) => (event.id === id ? body.event! : event))),
+      );
+      return;
+    }
+
+    const event = await updateLocalScheduledClassEvent(id, input);
+    setScheduledClassEvents((prev) =>
+      sortScheduledClassEvents(prev.map((item) => (item.id === id ? event : item))),
+    );
+  };
+
+  const handleDeleteScheduledClass = async (id: string) => {
+    if (launchMode === 'teacher-server') {
+      const response = await fetch('/api/scheduled-classes', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        await handleScheduleRequestFailure(response);
+      }
+      setScheduledClassEvents((prev) => prev.filter((event) => event.id !== id));
+      return;
+    }
+
+    await deleteLocalScheduledClassEvent(id);
+    setScheduledClassEvents((prev) => prev.filter((event) => event.id !== id));
+  };
+
+  const openClassroom = useCallback(
+    (classroomId: string) => {
+      clearClassroomLaunchContext();
+      writeClassroomLaunchContext({
+        classroomId,
+        launchMode,
+        homePath: getHomePathForLaunchMode(launchMode),
+      });
+      router.push(`/classroom/${classroomId}`);
+    },
+    [launchMode, router],
+  );
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -511,6 +737,18 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           </div>
         </motion.div>
 
+        <ScheduleClassesBox
+          events={scheduledClassEvents}
+          classrooms={classrooms.map((classroom) => ({
+            id: classroom.id,
+            name: classroom.name,
+          }))}
+          onCreate={handleCreateScheduledClass}
+          onUpdate={handleUpdateScheduledClass}
+          onDelete={handleDeleteScheduledClass}
+          onOpenClassroom={openClassroom}
+        />
+
         {/* ── Slogan ── */}
         <motion.p
           initial={{ opacity: 0 }}
@@ -694,14 +932,14 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                         confirmingDelete={pendingDeleteId === classroom.id}
                         onConfirmDelete={() => confirmDelete(classroom.id)}
                         onCancelDelete={() => setPendingDeleteId(null)}
+                        showLocalActions={launchMode === 'public-demo'}
+                        onShare={
+                          launchMode === 'teacher-server'
+                            ? () => setShareClassroom(classroom)
+                            : undefined
+                        }
                         onClick={() => {
-                          clearClassroomLaunchContext();
-                          writeClassroomLaunchContext({
-                            classroomId: classroom.id,
-                            launchMode,
-                            homePath: getHomePathForLaunchMode(launchMode),
-                          });
-                          router.push(`/classroom/${classroom.id}`);
+                          openClassroom(classroom.id);
                         }}
                       />
                     </motion.div>
@@ -712,6 +950,15 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           </AnimatePresence>
         </motion.div>
       )}
+
+      <ClassroomShareDialog
+        open={shareClassroom !== null}
+        onOpenChange={(open) => {
+          if (!open) setShareClassroom(null);
+        }}
+        classroomId={shareClassroom?.id ?? null}
+        classroomName={shareClassroom?.name}
+      />
 
       {/* Footer — flows with content, at the very end */}
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
@@ -1034,6 +1281,8 @@ function ClassroomCard({
   confirmingDelete,
   onConfirmDelete,
   onCancelDelete,
+  showLocalActions,
+  onShare,
   onClick,
 }: {
   classroom: StageListItem;
@@ -1044,6 +1293,8 @@ function ClassroomCard({
   confirmingDelete: boolean;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
+  showLocalActions?: boolean;
+  onShare?: () => void;
   onClick: () => void;
 }) {
   const { t } = useI18n();
@@ -1118,9 +1369,24 @@ function ClassroomCard({
           </div>
         ) : null}
 
+        {onShare ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={t('classroom.share.open')}
+            className="absolute top-2 left-2 size-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-black/30 hover:bg-blue-500/80 text-white hover:text-white backdrop-blur-sm rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare();
+            }}
+          >
+            <Share2 className="size-3.5" />
+          </Button>
+        ) : null}
+
         {/* Delete — top-right, only on hover */}
         <AnimatePresence>
-          {!confirmingDelete && (
+          {showLocalActions && !confirmingDelete && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1192,6 +1458,7 @@ function ClassroomCard({
       {/* Info — outside the thumbnail */}
       <div className="mt-2.5 px-1 flex items-center gap-2">
         <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/30 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400">
+          {showLocalActions ? t('classroom.localDemoBadge') : t('classroom.teacherBackedBadge')} ·{' '}
           {classroom.sceneCount} {t('classroom.slides')} · {formatDate(classroom.updatedAt)}
         </span>
         {editing ? (

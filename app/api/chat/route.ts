@@ -83,8 +83,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const access = await requireClassroomAccess(req, classroomId);
+    const isPublicDemoChat = body.classroomSource === 'public-demo';
+    const access = isPublicDemoChat ? null : await requireClassroomAccess(req, classroomId);
     if (access instanceof NextResponse) {
+      log.warn('Chat access rejected', {
+        classroomId,
+        classroomSource: body.classroomSource ?? 'teacher-server',
+        accessPath: isPublicDemoChat ? 'public-demo' : 'classroom-access',
+        status: access.status,
+      });
       return access;
     }
 
@@ -106,9 +113,9 @@ export async function POST(req: NextRequest) {
       apiKey: body.apiKey,
       baseUrl: body.baseUrl,
       providerType: body.providerType,
-      auth: access.auth,
-      organizationId: access.auth.organization?.id ?? null,
-      userId: access.auth.user.id,
+      auth: access?.auth ?? null,
+      organizationId: access?.auth.organization?.id ?? null,
+      userId: access?.auth.user.id ?? null,
     });
 
     if (isProviderKeyRequired(providerId) && !resolvedApiKey) {
@@ -116,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
 
     let adaptiveContext = null;
-    if (access.source === 'web' && access.auth.session.role === 'teacher') {
+    if (access?.source === 'web' && access.auth.session.role === 'teacher') {
       try {
         adaptiveContext = await buildAdaptiveRuntimeContext({
           classroomId,
@@ -127,7 +134,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    log.info('Processing request');
+    log.info('Processing request', {
+      classroomId,
+      classroomSource: body.classroomSource ?? 'teacher-server',
+      accessPath: isPublicDemoChat ? 'public-demo' : (access?.source ?? 'unknown'),
+    });
     log.info(
       `Agents: ${body.config.agentIds.join(', ')}, Messages: ${body.messages.length}, Turn: ${body.directorState?.turnCount ?? 0}`,
     );

@@ -34,7 +34,7 @@ const WB_STYLE =
 const WB_ACCENT = 'bg-violet-500 dark:bg-violet-400';
 
 const SPOTLIGHT_STYLE =
-  'bg-yellow-50 dark:bg-yellow-500/15 border-yellow-300/40 dark:border-yellow-500/30 text-yellow-700 dark:text-yellow-300';
+  'border-amber-500/70 bg-amber-100 text-amber-900 shadow-[0_0_0_1px_rgba(180,83,9,0.18)] drop-shadow-[0_1px_1px_rgba(120,53,15,0.28)] dark:border-amber-300/60 dark:bg-amber-400/20 dark:text-amber-100';
 const LASER_STYLE =
   'bg-red-50 dark:bg-red-500/15 border-red-300/40 dark:border-red-500/30 text-red-600 dark:text-red-300';
 const DISCUSS_STYLE =

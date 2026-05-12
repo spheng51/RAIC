@@ -10,7 +10,7 @@ const ACTION_ICON_ONLY: Record<string, { Icon: typeof Flashlight; style: string 
   spotlight: {
     Icon: Flashlight,
     style:
-      'bg-yellow-50 dark:bg-yellow-500/15 border-yellow-300/40 dark:border-yellow-500/30 text-yellow-700 dark:text-yellow-300',
+      'border-amber-500/70 bg-amber-100 text-amber-900 shadow-[0_0_0_1px_rgba(180,83,9,0.18)] drop-shadow-[0_1px_1px_rgba(120,53,15,0.28)] dark:border-amber-300/60 dark:bg-amber-400/20 dark:text-amber-100',
   },
   laser: {
     Icon: MousePointer2,
@@ -20,7 +20,7 @@ const ACTION_ICON_ONLY: Record<string, { Icon: typeof Flashlight; style: string 
   play_video: {
     Icon: Play,
     style:
-      'bg-yellow-50 dark:bg-yellow-500/15 border-yellow-300/40 dark:border-yellow-500/30 text-yellow-700 dark:text-yellow-300',
+      'border-amber-500/70 bg-amber-100 text-amber-900 shadow-[0_0_0_1px_rgba(180,83,9,0.18)] drop-shadow-[0_1px_1px_rgba(120,53,15,0.28)] dark:border-amber-300/60 dark:bg-amber-400/20 dark:text-amber-100',
   },
 };
 
@@ -62,7 +62,7 @@ export function LectureNotesView({ notes, currentSceneId }: LectureNotesViewProp
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 scrollbar-hide"
+      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain scroll-pb-24 px-3 pt-2 pb-24 [touch-action:pan-y] scrollbar-hide"
     >
       {notes.map((note, index) => {
         const isCurrent = note.sceneId === currentSceneId;
@@ -154,10 +154,10 @@ export function LectureNotesView({ notes, currentSceneId }: LectureNotesViewProp
                     return (
                       <div
                         key={i}
-                        className="my-1.5 flex items-start gap-1.5 rounded-md border border-amber-200/60 dark:border-amber-700/30 bg-amber-50/60 dark:bg-amber-900/10 px-2 py-1.5"
+                        className="my-1.5 flex items-start gap-1.5 rounded-md border border-amber-400/70 bg-amber-50/80 px-2 py-1.5 shadow-[0_0_0_1px_rgba(180,83,9,0.08)] dark:border-amber-400/35 dark:bg-amber-500/12"
                       >
-                        <MessageSquare className="w-3 h-3 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
-                        <span className="text-[11px] leading-snug text-amber-800 dark:text-amber-300">
+                        <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-amber-700 drop-shadow-[0_1px_1px_rgba(120,53,15,0.25)] dark:text-amber-200" />
+                        <span className="text-[11px] leading-snug text-amber-900 dark:text-amber-200">
                           {row.label}
                         </span>
                       </div>

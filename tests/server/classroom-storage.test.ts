@@ -34,6 +34,8 @@ describe('classroom-storage helpers', () => {
   });
 
   afterEach(async () => {
+    vi.doUnmock('@/lib/db/client');
+    vi.doUnmock('@/lib/db/repositories/classrooms');
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     await fs.rm(testRoot, {
@@ -226,5 +228,185 @@ describe('classroom-storage helpers', () => {
       },
     }));
     expect((await readClassroom('room-room-version'))?.roomVersion).toBe(1);
+  });
+
+  it('lists only classrooms accessible to the current teacher in JSON storage', async () => {
+    const { listAccessibleClassroomSummaries, persistClassroom } =
+      await import('@/lib/server/classroom-storage');
+
+    await persistClassroom(
+      {
+        id: 'teacher-room',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        stage: {
+          id: 'teacher-room',
+          name: 'Teacher room',
+          description: 'Visible',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        scenes: [
+          {
+            id: 'scene-1',
+            stageId: 'teacher-room',
+            type: 'slide',
+            title: 'Intro',
+            order: 0,
+            content: {
+              type: 'slide',
+              canvas: { id: 'slide-1', elements: [] },
+            } as never,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      },
+      'http://localhost:3000',
+    );
+    await persistClassroom(
+      {
+        id: 'other-room',
+        ownerUserId: 'teacher-2',
+        organizationId: 'org-1',
+        stage: {
+          id: 'other-room',
+          name: 'Other room',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        scenes: [],
+      },
+      'http://localhost:3000',
+    );
+
+    const summaries = await listAccessibleClassroomSummaries({
+      role: 'teacher',
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    });
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      id: 'teacher-room',
+      name: 'Teacher room',
+      description: 'Visible',
+      sceneCount: 1,
+    });
+  });
+
+  it('lists organization and system admin classroom summaries in JSON storage', async () => {
+    const { listAccessibleClassroomSummaries, persistClassroom } =
+      await import('@/lib/server/classroom-storage');
+
+    await Promise.all([
+      persistClassroom(
+        {
+          id: 'org-room',
+          ownerUserId: 'teacher-1',
+          organizationId: 'org-1',
+          stage: {
+            id: 'org-room',
+            name: 'Org room',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          scenes: [],
+        },
+        'http://localhost:3000',
+      ),
+      persistClassroom(
+        {
+          id: 'other-org-room',
+          ownerUserId: 'teacher-2',
+          organizationId: 'org-2',
+          stage: {
+            id: 'other-org-room',
+            name: 'Other org room',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          scenes: [],
+        },
+        'http://localhost:3000',
+      ),
+    ]);
+
+    const orgAdminSummaries = await listAccessibleClassroomSummaries({
+      role: 'org_admin',
+      userId: 'admin-1',
+      organizationId: 'org-1',
+    });
+    const systemAdminSummaries = await listAccessibleClassroomSummaries({
+      role: 'system_admin',
+      userId: 'system-admin-1',
+      organizationId: null,
+    });
+
+    expect(orgAdminSummaries.map((summary) => summary.id)).toEqual(['org-room']);
+    expect(systemAdminSummaries.map((summary) => summary.id).sort()).toEqual([
+      'org-room',
+      'other-org-room',
+    ]);
+  });
+
+  it('summarizes classroom records from Postgres storage when configured', async () => {
+    const runPostgresQuery = vi.fn().mockResolvedValue([
+      {
+        id: 'postgres-room',
+        owner_user_id: 'teacher-1',
+        organization_id: 'org-1',
+        room_version: 0,
+        stage: {
+          id: 'postgres-room',
+          name: 'Postgres room',
+          description: 'Durable',
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        scenes: [
+          {
+            id: 'scene-1',
+            stageId: 'postgres-room',
+            type: 'slide',
+            title: 'Intro',
+            order: 0,
+            content: {
+              type: 'slide',
+              canvas: { id: 'slide-1', elements: [] },
+            },
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+        created_at: '2026-05-11T00:00:00.000Z',
+        updated_at: '2026-05-11T01:00:00.000Z',
+      },
+    ]);
+
+    vi.doMock('@/lib/db/client', () => ({
+      isPostgresConfigured: () => true,
+      runPostgresQuery,
+      runPostgresTransaction: vi.fn(),
+    }));
+
+    const { listAccessibleClassroomSummaries } = await import('@/lib/server/classroom-storage');
+    const summaries = await listAccessibleClassroomSummaries({
+      role: 'teacher',
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    });
+
+    expect(runPostgresQuery.mock.calls[0]?.[1]).toEqual(['teacher-1']);
+    expect(summaries).toEqual([
+      {
+        id: 'postgres-room',
+        name: 'Postgres room',
+        description: 'Durable',
+        sceneCount: 1,
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T01:00:00.000Z',
+      },
+    ]);
   });
 });
