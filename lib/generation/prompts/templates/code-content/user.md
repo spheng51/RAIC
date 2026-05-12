@@ -30,6 +30,8 @@ Create a code playground widget for: {{title}}
 
 {{languageDirective}}
 
+All visible code playground text, buttons, hints, errors, status messages, output labels, and teacher-facing action labels must follow the Course Language directive above. Code identifiers may remain in the programming language where appropriate.
+
 ---
 
 Generate a complete, interactive HTML code editor with:

@@ -17,15 +17,10 @@ import { parseJsonResponse } from './json-repair';
 import { uniquifyMediaElementIds } from './scene-builder';
 import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline-types';
 import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
+import { buildCourseLanguageDirective } from './language-directive';
+export { DEFAULT_LANGUAGE_DIRECTIVE, buildCourseLanguageDirective } from './language-directive';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
-
-/**
- * Fallback used when a model returns the legacy bare outline array or omits
- * the newer course-level language directive.
- */
-export const DEFAULT_LANGUAGE_DIRECTIVE =
-  'Teach in the language that matches the user requirement.';
 
 export function enrichGeneratedOutline(
   outline: SceneOutline,
@@ -128,6 +123,7 @@ export async function generateSceneOutlinesFromRequirements(
   const videoEnabled = options?.videoGenerationEnabled ?? false;
   const mediaEnabled = imageEnabled || videoEnabled;
   const hasSourceImages = (pdfImages?.length ?? 0) > 0;
+  const languageDirective = buildCourseLanguageDirective(requirements.language);
 
   // Game Arcade has the strongest prompt shape; Deep Interactive is the generic widget-first mode.
   const outlinePromptId =
@@ -155,7 +151,7 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
-    languageDirective: DEFAULT_LANGUAGE_DIRECTIVE,
+    languageDirective,
     gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
     gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,
   });
@@ -179,14 +175,11 @@ export async function generateSceneOutlinesFromRequirements(
       { languageDirective?: string; outlines?: SceneOutline[] } | SceneOutline[]
     >(response);
 
-    let languageDirective: string;
     let outlines: SceneOutline[];
 
     if (Array.isArray(parsed)) {
-      languageDirective = DEFAULT_LANGUAGE_DIRECTIVE;
       outlines = parsed;
     } else if (parsed && Array.isArray(parsed.outlines)) {
-      languageDirective = parsed.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE;
       outlines = parsed.outlines;
     } else {
       return {

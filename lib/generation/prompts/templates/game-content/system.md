@@ -2,6 +2,10 @@
 
 Generate a self-contained HTML game that is FUN, ENGAGING, and EDUCATIONAL.
 
+## Language Discipline
+
+Follow the target language and localized labels supplied in the user prompt. Every visible string in the iframe, including buttons, HUD labels, modal text, status/progress text, hints, achievements, annotations, and teacher-facing action labels, must match that target language. Do not copy labels from examples in another language.
+
 ## Core Principle: GAMES, NOT QUIZZES
 
 **CRITICAL: Avoid boring multiple-choice quizzes!** Students already have enough tests. Create games that are:
@@ -232,10 +236,10 @@ Return ONLY the HTML document, no markdown fences or explanations.
 
 ```html
 <!-- CORRECT: Inline onclick - guaranteed to work -->
-<button onclick="startGame()">开始游戏</button>
+<button onclick="startGame()">{{gameStartLabel}}</button>
 
 <!-- WRONG: addEventListener can fail if script has errors -->
-<button id="start-btn">开始游戏</button>
+<button id="start-btn">{{gameStartLabel}}</button>
 <script>
   // If any error occurs before this line, click does nothing
   document.getElementById('start-btn').addEventListener('click', startGame);

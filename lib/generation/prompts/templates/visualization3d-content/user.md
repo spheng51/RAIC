@@ -24,6 +24,8 @@ Create a 3D visualization widget for: {{title}}
 
 {{languageDirective}}
 
+All visible visualization text, labels, buttons, panels, status messages, annotations, and teacher-facing action labels must follow the Language directive above.
+
 ---
 
 Generate a complete, interactive 3D visualization using Three.js with these MANDATORY features:

@@ -40,7 +40,22 @@ QA expectations: {{gameQaExpectations}}
 
 ## Language
 
+Target language: {{courseLanguageName}}
+
+HTML lang attribute: {{htmlLang}}
+
 {{languageDirective}}
+
+All visible game text must use {{courseLanguageName}}. This includes modal copy, button labels, HUD labels, score/status/progress text, hints, achievement text, error messages, and teacher-facing labels. Use these localized examples when helpful:
+
+- Start: {{gameStartLabel}}
+- Restart: {{gameRestartLabel}}
+- Hint: {{gameHintLabel}}
+- Score: {{gameScoreLabel}}
+- Status: {{gameStatusLabel}}
+- Progress: {{gameProgressLabel}}
+- Pause: {{gamePauseLabel}}
+- Resume: {{gameResumeLabel}}
 
 ---
 
@@ -81,15 +96,16 @@ Generate a FUN, INTERACTIVE HTML game with these MANDATORY features:
 4. Responsive layout (mobile + desktop)
 
 ### Technical (MANDATORY)
-1. **Inline onclick for start button**: `<button onclick="startGame()">开始</button>` - NOT addEventListener
+1. **Inline onclick for start button**: `<button onclick="startGame()">{{gameStartLabel}}</button>` - NOT addEventListener
 2. **Custom CSS preferred**: Avoid Tailwind `@layer utilities` blocks; use plain CSS
 3. **DOMContentLoaded wrapper**: Wrap game code in `document.addEventListener('DOMContentLoaded', ...)`
 4. **Global start function**: `function startGame()` must be callable from onclick
-5. Embedded `<script type="application/json" id="widget-config">`
-6. `requestAnimationFrame` for smooth animations
-7. Touch-friendly controls (min 44px touch targets)
-8. localStorage for progress/high scores
-9. Pause functionality
+5. Use `<html lang="{{htmlLang}}">`
+6. Embedded `<script type="application/json" id="widget-config">`
+7. `requestAnimationFrame` for smooth animations
+8. Touch-friendly controls (min 44px touch targets)
+9. localStorage for progress/high scores
+10. Pause functionality
 
 ### Output
 Return ONLY the HTML document. Make the game FUN enough that students want to play again!
