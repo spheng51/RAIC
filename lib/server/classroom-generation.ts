@@ -52,6 +52,9 @@ export interface GenerateClassroomInput {
   language?: string;
   enableWebSearch?: boolean;
   interactiveMode?: boolean;
+  creationMode?: UserRequirements['creationMode'];
+  gameTemplateId?: UserRequirements['gameTemplateId'];
+  gameCreativeBrief?: string;
   selectedModel?: string;
   enableImageGeneration?: boolean;
   enableVideoGeneration?: boolean;
@@ -296,6 +299,9 @@ export async function generateClassroom(
     requirement,
     language: lang,
     interactiveMode: input.interactiveMode || undefined,
+    creationMode: input.creationMode,
+    gameTemplateId: input.gameTemplateId,
+    gameCreativeBrief: input.gameCreativeBrief,
   };
   const pdfText = pdfContent?.text || undefined;
 
@@ -417,6 +423,8 @@ export async function generateClassroom(
       tavilyEnabled: Boolean(input.enableWebSearch),
       language: lang,
       selectedModel: input.selectedModel || modelString,
+      creationMode: input.creationMode,
+      gameTemplateId: input.gameTemplateId,
     },
     languageDirective,
     interactiveMode: input.interactiveMode || undefined,

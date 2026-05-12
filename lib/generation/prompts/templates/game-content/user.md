@@ -4,6 +4,28 @@ Create an educational GAME widget for: {{title}}
 
 {{gameType}}
 
+## Arcade Template
+
+Template: {{gameTemplateLabel}}
+
+Creative direction: {{gameTemplateHint}}
+
+Preferred controls: {{gamePreferredControls}}
+
+QA expectations: {{gameQaExpectations}}
+
+## Game Goal
+
+{{gameGoal}}
+
+## Core Mechanic
+
+{{coreMechanic}}
+
+## Difficulty Curve
+
+{{difficultyCurve}}
+
 ## Description
 
 {{description}}

@@ -259,6 +259,9 @@ function GenerationPreviewContent() {
         language: currentSession.requirements.language,
         enableWebSearch: !!currentSession.requirements.webSearch,
         interactiveMode: !!currentSession.requirements.interactiveMode,
+        creationMode: currentSession.requirements.creationMode,
+        gameTemplateId: currentSession.requirements.gameTemplateId,
+        gameCreativeBrief: currentSession.requirements.gameCreativeBrief,
         selectedModel: getCurrentModelConfig().modelString,
         enableImageGeneration: !!settings.imageGenerationEnabled,
         ...(settings.imageGenerationEnabled && settings.imageProviderId
@@ -639,6 +642,8 @@ function GenerationPreviewContent() {
           tavilyEnabled: Boolean(currentSession.requirements.webSearch),
           language: currentSession.requirements.language || 'zh-CN',
           selectedModel: getCurrentModelConfig().modelString,
+          creationMode: currentSession.requirements.creationMode,
+          gameTemplateId: currentSession.requirements.gameTemplateId,
         },
         createdAt: Date.now(),
         updatedAt: Date.now(),
