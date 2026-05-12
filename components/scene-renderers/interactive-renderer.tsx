@@ -19,12 +19,9 @@ export function InteractiveRenderer({ content, mode: _mode, sceneId }: Interacti
     () => (content.html ? patchHtmlForIframe(content.html) : undefined),
     [content.html],
   );
-  const sendMessageToIframe = useCallback(
-    (type: string, payload: Record<string, unknown>) => {
-      iframeRef.current?.contentWindow?.postMessage({ type, ...payload }, '*');
-    },
-    [],
-  );
+  const sendMessageToIframe = useCallback((type: string, payload: Record<string, unknown>) => {
+    iframeRef.current?.contentWindow?.postMessage({ type, ...payload }, '*');
+  }, []);
 
   useEffect(() => {
     registerIframe(sceneId, sendMessageToIframe);

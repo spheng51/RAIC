@@ -247,20 +247,16 @@ export async function generateSingleSceneOutcome(
     | null;
 
   try {
-    content = await generateSceneContent(
-      outline,
-      context.aiCall,
-      {
-        assignedImages: context.assignedImages,
-        imageMapping: context.imageMapping,
-        languageModel: context.languageModel,
-        visionEnabled: context.visionEnabled,
-        generatedMediaMapping: context.generatedMediaMapping,
-        agents: context.agents,
-        adaptivePrompt: context.adaptivePrompt,
-        languageDirective: context.languageDirective,
-      },
-    );
+    content = await generateSceneContent(outline, context.aiCall, {
+      assignedImages: context.assignedImages,
+      imageMapping: context.imageMapping,
+      languageModel: context.languageModel,
+      visionEnabled: context.visionEnabled,
+      generatedMediaMapping: context.generatedMediaMapping,
+      agents: context.agents,
+      adaptivePrompt: context.adaptivePrompt,
+      languageDirective: context.languageDirective,
+    });
   } catch (error) {
     const failure = classifySceneFailure(error);
     return {
@@ -292,18 +288,13 @@ export async function generateSingleSceneOutcome(
   let actions: Action[];
 
   try {
-    actions = await generateSceneActions(
-      outline,
-      content,
-      context.aiCall,
-      {
-        ctx: context.ctx,
-        agents: context.agents,
-        userProfile: context.userProfile,
-        adaptivePrompt: context.adaptivePrompt,
-        languageDirective: context.languageDirective,
-      },
-    );
+    actions = await generateSceneActions(outline, content, context.aiCall, {
+      ctx: context.ctx,
+      agents: context.agents,
+      userProfile: context.userProfile,
+      adaptivePrompt: context.adaptivePrompt,
+      languageDirective: context.languageDirective,
+    });
   } catch (error) {
     const failure = classifySceneFailure(error);
     return {
@@ -559,9 +550,7 @@ function normalizeGeneratedVideoRefs(
   elements: GeneratedSlideData['elements'],
   mediaGenerations: SceneOutline['mediaGenerations'] = [],
 ): GeneratedSlideData['elements'] {
-  const validRefs = mediaGenerations
-    .filter((mg) => mg.type === 'video')
-    .map((mg) => mg.elementId);
+  const validRefs = mediaGenerations.filter((mg) => mg.type === 'video').map((mg) => mg.elementId);
   const validRefSet = new Set(validRefs);
   const onlyRef = validRefs.length === 1 ? validRefs[0] : undefined;
 

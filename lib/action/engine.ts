@@ -38,10 +38,7 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ActionEngine');
 
-export type WidgetMessageCallback = (
-  type: string,
-  payload: Record<string, unknown>,
-) => void;
+export type WidgetMessageCallback = (type: string, payload: Record<string, unknown>) => void;
 
 // ==================== SVG Paths for Shapes ====================
 

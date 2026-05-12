@@ -533,7 +533,9 @@ export function SceneSidebar({
                   tabIndex={0}
                   aria-label={label}
                   onClick={() => selectScene(PENDING_SCENE_ID)}
-                  onKeyDown={(e) => handleInteractiveKeyDown(e, () => selectScene(PENDING_SCENE_ID))}
+                  onKeyDown={(e) =>
+                    handleInteractiveKeyDown(e, () => selectScene(PENDING_SCENE_ID))
+                  }
                   className={cn(
                     'group relative rounded-lg flex flex-col gap-1 p-1.5 transition-all duration-200 cursor-pointer hover:bg-amber-50/70 dark:hover:bg-amber-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40',
                     !isActive && 'opacity-70',
@@ -561,9 +563,7 @@ export function SceneSidebar({
                   <div className="relative aspect-video w-full rounded overflow-hidden ring-1 bg-amber-50 dark:bg-amber-950/20 ring-amber-100 dark:ring-amber-900/30">
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-amber-500 dark:text-amber-300">
                       <Trophy className="w-6 h-6" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider">
-                        {label}
-                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
                     </div>
                   </div>
                 </div>

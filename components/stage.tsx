@@ -1093,11 +1093,7 @@ export function Stage({
     const widgetSendMessage = (type: string, payload: Record<string, unknown>) => {
       useWidgetIframeStore.getState().getSendMessage(currentScene.id)?.(type, payload);
     };
-    const actionEngine = new ActionEngine(
-      useStageStore,
-      audioPlayerRef.current,
-      widgetSendMessage,
-    );
+    const actionEngine = new ActionEngine(useStageStore, audioPlayerRef.current, widgetSendMessage);
 
     // Create new PlaybackEngine
     const engine = new PlaybackEngine([currentScene], actionEngine, audioPlayerRef.current, {

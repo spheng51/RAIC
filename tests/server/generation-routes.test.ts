@@ -321,7 +321,10 @@ describe('generation routes', () => {
     );
     expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
 
-    const adaptivePrompt = generateSceneContentMock.mock.calls[0]?.[8];
+    const generationOptions = generateSceneContentMock.mock.calls[0]?.[2] as
+      | { adaptivePrompt?: string }
+      | undefined;
+    const adaptivePrompt = generationOptions?.adaptivePrompt;
     expect(scorePromptReplay(adaptivePrompt, repeatedSessionPromptExpectation)).toEqual({
       pass: true,
       missing: [],
@@ -352,7 +355,10 @@ describe('generation routes', () => {
     expect(response.status).toBe(200);
     expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
 
-    const adaptivePrompt = generateSceneContentMock.mock.calls[0]?.[8];
+    const generationOptions = generateSceneContentMock.mock.calls[0]?.[2] as
+      | { adaptivePrompt?: string }
+      | undefined;
+    const adaptivePrompt = generationOptions?.adaptivePrompt;
     expect(scorePromptReplay(adaptivePrompt, noAdaptivePromptExpectation)).toEqual({
       pass: true,
       missing: [],

@@ -24,11 +24,7 @@ import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
 import { toast } from 'sonner';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
-import {
-  gradeChoiceQuestions,
-  isShortAnswer,
-  type QuestionResult,
-} from '@/lib/quiz/grading';
+import { gradeChoiceQuestions, isShortAnswer, type QuestionResult } from '@/lib/quiz/grading';
 import {
   clearSubmitted,
   draftKey,
@@ -668,24 +664,23 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
     initialSubmitted?.kind === 'reviewing' ? initialSubmitted.results : [],
   );
 
-  useEffect(() => {
-    const submitted = readSubmittedState(sceneId);
-    if (submitted?.kind === 'reviewing') {
-      setAnswers(submitted.answers);
-      setResults(submitted.results);
+  const [prevSceneId, setPrevSceneId] = useState(sceneId);
+  if (sceneId !== prevSceneId) {
+    setPrevSceneId(sceneId);
+    if (initialSubmitted?.kind === 'reviewing') {
+      setAnswers(initialSubmitted.answers);
+      setResults(initialSubmitted.results);
       setPhase('reviewing');
-      return;
-    }
-    if (submitted?.kind === 'answering') {
-      setAnswers(submitted.answers);
+    } else if (initialSubmitted?.kind === 'answering') {
+      setAnswers(initialSubmitted.answers);
       setResults([]);
       setPhase('answering');
-      return;
+    } else {
+      setAnswers({});
+      setResults([]);
+      setPhase('not_started');
     }
-    setAnswers({});
-    setResults([]);
-    setPhase('not_started');
-  }, [sceneId]);
+  }
 
   // Draft cache for quiz answers, keyed by sceneId to isolate across classrooms
   const {

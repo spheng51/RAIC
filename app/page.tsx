@@ -588,17 +588,20 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const formatDate = useCallback(
+    (timestamp: number) => {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return t('classroom.today');
-    if (diffDays === 1) return t('classroom.yesterday');
-    if (diffDays < 7) return `${diffDays} ${t('classroom.daysAgo')}`;
-    return date.toLocaleDateString();
-  };
+      if (diffDays === 0) return t('classroom.today');
+      if (diffDays === 1) return t('classroom.yesterday');
+      if (diffDays < 7) return `${diffDays} ${t('classroom.daysAgo')}`;
+      return date.toLocaleDateString();
+    },
+    [t],
+  );
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredClassrooms = useMemo(() => {
@@ -1012,9 +1015,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                     onBlur={() => {
                       if (!searchQuery) setSearchOpen(false);
                     }}
-                    placeholder={
-                      locale === 'zh-CN' ? '按名称或日期搜索' : 'Search name or date'
-                    }
+                    placeholder={locale === 'zh-CN' ? '按名称或日期搜索' : 'Search name or date'}
                     aria-label={locale === 'zh-CN' ? '搜索最近课堂' : 'Search recent classrooms'}
                     className="h-8 w-full rounded-full border border-border/60 bg-background/90 pl-8 pr-8 text-xs outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-ring/20"
                   />

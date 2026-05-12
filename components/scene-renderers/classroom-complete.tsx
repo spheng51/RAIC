@@ -34,7 +34,9 @@ function copy(locale: string) {
   const zh = locale === 'zh-CN';
   return {
     title: zh ? '课程完成' : 'Course complete',
-    subtitle: zh ? '你已经走完整个课堂。做得漂亮。' : 'You made it through the whole classroom. Nicely done.',
+    subtitle: zh
+      ? '你已经走完整个课堂。做得漂亮。'
+      : 'You made it through the whole classroom. Nicely done.',
     quizScore: zh ? '测验得分' : 'Quiz score',
     noQuiz: zh ? '本课程没有可自动汇总的选择题。' : 'No auto-graded quiz questions to summarize.',
     scenes: zh ? '学习足迹' : 'Learning trail',

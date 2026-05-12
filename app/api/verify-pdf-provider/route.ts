@@ -75,12 +75,7 @@ export async function POST(req: NextRequest) {
             : `MinerU Cloud verification failed (${response.status}): ${
                 text || response.statusText
               }`;
-        return apiErrorWithRequestSession(
-          req,
-          'INTERNAL_ERROR',
-          500,
-          message,
-        );
+        return apiErrorWithRequestSession(req, 'INTERNAL_ERROR', 500, message);
       }
 
       return apiSuccessWithRequestSession(req, {

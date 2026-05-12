@@ -250,7 +250,10 @@ function applyOpenAIImageFallback(
 }
 
 function buildConfig(yamlData: YamlData): ServerConfig {
-  const image = applyOpenAIImageFallback(loadEnvSection(IMAGE_ENV_MAP, yamlData.image), yamlData.image);
+  const image = applyOpenAIImageFallback(
+    loadEnvSection(IMAGE_ENV_MAP, yamlData.image),
+    yamlData.image,
+  );
 
   return {
     providers: loadEnvSection(LLM_ENV_MAP, yamlData.providers, {

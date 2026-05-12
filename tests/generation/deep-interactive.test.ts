@@ -5,15 +5,9 @@ import {
   applyOutlineFallbacks,
   generateSceneOutlinesFromRequirements,
 } from '@/lib/generation/outline-generator';
-import {
-  generateSceneActions,
-  generateSceneContent,
-} from '@/lib/generation/scene-generator';
+import { generateSceneActions, generateSceneContent } from '@/lib/generation/scene-generator';
 import { buildCompleteScene } from '@/lib/generation/scene-builder';
-import type {
-  GeneratedInteractiveContent,
-  SceneOutline,
-} from '@/lib/types/generation';
+import type { GeneratedInteractiveContent, SceneOutline } from '@/lib/types/generation';
 
 const widgetOutline: SceneOutline = {
   id: 'scene-widget',
