@@ -387,6 +387,7 @@ export function GenerationToolbar({
         <TooltipTrigger asChild>
           <button
             type="button"
+            data-testid="generation-language-toggle"
             aria-label={t('toolbar.languageHint')}
             onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
             className={pillMuted}

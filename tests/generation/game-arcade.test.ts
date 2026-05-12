@@ -9,7 +9,10 @@ import {
 import { promptGameWidgetAdapter } from '@/lib/game-arcade/adapter';
 import { validateGameWidgetHtml } from '@/lib/game-arcade/qa';
 import { buildPrompt, PROMPT_IDS } from '@/lib/generation/prompts';
-import { generateSceneOutlinesFromRequirements } from '@/lib/generation/outline-generator';
+import {
+  buildCourseLanguageDirective,
+  generateSceneOutlinesFromRequirements,
+} from '@/lib/generation/outline-generator';
 import { generateSceneContent } from '@/lib/generation/scene-generator';
 import type { GeneratedInteractiveContent, SceneOutline } from '@/lib/types/generation';
 
@@ -93,7 +96,28 @@ describe('Classroom Game Studio generation', () => {
       gameTemplateLabel: 'Puzzle Lab',
       gameGoal: 'Build the respiration pathway by sorting draggable cards.',
       languageDirective: 'Teach in English.',
+      courseLanguageName: 'English',
+      htmlLang: 'en-US',
+      gameStartLabel: 'Start Game',
+      gameScoreLabel: 'Score',
     });
+  });
+
+  it('keeps English game prompts free of Chinese UI label examples', () => {
+    const variables = promptGameWidgetAdapter.buildPromptVariables({
+      outline: gameOutline,
+      widgetOutline: gameOutline.widgetOutline!,
+      languageDirective: buildCourseLanguageDirective('en-US'),
+    });
+    const prompt = buildPrompt(PROMPT_IDS.GAME_CONTENT, variables);
+    const promptText = `${prompt?.system}\n${prompt?.user}`;
+
+    expect(promptText).toContain('Target language: English');
+    expect(promptText).toContain('<html lang="en-US">');
+    expect(promptText).toContain('<button onclick="startGame()">Start Game</button>');
+    for (const leakedLabel of ['开始', '任务', '分数', '提示', '重新开始']) {
+      expect(promptText).not.toContain(leakedLabel);
+    }
   });
 
   it('loads the game-arcade outline prompt with template context', () => {
@@ -141,6 +165,9 @@ describe('Classroom Game Studio generation', () => {
     expect(result.success).toBe(true);
     expect(aiCall.mock.calls[0][0]).toContain('Game Arcade Classroom Outline Planner');
     expect(aiCall.mock.calls[0][1]).toContain('Puzzle Lab');
+    expect(aiCall.mock.calls[0][1]).toContain(
+      'All generated classroom content must be written in English.',
+    );
     expect(result.data?.outlines[0]).toMatchObject({
       type: 'interactive',
       widgetType: 'game',
@@ -189,8 +216,51 @@ describe('Classroom Game Studio generation', () => {
     });
     expect(content.teacherActions).toHaveLength(2);
     expect(aiCall.mock.calls[0][1]).toContain('Puzzle Lab');
+    expect(aiCall.mock.calls[0][1]).toContain('Target language: English');
+    expect(aiCall.mock.calls[0][1]).toContain('<html lang="en-US">');
     expect(aiCall.mock.calls[0][1]).toContain('Teach in English with short labels.');
     expect(aiCall.mock.calls[1][1]).toContain('Teach in English with short labels.');
+  });
+
+  it('falls back to a playable game shell when generated game HTML fails QA', async () => {
+    const invalidGameHtml = `<!DOCTYPE html>
+<html>
+<body>
+  <main>
+    <h1>Welcome to the Water Molecule Lab</h1>
+    <p>This intro missed the required game widget structure.</p>
+  </main>
+</body>
+</html>`;
+    const aiCall = vi.fn(async (_system: string, user: string) => {
+      if (user.includes('Create an educational GAME widget')) {
+        return invalidGameHtml;
+      }
+      if (user.includes('Generate teacher actions')) {
+        return JSON.stringify({ actions: [] });
+      }
+      throw new Error(`Unexpected prompt: ${user.slice(0, 80)}`);
+    });
+
+    const content = (await generateSceneContent(gameOutline, aiCall, {
+      languageDirective: 'Teach in English with short labels.',
+    })) as GeneratedInteractiveContent;
+
+    expect(content.widgetType).toBe('game');
+    expect(content.html).toContain('data-game-fallback="true"');
+    expect(content.widgetConfig).toMatchObject({
+      type: 'game',
+      gameType: 'puzzle',
+      gameConfig: {
+        fallback: true,
+        templateId: 'puzzle-lab',
+        htmlLang: 'en-US',
+      },
+    });
+    expect(content.teacherActions?.map((action) => action.id)).toContain('intro_game_goal');
+    expect(
+      validateGameWidgetHtml(content.html, content.widgetConfig, content.teacherActions).valid,
+    ).toBe(true);
   });
 
   it('validates generated game HTML before persistence', () => {

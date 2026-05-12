@@ -17,17 +17,34 @@ function getTomorrowScheduleParts() {
   };
 }
 
-async function readGenerationSession(page: import('@playwright/test').Page) {
-  return page.evaluate(() => JSON.parse(sessionStorage.getItem('generationSession') || 'null'));
+async function readCapturedGenerationSession(page: import('@playwright/test').Page) {
+  return page.evaluate(() =>
+    JSON.parse(localStorage.getItem('e2e:lastGenerationSession') || 'null'),
+  );
+}
+
+async function clearCapturedGenerationSession(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    localStorage.removeItem('e2e:lastGenerationSession');
+    sessionStorage.removeItem('generationSession');
+  });
 }
 
 test.describe('Home → Generation', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript((settings) => {
       localStorage.setItem('settings-storage', settings);
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function setItemWithGenerationCapture(key, value) {
+        if (this === window.sessionStorage && key === 'generationSession') {
+          window.localStorage.setItem('e2e:lastGenerationSession', value);
+        }
+        return originalSetItem.call(this, key, value);
+      };
       if (!sessionStorage.getItem('home-to-generation-initialized')) {
         localStorage.removeItem('interactiveModeEnabled');
         localStorage.removeItem('requirementDraft');
+        localStorage.removeItem('e2e:lastGenerationSession');
         sessionStorage.setItem('home-to-generation-initialized', 'true');
       }
     }, SETTINGS_STORAGE);
@@ -85,10 +102,14 @@ test.describe('Home → Generation', () => {
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
     await expect(home.deepInteractiveState).toHaveText('On');
 
+    await home.setGenerationLanguage('en-US');
+    await expect(home.generationLanguageToggle).toHaveText('EN');
     await home.fillRequirement('Build an orbital mechanics lab');
+    await clearCapturedGenerationSession(page);
     await home.submit();
     await page.waitForURL(/\/generation-preview/);
-    const enabledSession = await readGenerationSession(page);
+    const enabledSession = await readCapturedGenerationSession(page);
+    expect(enabledSession.requirements.language).toBe('en-US');
     expect(enabledSession.requirements.interactiveMode).toBe(true);
 
     await home.goto();
@@ -98,9 +119,10 @@ test.describe('Home → Generation', () => {
     await expect(home.deepInteractiveState).toHaveText('Off');
 
     await home.fillRequirement('Build a standard lecture');
+    await clearCapturedGenerationSession(page);
     await home.submit();
     await page.waitForURL(/\/generation-preview/);
-    const disabledSession = await readGenerationSession(page);
+    const disabledSession = await readCapturedGenerationSession(page);
     expect(disabledSession.requirements.interactiveMode).toBeUndefined();
   });
 
@@ -126,15 +148,19 @@ test.describe('Home → Generation', () => {
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
     await expect(home.deepInteractiveState).toHaveText('On');
 
+    await home.setGenerationLanguage('en-US');
+    await expect(home.generationLanguageToggle).toHaveText('EN');
     await home.gameTemplateButton('puzzle-lab').click();
     await home.fillRequirement('Teach cellular respiration as a sorting challenge');
+    await clearCapturedGenerationSession(page);
     await home.submit();
     await page.waitForURL(/\/generation-preview/);
-    const gameSession = await readGenerationSession(page);
+    const gameSession = await readCapturedGenerationSession(page);
     expect(gameSession.requirements).toMatchObject({
       creationMode: 'game-arcade',
       gameTemplateId: 'puzzle-lab',
       interactiveMode: true,
+      language: 'en-US',
     });
     expect(gameSession.requirements.gameCreativeBrief).toContain('Puzzle Lab');
     expect(gameSession.requirements.gameCreativeBrief).toContain('cellular respiration');
@@ -146,9 +172,10 @@ test.describe('Home → Generation', () => {
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
 
     await home.fillRequirement('Teach cellular respiration as a normal classroom');
+    await clearCapturedGenerationSession(page);
     await home.submit();
     await page.waitForURL(/\/generation-preview/);
-    const courseSession = await readGenerationSession(page);
+    const courseSession = await readCapturedGenerationSession(page);
     expect(courseSession.requirements.creationMode).toBeUndefined();
     expect(courseSession.requirements.gameTemplateId).toBeUndefined();
     expect(courseSession.requirements.gameCreativeBrief).toBeUndefined();
