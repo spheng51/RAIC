@@ -25,6 +25,11 @@ test.describe('Home → Generation', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript((settings) => {
       localStorage.setItem('settings-storage', settings);
+      if (!sessionStorage.getItem('home-to-generation-initialized')) {
+        localStorage.removeItem('interactiveModeEnabled');
+        localStorage.removeItem('requirementDraft');
+        sessionStorage.setItem('home-to-generation-initialized', 'true');
+      }
     }, SETTINGS_STORAGE);
   });
 
@@ -97,6 +102,57 @@ test.describe('Home → Generation', () => {
     await page.waitForURL(/\/generation-preview/);
     const disabledSession = await readGenerationSession(page);
     expect(disabledSession.requirements.interactiveMode).toBeUndefined();
+  });
+
+  test('Game mode chooses an arcade template and stores game requirements', async ({ page }) => {
+    await page.route('**/api/generate/scene-outlines-stream', (route) => {
+      route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Generation intentionally stopped by e2e game mode test' }),
+      });
+    });
+
+    const home = new HomePage(page);
+    await home.goto();
+
+    await expect(home.courseModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.gameTemplateSelector).toBeHidden();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+
+    await home.gameModeButton.click();
+    await expect(home.gameModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.gameTemplateSelector).toBeVisible();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(home.deepInteractiveState).toHaveText('On');
+
+    await home.gameTemplateButton('puzzle-lab').click();
+    await home.fillRequirement('Teach cellular respiration as a sorting challenge');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const gameSession = await readGenerationSession(page);
+    expect(gameSession.requirements).toMatchObject({
+      creationMode: 'game-arcade',
+      gameTemplateId: 'puzzle-lab',
+      interactiveMode: true,
+    });
+    expect(gameSession.requirements.gameCreativeBrief).toContain('Puzzle Lab');
+    expect(gameSession.requirements.gameCreativeBrief).toContain('cellular respiration');
+
+    await home.goto();
+    await home.courseModeButton.click();
+    await expect(home.courseModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.gameTemplateSelector).toBeHidden();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+
+    await home.fillRequirement('Teach cellular respiration as a normal classroom');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const courseSession = await readGenerationSession(page);
+    expect(courseSession.requirements.creationMode).toBeUndefined();
+    expect(courseSession.requirements.gameTemplateId).toBeUndefined();
+    expect(courseSession.requirements.gameCreativeBrief).toBeUndefined();
+    expect(courseSession.requirements.interactiveMode).toBeUndefined();
   });
 
   test('public demo schedule creates a class and keeps it after refresh', async ({

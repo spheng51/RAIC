@@ -7,6 +7,9 @@ export class HomePage {
   readonly enterButton: Locator;
   readonly deepInteractiveSwitch: Locator;
   readonly deepInteractiveState: Locator;
+  readonly courseModeButton: Locator;
+  readonly gameModeButton: Locator;
+  readonly gameTemplateSelector: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -17,6 +20,9 @@ export class HomePage {
       .or(page.locator('button:has-text("进入课堂")'));
     this.deepInteractiveSwitch = page.getByRole('switch', { name: /deep interactive/i });
     this.deepInteractiveState = page.getByTestId('deep-interactive-state');
+    this.courseModeButton = page.getByTestId('creation-mode-course');
+    this.gameModeButton = page.getByTestId('creation-mode-game');
+    this.gameTemplateSelector = page.getByTestId('game-template-selector');
   }
 
   async goto() {
@@ -29,5 +35,9 @@ export class HomePage {
 
   async submit() {
     await this.enterButton.click();
+  }
+
+  gameTemplateButton(templateId: string) {
+    return this.page.getByTestId(`game-template-${templateId}`);
   }
 }
