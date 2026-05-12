@@ -85,6 +85,9 @@ export async function POST(req: NextRequest) {
       ...(rawBody.language ? { language: rawBody.language } : {}),
       ...(rawBody.enableWebSearch != null ? { enableWebSearch: rawBody.enableWebSearch } : {}),
       ...(rawBody.interactiveMode != null ? { interactiveMode: rawBody.interactiveMode } : {}),
+      ...(rawBody.creationMode ? { creationMode: rawBody.creationMode } : {}),
+      ...(rawBody.gameTemplateId ? { gameTemplateId: rawBody.gameTemplateId } : {}),
+      ...(rawBody.gameCreativeBrief ? { gameCreativeBrief: rawBody.gameCreativeBrief } : {}),
       ...(rawBody.selectedModel?.trim() ? { selectedModel: rawBody.selectedModel.trim() } : {}),
       ...(rawBody.enableImageGeneration != null
         ? { enableImageGeneration: rawBody.enableImageGeneration }

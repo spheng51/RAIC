@@ -49,6 +49,9 @@
     "interactiveModeOn": "オン",
     "interactiveModeOff": "オフ",
     "interactiveModeHint": "操作できるウィジェット中心の教室を生成します",
+    "courseMode": "コース",
+    "gameMode": "ゲーム",
+    "gameTemplateLabel": "ゲームテンプレート",
     "webSearchProvider": "検索エンジン",
     "webSearchNoProvider": "設定画面で検索APIキーを設定してください",
     "selectProvider": "プロバイダーを選択",
@@ -525,6 +528,7 @@
     "pdfSizeLimit": "50MBまでのPDFファイルに対応しています",
     "generateFailed": "教室の生成に失敗しました。もう一度お試しください",
     "requirementPlaceholder": "学びたいことを自由に入力してください。例えば：\n「Pythonをゼロから30分で教えて」\n「フーリエ変換をホワイトボードで解説して」\n「ボードゲーム『アバロン』の遊び方」",
+    "gameRequirementPlaceholder": "作りたい教室ゲームを説明してください。例：\n「軌道力学を物理チャレンジにする」\n「細胞呼吸のパズルゲームを作る」",
     "requirementRequired": "コースの要件を入力してください",
     "fileTooLarge": "ファイルが大きすぎます。50MB以下のPDFファイルを選択してください"
   },

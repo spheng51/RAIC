@@ -16,6 +16,7 @@ import { formatImageDescription, formatImagePlaceholder } from './prompt-formatt
 import { parseJsonResponse } from './json-repair';
 import { uniquifyMediaElementIds } from './scene-builder';
 import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline-types';
+import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -25,6 +26,41 @@ const log = createLogger('Generation');
  */
 export const DEFAULT_LANGUAGE_DIRECTIVE =
   'Teach in the language that matches the user requirement.';
+
+export function enrichGeneratedOutline(
+  outline: SceneOutline,
+  index: number,
+  requirements: UserRequirements,
+): SceneOutline {
+  const enriched: SceneOutline = {
+    ...outline,
+    id: outline.id || nanoid(),
+    order: index + 1,
+    language: requirements.language,
+  };
+
+  if (requirements.creationMode !== 'game-arcade' || enriched.type !== 'interactive') {
+    return enriched;
+  }
+
+  const widgetOutline = enriched.widgetOutline ?? {};
+  return {
+    ...enriched,
+    widgetType: 'game',
+    widgetOutline: {
+      ...widgetOutline,
+      gameTemplateId: widgetOutline.gameTemplateId ?? requirements.gameTemplateId,
+      gameGoal:
+        widgetOutline.gameGoal ??
+        widgetOutline.challenge ??
+        requirements.gameCreativeBrief ??
+        requirements.requirement,
+      coreMechanic:
+        widgetOutline.coreMechanic ?? widgetOutline.challenge ?? 'Playable classroom game',
+      difficultyCurve: widgetOutline.difficultyCurve ?? 'standard',
+    },
+  };
+}
 
 /**
  * Generate scene outlines from user requirements
@@ -93,10 +129,13 @@ export async function generateSceneOutlinesFromRequirements(
   const mediaEnabled = imageEnabled || videoEnabled;
   const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
-  // Use the widget-first outline prompt only when Deep Interactive is explicitly enabled.
-  const outlinePromptId = requirements.interactiveMode
-    ? PROMPT_IDS.INTERACTIVE_OUTLINES
-    : PROMPT_IDS.REQUIREMENTS_TO_OUTLINES;
+  // Game Arcade has the strongest prompt shape; Deep Interactive is the generic widget-first mode.
+  const outlinePromptId =
+    requirements.creationMode === 'game-arcade'
+      ? PROMPT_IDS.GAME_ARCADE_OUTLINES
+      : requirements.interactiveMode
+        ? PROMPT_IDS.INTERACTIVE_OUTLINES
+        : PROMPT_IDS.REQUIREMENTS_TO_OUTLINES;
   const prompts = buildPrompt(outlinePromptId, {
     // New simplified variables
     requirement: requirements.requirement,
@@ -116,6 +155,9 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
+    languageDirective: DEFAULT_LANGUAGE_DIRECTIVE,
+    gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
+    gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,
   });
 
   if (!prompts) {
@@ -160,12 +202,9 @@ export async function generateSceneOutlinesFromRequirements(
       };
     }
     // Ensure IDs, order, and language
-    const enriched = outlines.map((outline, index) => ({
-      ...outline,
-      id: outline.id || nanoid(),
-      order: index + 1,
-      language: requirements.language,
-    }));
+    const enriched = outlines.map((outline, index) =>
+      enrichGeneratedOutline(outline, index, requirements),
+    );
 
     // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
     const result = uniquifyMediaElementIds(enriched);

@@ -772,8 +772,15 @@ test('teacher shares a classroom invite with an attached Zoom join link', async 
     await teacher.page.goto(`${APP_BASE_URL}/classroom/${classroomId}`);
     await teacherClassroom.waitForLoaded();
 
+    const zoomLoadResponsePromise = teacher.page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/classroom/${classroomId}/live-meeting`) &&
+        response.request().method() === 'GET',
+    );
     await teacher.page.getByRole('button', { name: 'Share classroom' }).click();
     await expect(teacher.page.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
+    await zoomLoadResponsePromise;
+    await expect(teacher.page.getByLabel('Zoom join link')).toBeEnabled();
 
     await teacher.page.getByLabel('Zoom join link').fill('https://zoom.us/profile');
     const invalidZoomResponsePromise = teacher.page.waitForResponse(

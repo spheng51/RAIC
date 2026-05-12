@@ -58,6 +58,8 @@ import type {
   GenerationCallbacks,
 } from './pipeline-types';
 import { executeScenesWithPolicy } from './scene-executor';
+import { promptGameWidgetAdapter } from '@/lib/game-arcade/adapter';
+import { validateGameWidgetHtml } from '@/lib/game-arcade/qa';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -1111,16 +1113,11 @@ function buildWidgetPrompt(
     case 'game':
       return {
         promptId: PROMPT_IDS.GAME_CONTENT,
-        variables: {
-          title: outline.title,
-          gameType: widgetOutline.gameType || 'action',
-          description: outline.description,
-          keyPoints,
-          scoring: { correctPoints: 10, speedBonus: 5 },
-          challenge: widgetOutline.challenge || '',
-          playerControls: widgetOutline.playerControls || [],
-          languageDirective: languageDirective || '',
-        },
+        variables: promptGameWidgetAdapter.buildPromptVariables({
+          outline,
+          widgetOutline,
+          languageDirective,
+        }),
       };
 
     case 'visualization3d':
@@ -1186,6 +1183,17 @@ async function generateWidgetContent(
     languageDirective,
   );
 
+  if (widgetType === 'game') {
+    const validation = validateGameWidgetHtml(rawHtml, widgetConfig, teacherActions);
+    for (const warning of validation.warnings) {
+      log.warn(`Game widget QA warning for "${outline.title}": ${warning}`);
+    }
+    if (!validation.valid) {
+      log.error(`Game widget QA failed for "${outline.title}": ${validation.errors.join('; ')}`);
+      return null;
+    }
+  }
+
   return {
     html: postProcessInteractiveHtml(rawHtml),
     widgetType,
@@ -1199,7 +1207,7 @@ async function generateWidgetContent(
  */
 function extractWidgetConfig(html: string): WidgetConfig | undefined {
   const match = html.match(
-    /<script type="application\/json" id="widget-config">([\s\S]*?)<\/script>/,
+    /<script(?=[^>]*\btype=["']application\/json["'])(?=[^>]*\bid=["']widget-config["'])[^>]*>([\s\S]*?)<\/script>/i,
   );
   if (!match) return undefined;
 

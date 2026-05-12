@@ -2,7 +2,11 @@
 import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
-import type { GenerationCompletionStatus, GenerationWarning } from '@/lib/types/generation';
+import type {
+  GameTemplateId,
+  GenerationCompletionStatus,
+  GenerationWarning,
+} from '@/lib/types/generation';
 import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widgets';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
@@ -61,6 +65,8 @@ export interface ClassroomSourceContext {
   tavilyEnabled: boolean;
   language: string;
   selectedModel: string;
+  creationMode?: 'course' | 'game-arcade';
+  gameTemplateId?: GameTemplateId;
 }
 
 /**

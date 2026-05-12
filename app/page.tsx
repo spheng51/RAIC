@@ -21,6 +21,14 @@ import {
   ChevronUp,
   Share2,
   Atom,
+  BookOpen,
+  Brain,
+  Code2,
+  Gamepad2,
+  Layers,
+  Puzzle,
+  Rocket,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -36,7 +44,7 @@ import { AgentBar } from '@/components/agent/agent-bar';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { nanoid } from 'nanoid';
 import { storePdfBlob } from '@/lib/utils/image-storage';
-import type { UserRequirements } from '@/lib/types/generation';
+import type { GameTemplateId, UserRequirements } from '@/lib/types/generation';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
 import {
@@ -74,6 +82,11 @@ import {
   normalizeScheduledClassInput,
   sortScheduledClassEvents,
 } from '@/lib/utils/scheduled-classes';
+import {
+  DEFAULT_GAME_TEMPLATE_ID,
+  GAME_TEMPLATE_DEFINITIONS,
+  getGameTemplateDefinition,
+} from '@/lib/game-arcade/templates';
 
 const log = createLogger('Home');
 
@@ -88,6 +101,8 @@ interface FormState {
   language: 'zh-CN' | 'en-US';
   webSearch: boolean;
   interactiveMode: boolean;
+  creationMode: 'course' | 'game-arcade';
+  gameTemplateId: GameTemplateId;
 }
 
 interface ServerClassroomSummary {
@@ -113,6 +128,17 @@ const initialFormState: FormState = {
   language: 'zh-CN',
   webSearch: false,
   interactiveMode: false,
+  creationMode: 'course',
+  gameTemplateId: DEFAULT_GAME_TEMPLATE_ID,
+};
+
+const GAME_TEMPLATE_ICONS: Record<GameTemplateId, typeof Gamepad2> = {
+  'physics-challenge': Rocket,
+  'puzzle-lab': Puzzle,
+  'strategy-sim': Brain,
+  'card-match': Layers,
+  'code-quest': Code2,
+  'boss-review': Trophy,
 };
 
 function parseServerTimestamp(value: string) {
@@ -312,15 +338,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
     clearClassroomLaunchContext();
 
-    const userProfile = useUserProfileStore.getState();
-    const requirements: UserRequirements = {
-      requirement: normalized.value.title,
-      language: form.language,
-      userNickname: userProfile.nickname || undefined,
-      userBio: userProfile.bio || undefined,
-      webSearch: form.webSearch || undefined,
-      interactiveMode: form.interactiveMode || undefined,
-    };
+    const requirements = buildRequirements(normalized.value.title);
     const scheduledClass = {
       title: normalized.value.title,
       startsAt: normalized.value.startsAt,
@@ -472,6 +490,38 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     }
   };
 
+  const updateCreationMode = (creationMode: FormState['creationMode']) => {
+    const interactiveMode = creationMode === 'game-arcade';
+    setForm((prev) => ({ ...prev, creationMode, interactiveMode }));
+    try {
+      localStorage.setItem(INTERACTIVE_MODE_STORAGE_KEY, String(interactiveMode));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const buildRequirements = useCallback(
+    (requirement: string): UserRequirements => {
+      const userProfile = useUserProfileStore.getState();
+      const selectedTemplate = getGameTemplateDefinition(form.gameTemplateId);
+      return {
+        requirement,
+        language: form.language,
+        userNickname: userProfile.nickname || undefined,
+        userBio: userProfile.bio || undefined,
+        webSearch: form.webSearch || undefined,
+        interactiveMode: form.interactiveMode || undefined,
+        creationMode: form.creationMode === 'game-arcade' ? 'game-arcade' : undefined,
+        gameTemplateId: form.creationMode === 'game-arcade' ? selectedTemplate.id : undefined,
+        gameCreativeBrief:
+          form.creationMode === 'game-arcade'
+            ? `${requirement}\n\nArcade template: ${selectedTemplate.label}. ${selectedTemplate.promptHint}`
+            : undefined,
+      };
+    },
+    [form.creationMode, form.gameTemplateId, form.interactiveMode, form.language, form.webSearch],
+  );
+
   const showSetupToast = (icon: React.ReactNode, title: string, desc: string) => {
     toast.custom(
       (id) => (
@@ -535,15 +585,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     try {
       clearClassroomLaunchContext();
 
-      const userProfile = useUserProfileStore.getState();
-      const requirements: UserRequirements = {
-        requirement: form.requirement,
-        language: form.language,
-        userNickname: userProfile.nickname || undefined,
-        userBio: userProfile.bio || undefined,
-        webSearch: form.webSearch || undefined,
-        interactiveMode: form.interactiveMode || undefined,
-      };
+      const requirements = buildRequirements(form.requirement);
 
       let pdfStorageKey: string | undefined;
       let pdfFileName: string | undefined;
@@ -827,6 +869,89 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
               </div>
             </div>
 
+            <div className="px-3 pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5">
+                  <button
+                    type="button"
+                    data-testid="creation-mode-course"
+                    aria-pressed={form.creationMode === 'course'}
+                    onClick={() => updateCreationMode('course')}
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors',
+                      form.creationMode === 'course'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <BookOpen className="size-3.5" />
+                    {t('toolbar.courseMode')}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="creation-mode-game"
+                    aria-pressed={form.creationMode === 'game-arcade'}
+                    onClick={() => updateCreationMode('game-arcade')}
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors',
+                      form.creationMode === 'game-arcade'
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Gamepad2 className="size-3.5" />
+                    {t('toolbar.gameMode')}
+                  </button>
+                </div>
+
+                {form.creationMode === 'game-arcade' ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
+                      {t('toolbar.gameTemplateLabel')}
+                    </span>
+                    <div
+                      data-testid="game-template-selector"
+                      className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5"
+                    >
+                      {GAME_TEMPLATE_DEFINITIONS.map((template) => {
+                        const TemplateIcon = GAME_TEMPLATE_ICONS[template.id];
+                        const selected = form.gameTemplateId === template.id;
+                        return (
+                          <Tooltip key={template.id}>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                data-testid={`game-template-${template.id}`}
+                                aria-pressed={selected}
+                                onClick={() => updateForm('gameTemplateId', template.id)}
+                                className={cn(
+                                  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-colors',
+                                  selected
+                                    ? 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/45 dark:text-violet-200'
+                                    : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground',
+                                )}
+                              >
+                                <TemplateIcon className="size-3" />
+                                {template.shortLabel}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={8}>
+                              <div className="max-w-56">
+                                <div className="font-medium">{template.label}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {template.description}
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             {/* Textarea */}
             <label htmlFor="requirement-input" className="sr-only">
               {t('upload.requirementPlaceholder')}
@@ -836,7 +961,11 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
               ref={textareaRef}
               data-testid="requirement-input"
               aria-label={t('upload.requirementPlaceholder')}
-              placeholder={t('upload.requirementPlaceholder')}
+              placeholder={
+                form.creationMode === 'game-arcade'
+                  ? t('upload.gameRequirementPlaceholder')
+                  : t('upload.requirementPlaceholder')
+              }
               className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
               value={form.requirement}
               onChange={(e) => updateForm('requirement', e.target.value)}
@@ -866,9 +995,13 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                 <TooltipTrigger asChild>
                   <div
                     data-testid="deep-interactive-toggle"
-                    onClick={() => updateForm('interactiveMode', !form.interactiveMode)}
+                    onClick={() => {
+                      if (form.creationMode === 'game-arcade') return;
+                      updateForm('interactiveMode', !form.interactiveMode);
+                    }}
                     className={cn(
-                      'relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-2.5 text-[11px] font-semibold shadow-sm transition-colors',
+                      'relative inline-flex h-8 shrink-0 items-center gap-2 rounded-lg border px-2.5 text-[11px] font-semibold shadow-sm transition-colors',
+                      form.creationMode === 'game-arcade' ? 'cursor-default' : 'cursor-pointer',
                       form.interactiveMode
                         ? 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/45 dark:text-violet-200'
                         : 'border-border/60 bg-background/80 text-muted-foreground hover:text-foreground',
@@ -896,6 +1029,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                       checked={form.interactiveMode}
                       onCheckedChange={(checked) => updateForm('interactiveMode', checked)}
                       onClick={(event) => event.stopPropagation()}
+                      disabled={form.creationMode === 'game-arcade'}
                       aria-label={`${t('toolbar.interactiveModeLabel')}: ${interactiveModeStateLabel}`}
                       className="relative origin-right scale-[0.78] data-[state=checked]:bg-violet-600"
                     />

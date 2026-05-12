@@ -49,6 +49,9 @@
     "interactiveModeOn": "开启",
     "interactiveModeOff": "关闭",
     "interactiveModeHint": "生成更多可操作的互动组件课堂",
+    "courseMode": "课程",
+    "gameMode": "游戏",
+    "gameTemplateLabel": "街机模板",
     "webSearchProvider": "搜索引擎",
     "webSearchNoProvider": "请在设置中配置搜索引擎 API Key",
     "selectProvider": "选择模型服务商",
@@ -525,6 +528,7 @@
     "pdfSizeLimit": "支持最大50MB的PDF文件",
     "generateFailed": "生成课堂失败，请重试",
     "requirementPlaceholder": "输入你想学的任何内容，例如：\n「从零学 Python，30 分钟写出第一个程序」\n「用白板给我讲解傅里叶变换」\n「阿瓦隆桌游怎么玩」",
+    "gameRequirementPlaceholder": "描述你想创建的课堂游戏，例如：\n「把轨道力学做成物理挑战」\n「为细胞呼吸做一个拼图游戏」",
     "requirementRequired": "请输入课程需求",
     "fileTooLarge": "文件过大，请选择小于50MB的PDF文件"
   },

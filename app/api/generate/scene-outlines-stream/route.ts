@@ -23,7 +23,6 @@ import {
 } from '@/lib/generation/generation-pipeline';
 import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
-import { nanoid } from 'nanoid';
 import type {
   UserRequirements,
   PdfImage,
@@ -34,7 +33,11 @@ import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import { parseJsonResponse } from '@/lib/generation/json-repair';
-import { DEFAULT_LANGUAGE_DIRECTIVE } from '@/lib/generation/outline-generator';
+import {
+  DEFAULT_LANGUAGE_DIRECTIVE,
+  enrichGeneratedOutline,
+} from '@/lib/generation/outline-generator';
+import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -169,9 +172,12 @@ export async function POST(req: NextRequest) {
     // Build teacher context from agents (if available)
     const teacherContext = formatTeacherPersonaForPrompt(agents);
 
-    const outlinePromptId = requirements.interactiveMode
-      ? PROMPT_IDS.INTERACTIVE_OUTLINES
-      : PROMPT_IDS.REQUIREMENTS_TO_OUTLINES;
+    const outlinePromptId =
+      requirements.creationMode === 'game-arcade'
+        ? PROMPT_IDS.GAME_ARCADE_OUTLINES
+        : requirements.interactiveMode
+          ? PROMPT_IDS.INTERACTIVE_OUTLINES
+          : PROMPT_IDS.REQUIREMENTS_TO_OUTLINES;
     const prompts = buildPrompt(outlinePromptId, {
       requirement: requirements.requirement,
       language: requirements.language,
@@ -188,6 +194,9 @@ export async function POST(req: NextRequest) {
       mediaEnabled,
       teacherContext,
       userProfile: '',
+      languageDirective: DEFAULT_LANGUAGE_DIRECTIVE,
+      gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
+      gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,
     });
 
     if (!prompts) {
@@ -264,12 +273,11 @@ export async function POST(req: NextRequest) {
                 const newOutlines = extractNewOutlines(fullText, parsedOutlines.length);
                 for (const outline of newOutlines) {
                   // Ensure ID and order
-                  const enriched = {
-                    ...outline,
-                    id: outline.id || nanoid(),
-                    order: parsedOutlines.length + 1,
-                    language: requirements.language,
-                  };
+                  const enriched = enrichGeneratedOutline(
+                    outline,
+                    parsedOutlines.length,
+                    requirements,
+                  );
                   parsedOutlines.push(enriched);
 
                   const event = JSON.stringify({
