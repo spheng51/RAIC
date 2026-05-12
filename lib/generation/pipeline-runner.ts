@@ -52,7 +52,8 @@ export async function runGenerationPipeline(
     if (!outlinesResult.success || !outlinesResult.data) {
       throw new Error(outlinesResult.error || 'Failed to generate scene outlines');
     }
-    session.sceneOutlines = outlinesResult.data;
+    const { languageDirective, outlines } = outlinesResult.data;
+    session.sceneOutlines = outlines;
     callbacks?.onStageComplete?.(1, session.sceneOutlines);
 
     // Stage 2: Generate Full Scenes
@@ -64,7 +65,13 @@ export async function runGenerationPipeline(
       totalScenes: session.sceneOutlines.length,
     });
 
-    const scenesResult = await generateFullScenes(session.sceneOutlines, store, aiCall, callbacks);
+    const scenesResult = await generateFullScenes(
+      session.sceneOutlines,
+      store,
+      aiCall,
+      callbacks,
+      languageDirective,
+    );
     if (!scenesResult.success || !scenesResult.data) {
       throw new Error(scenesResult.error || 'Failed to generate scenes');
     }

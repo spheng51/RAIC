@@ -11,14 +11,20 @@
 
 ## Available Resources
 
-- **Available Images**: {{assignedImages}}
+{{#if mediaElementEnabled}}
+- **Available Media**: {{assignedImages}}
+{{/if}}
 - **Canvas Size**: {{canvas_width}} × {{canvas_height}} px
+
+## Language Directive
+
+{{languageDirective}}
 
 ## Output Requirements
 
 Based on the scene information above, generate a complete Canvas/PPT component for one page.
 
-**Language Requirement**: All generated text content must be in the same language as the title and description above.
+**Language Requirement**: All generated text content must follow the Language Directive above.
 
 **Must Follow**:
 
@@ -26,7 +32,12 @@ Based on the scene information above, generate a complete Canvas/PPT component f
 2. Do not wrap with ```json code blocks
 3. Do not add any text before or after the JSON
 4. Ensure the JSON format is correct and can be parsed directly
+{{#if imageElementEnabled}}
 5. Use the provided image_id (e.g., `img_001`) for the `src` field of image elements
+{{/if}}
+{{#if generatedVideoEnabled}}
+5. Use only the provided generated video media refs for video elements. Put generated video IDs in `mediaRef`, not in `src`.
+{{/if}}
 6. All TextElement `height` values must be selected from the quick reference table in the system prompt
 
 **Output Structure Example**:

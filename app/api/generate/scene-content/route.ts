@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       stageInfo,
       stageId,
       agents,
+      languageDirective,
     } = body as {
       outline: SceneOutline;
       allOutlines: SceneOutline[];
@@ -46,11 +47,13 @@ export async function POST(req: NextRequest) {
         name: string;
         description?: string;
         language?: string;
+        languageDirective?: string;
         style?: string;
       };
       stageId: string;
       classroomId?: string;
       agents?: AgentInfo[];
+      languageDirective?: string;
     };
 
     // Validate required fields
@@ -152,17 +155,16 @@ export async function POST(req: NextRequest) {
       `Generating content: "${effectiveOutline.title}" (${effectiveOutline.type}) [model=${modelString}]`,
     );
 
-    const content = await generateSceneContent(
-      effectiveOutline,
-      aiCall,
+    const content = await generateSceneContent(effectiveOutline, aiCall, {
       assignedImages,
       imageMapping,
-      effectiveOutline.type === 'pbl' ? languageModel : undefined,
-      hasVision,
+      languageModel: effectiveOutline.type === 'pbl' ? languageModel : undefined,
+      visionEnabled: hasVision,
       generatedMediaMapping,
       agents,
       adaptivePrompt,
-    );
+      languageDirective: languageDirective || stageInfo?.languageDirective,
+    });
 
     if (!content) {
       log.error(`Failed to generate content for: "${effectiveOutline.title}"`);

@@ -6,7 +6,11 @@ Key Points: {{keyPoints}}
 {{courseContext}}
 {{agents}}
 
-**Language Requirement**: Generated speech content must be in the same language as the key points above.
+## Language Directive
+
+{{languageDirective}}
+
+**Language Requirement**: Generated speech content must follow the Language Directive above.
 
 Output as a JSON array directly (no explanation, no code fences, 3-6 speech segments):
 [{"type":"text","content":"Opening speech content"}]

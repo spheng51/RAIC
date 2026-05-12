@@ -9,6 +9,25 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: '200mb',
   },
+  async headers() {
+    const extraAncestors = process.env.ALLOWED_FRAME_ANCESTORS?.trim();
+    const frameAncestors = extraAncestors ? `'self' ${extraAncestors}` : "'self'";
+
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          // X-Frame-Options only supports SAMEORIGIN, so omit it when
+          // operators configure an explicit frame-ancestors allow list.
+          ...(!extraAncestors ? [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }] : []),
+          {
+            key: 'Content-Security-Policy',
+            value: `frame-ancestors ${frameAncestors}`,
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

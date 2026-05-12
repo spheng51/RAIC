@@ -390,7 +390,7 @@ export async function generateClassroom(
     throw new Error(outlinesResult.error || 'Failed to generate scene outlines');
   }
 
-  const outlines = outlinesResult.data;
+  const { languageDirective, outlines } = outlinesResult.data;
   log.info(`Generated ${outlines.length} scene outlines`);
 
   await options.onProgress?.({
@@ -416,6 +416,7 @@ export async function generateClassroom(
       language: lang,
       selectedModel: input.selectedModel || modelString,
     },
+    languageDirective,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     // For LLM-generated agents, embed full configs so the client can
@@ -460,6 +461,7 @@ export async function generateClassroom(
         api,
         aiCall,
         agents,
+        languageDirective,
       },
     })),
     executeScene: async (item, attempt) =>

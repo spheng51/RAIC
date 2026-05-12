@@ -4,6 +4,7 @@
  * Supports:
  * - Loading prompts from templates/{promptId}/ directory
  * - Snippet inclusion via {{snippet:name}} syntax
+ * - Conditional blocks via {{#if condition}}...{{/if}} syntax
  * - Variable interpolation via {{variable}} syntax
  * - Caching for performance
  */
@@ -40,8 +41,7 @@ export function loadSnippet(snippetId: SnippetId): string {
     snippetCache.set(snippetId, content);
     return content;
   } catch {
-    log.warn(`Snippet not found: ${snippetId}`);
-    return `{{snippet:${snippetId}}}`;
+    throw new Error(`Snippet not found: ${snippetId}`);
   }
 }
 
@@ -49,10 +49,26 @@ export function loadSnippet(snippetId: SnippetId): string {
  * Process snippet includes in a template
  * Replaces {{snippet:name}} with actual snippet content
  */
-function processSnippets(template: string): string {
+export function processSnippets(template: string): string {
   return template.replace(/\{\{snippet:(\w[\w-]*)\}\}/g, (_, snippetId) => {
     return loadSnippet(snippetId as SnippetId);
   });
+}
+
+/**
+ * Process conditional blocks in a template.
+ * Blocks do not nest; keep prompt templates simple and reviewable.
+ */
+export function processConditionalBlocks(
+  template: string,
+  conditions: Record<string, unknown>,
+): string {
+  return template.replace(
+    /\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    (_, conditionName: string, content: string) => {
+      return conditions[conditionName] ? content : '';
+    },
+  );
 }
 
 /**
@@ -118,8 +134,14 @@ export function buildPrompt(
   if (!prompt) return null;
 
   return {
-    system: interpolateVariables(prompt.systemPrompt, variables),
-    user: interpolateVariables(prompt.userPromptTemplate, variables),
+    system: interpolateVariables(
+      processConditionalBlocks(prompt.systemPrompt, variables),
+      variables,
+    ),
+    user: interpolateVariables(
+      processConditionalBlocks(prompt.userPromptTemplate, variables),
+      variables,
+    ),
   };
 }
 

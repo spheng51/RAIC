@@ -33,6 +33,8 @@ import type {
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { parseJsonResponse } from '@/lib/generation/json-repair';
+import { DEFAULT_LANGUAGE_DIRECTIVE } from '@/lib/generation/outline-generator';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -158,20 +160,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build media generation policy based on enabled flags
+    // Build media snippet conditions based on enabled flags
     const imageGenerationEnabled = req.headers.get('x-image-generation-enabled') === 'true';
     const videoGenerationEnabled = req.headers.get('x-video-generation-enabled') === 'true';
-    let mediaGenerationPolicy = '';
-    if (!imageGenerationEnabled && !videoGenerationEnabled) {
-      mediaGenerationPolicy =
-        '**IMPORTANT: Do NOT include any mediaGenerations in the outlines. Both image and video generation are disabled.**';
-    } else if (!imageGenerationEnabled) {
-      mediaGenerationPolicy =
-        '**IMPORTANT: Do NOT include any image mediaGenerations (type: "image") in the outlines. Image generation is disabled. Video generation is allowed.**';
-    } else if (!videoGenerationEnabled) {
-      mediaGenerationPolicy =
-        '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
-    }
+    const mediaEnabled = imageGenerationEnabled || videoGenerationEnabled;
+    const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
     // Build teacher context from agents (if available)
     const teacherContext = formatTeacherPersonaForPrompt(agents);
@@ -186,8 +179,12 @@ export async function POST(req: NextRequest) {
           : 'None',
       availableImages: availableImagesText,
       researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
-      mediaGenerationPolicy,
+      hasSourceImages,
+      imageEnabled: imageGenerationEnabled,
+      videoEnabled: videoGenerationEnabled,
+      mediaEnabled,
       teacherContext,
+      userProfile: '',
     });
 
     if (!prompts) {
@@ -248,6 +245,7 @@ export async function POST(req: NextRequest) {
 
           let parsedOutlines: SceneOutline[] = [];
           let lastError: string | undefined;
+          let languageDirective = DEFAULT_LANGUAGE_DIRECTIVE;
 
           for (let attempt = 1; attempt <= MAX_STREAM_RETRIES + 1; attempt++) {
             try {
@@ -277,6 +275,12 @@ export async function POST(req: NextRequest) {
                   });
                   controller.enqueue(encoder.encode(`data: ${event}\n\n`));
                 }
+              }
+              const parsed = parseJsonResponse<
+                { languageDirective?: string; outlines?: SceneOutline[] } | SceneOutline[]
+              >(fullText);
+              if (parsed && !Array.isArray(parsed) && parsed.languageDirective) {
+                languageDirective = parsed.languageDirective;
               }
 
               // Validate: got outlines?
@@ -325,6 +329,7 @@ export async function POST(req: NextRequest) {
             const doneEvent = JSON.stringify({
               type: 'done',
               outlines: uniquifiedOutlines,
+              languageDirective,
             });
             controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
           } else {

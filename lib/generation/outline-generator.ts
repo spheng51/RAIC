@@ -20,6 +20,13 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
 /**
+ * Fallback used when a model returns the legacy bare outline array or omits
+ * the newer course-level language directive.
+ */
+export const DEFAULT_LANGUAGE_DIRECTIVE =
+  'Teach in the language that matches the user requirement.';
+
+/**
  * Generate scene outlines from user requirements
  * Now uses simplified UserRequirements with just requirement text and language
  */
@@ -37,7 +44,7 @@ export async function generateSceneOutlinesFromRequirements(
     researchContext?: string;
     teacherContext?: string;
   },
-): Promise<GenerationResult<SceneOutline[]>> {
+): Promise<GenerationResult<{ languageDirective: string; outlines: SceneOutline[] }>> {
   // Build available images description for the prompt
   let availableImagesText =
     requirements.language === 'zh-CN' ? '无可用图片' : 'No images available';
@@ -79,20 +86,12 @@ export async function generateSceneOutlinesFromRequirements(
       ? `## Student Profile\n\nStudent: ${requirements.userNickname || 'Unknown'}${requirements.userBio ? ` — ${requirements.userBio}` : ''}\n\nConsider this student's background when designing the course. Adapt difficulty, examples, and teaching approach accordingly.\n\n---`
       : '';
 
-  // Build media generation policy based on enabled flags
+  // Build media snippet conditions based on enabled flags. Disabled media
+  // capabilities are omitted from prompts instead of described negatively.
   const imageEnabled = options?.imageGenerationEnabled ?? false;
   const videoEnabled = options?.videoGenerationEnabled ?? false;
-  let mediaGenerationPolicy = '';
-  if (!imageEnabled && !videoEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any mediaGenerations in the outlines. Both image and video generation are disabled.**';
-  } else if (!imageEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any image mediaGenerations (type: "image") in the outlines. Image generation is disabled. Video generation is allowed.**';
-  } else if (!videoEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
-  }
+  const mediaEnabled = imageEnabled || videoEnabled;
+  const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
   // Use simplified prompt variables
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
@@ -106,7 +105,10 @@ export async function generateSceneOutlinesFromRequirements(
         : 'None',
     availableImages: availableImagesText,
     userProfile: userProfileText,
-    mediaGenerationPolicy,
+    hasSourceImages,
+    imageEnabled,
+    videoEnabled,
+    mediaEnabled,
     researchContext:
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
@@ -128,7 +130,25 @@ export async function generateSceneOutlinesFromRequirements(
     });
 
     const response = await aiCall(prompts.system, prompts.user, visionImages);
-    const outlines = parseJsonResponse<SceneOutline[]>(response);
+    const parsed = parseJsonResponse<
+      { languageDirective?: string; outlines?: SceneOutline[] } | SceneOutline[]
+    >(response);
+
+    let languageDirective: string;
+    let outlines: SceneOutline[];
+
+    if (Array.isArray(parsed)) {
+      languageDirective = DEFAULT_LANGUAGE_DIRECTIVE;
+      outlines = parsed;
+    } else if (parsed && Array.isArray(parsed.outlines)) {
+      languageDirective = parsed.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE;
+      outlines = parsed.outlines;
+    } else {
+      return {
+        success: false,
+        error: 'Failed to parse scene outlines response',
+      };
+    }
 
     if (!outlines || !Array.isArray(outlines)) {
       return {
@@ -156,7 +176,7 @@ export async function generateSceneOutlinesFromRequirements(
       totalScenes: result.length,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: { languageDirective, outlines: result } };
   } catch (error) {
     return { success: false, error: String(error) };
   }
