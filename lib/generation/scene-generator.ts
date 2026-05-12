@@ -17,6 +17,7 @@ import type {
   SceneGenerationSummary,
   SceneOutcome,
   ScientificModel,
+  WidgetOutline,
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
@@ -24,7 +25,7 @@ import type { LanguageModel } from 'ai';
 import type { StageStore } from '@/lib/api/stage-api';
 import { createStageAPI } from '@/lib/api/stage-api';
 import { generatePBLContent } from '@/lib/pbl/generate-pbl';
-import { buildPrompt, PROMPT_IDS } from './prompts';
+import { buildPrompt, PROMPT_IDS, type PromptId } from './prompts';
 import { DEFAULT_LANGUAGE_DIRECTIVE } from './outline-generator';
 import { postProcessInteractiveHtml } from './interactive-post-processor';
 import { parseActionsFromStructuredOutput } from './action-parser';
@@ -39,7 +40,15 @@ import {
 } from './prompt-formatters';
 import type { PPTElement, Slide, SlideBackground, SlideTheme } from '@/lib/types/slides';
 import type { QuizQuestion } from '@/lib/types/stage';
-import type { Action } from '@/lib/types/action';
+import type {
+  Action,
+  SpeechAction,
+  WidgetAnnotationAction,
+  WidgetHighlightAction,
+  WidgetRevealAction,
+  WidgetSetStateAction,
+} from '@/lib/types/action';
+import type { TeacherAction, WidgetConfig, WidgetType } from '@/lib/types/widgets';
 import type {
   AgentInfo,
   SceneGenerationContext,
@@ -388,10 +397,11 @@ export async function generateSceneContent(
     outline.languageNote,
   );
 
-  // If outline is interactive but missing interactiveConfig, fall back to slide
-  if (outline.type === 'interactive' && !outline.interactiveConfig) {
+  // Legacy interactive scenes still use interactiveConfig; Deep Interactive scenes use widget metadata.
+  const hasWidgetMetadata = Boolean(outline.widgetType && outline.widgetOutline);
+  if (outline.type === 'interactive' && !outline.interactiveConfig && !hasWidgetMetadata) {
     log.warn(
-      `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
+      `Interactive outline "${outline.title}" missing interactive config, falling back to slide`,
     );
     const fallbackOutline = { ...outline, type: 'slide' as const };
     return generateSlideContent(
@@ -423,6 +433,9 @@ export async function generateSceneContent(
     case 'quiz':
       return generateQuizContent(outline, aiCall, options.adaptivePrompt, languageDirective);
     case 'interactive':
+      if (outline.widgetType && outline.widgetOutline) {
+        return generateWidgetContent(outline, aiCall, options.adaptivePrompt, languageDirective);
+      }
       return generateInteractiveContent(
         outline,
         aiCall,
@@ -1053,6 +1066,190 @@ function normalizeQuizAnswer(question: Record<string, unknown>): string[] | unde
   return [String(raw)];
 }
 
+// ==================== Deep Interactive Widget Generation ====================
+
+function buildWidgetPrompt(
+  outline: SceneOutline,
+  widgetType: WidgetType,
+  widgetOutline: WidgetOutline,
+  languageDirective?: string,
+): { promptId: PromptId; variables: Record<string, unknown> } | null {
+  const keyPoints = (outline.keyPoints || []).join('\n');
+
+  switch (widgetType) {
+    case 'simulation':
+      return {
+        promptId: PROMPT_IDS.SIMULATION_CONTENT,
+        variables: {
+          conceptName: widgetOutline.concept || outline.title,
+          conceptOverview: outline.description,
+          keyPoints,
+          variables: widgetOutline.keyVariables?.join(', ') || '',
+          designIdea: widgetOutline.challenge || '',
+          languageDirective: languageDirective || '',
+        },
+      };
+
+    case 'diagram':
+      return {
+        promptId: PROMPT_IDS.DIAGRAM_CONTENT,
+        variables: {
+          title: outline.title,
+          diagramType: widgetOutline.diagramType || 'flowchart',
+          description: outline.description,
+          keyPoints,
+          nodeCount: widgetOutline.nodeCount || '',
+          languageDirective: languageDirective || '',
+        },
+      };
+
+    case 'code':
+      return {
+        promptId: PROMPT_IDS.CODE_CONTENT,
+        variables: {
+          title: outline.title,
+          programmingLanguage: widgetOutline.language || 'python',
+          description: outline.description,
+          keyPoints,
+          starterCode: '',
+          testCases: '',
+          hints: '',
+          challengeType: widgetOutline.challengeType || '',
+          languageDirective: languageDirective || '',
+        },
+      };
+
+    case 'game':
+      return {
+        promptId: PROMPT_IDS.GAME_CONTENT,
+        variables: {
+          title: outline.title,
+          gameType: widgetOutline.gameType || 'action',
+          description: outline.description,
+          keyPoints,
+          scoring: { correctPoints: 10, speedBonus: 5 },
+          challenge: widgetOutline.challenge || '',
+          playerControls: widgetOutline.playerControls || [],
+          languageDirective: languageDirective || '',
+        },
+      };
+
+    case 'visualization3d':
+      return {
+        promptId: PROMPT_IDS.VISUALIZATION3D_CONTENT,
+        variables: {
+          title: outline.title,
+          visualizationType: widgetOutline.visualizationType || 'custom',
+          description: outline.description,
+          keyPoints,
+          objects: widgetOutline.objects || [],
+          interactions: widgetOutline.interactions || [],
+          languageDirective: languageDirective || '',
+        },
+      };
+  }
+}
+
+/**
+ * Generate widget HTML/config plus teacher actions for Deep Interactive scenes.
+ */
+async function generateWidgetContent(
+  outline: SceneOutline,
+  aiCall: AICallFn,
+  adaptivePrompt?: string,
+  languageDirective?: string,
+): Promise<GeneratedInteractiveContent | null> {
+  const widgetType = outline.widgetType;
+  const widgetOutline = outline.widgetOutline;
+
+  if (!widgetType || !widgetOutline) {
+    log.warn(`Interactive outline "${outline.title}" missing widget metadata`);
+    return null;
+  }
+
+  const promptSpec = buildWidgetPrompt(outline, widgetType, widgetOutline, languageDirective);
+  if (!promptSpec) {
+    log.warn(`Unknown widget type: ${widgetType}`);
+    return null;
+  }
+
+  const prompts = buildPrompt(promptSpec.promptId, promptSpec.variables);
+  if (!prompts) {
+    log.error(`Failed to build ${widgetType} prompt for: ${outline.title}`);
+    return null;
+  }
+
+  log.info(`Generating ${widgetType} widget for: ${outline.title}`);
+  const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+  const rawHtml = extractHtml(response);
+  if (!rawHtml) {
+    log.error(`Failed to extract HTML from ${widgetType} response for: ${outline.title}`);
+    return null;
+  }
+
+  const widgetConfig = extractWidgetConfig(rawHtml);
+  const teacherActions = await generateWidgetTeacherActions(
+    widgetType,
+    outline,
+    widgetConfig,
+    aiCall,
+    adaptivePrompt,
+    languageDirective,
+  );
+
+  return {
+    html: postProcessInteractiveHtml(rawHtml),
+    widgetType,
+    widgetConfig,
+    teacherActions,
+  };
+}
+
+/**
+ * Extract widget config from embedded JSON in generated HTML.
+ */
+function extractWidgetConfig(html: string): WidgetConfig | undefined {
+  const match = html.match(
+    /<script type="application\/json" id="widget-config">([\s\S]*?)<\/script>/,
+  );
+  if (!match) return undefined;
+
+  try {
+    return JSON.parse(match[1].trim()) as WidgetConfig;
+  } catch (error) {
+    log.warn(`Failed to parse widget config: ${error}`);
+    return undefined;
+  }
+}
+
+async function generateWidgetTeacherActions(
+  widgetType: WidgetType,
+  outline: SceneOutline,
+  widgetConfig: WidgetConfig | undefined,
+  aiCall: AICallFn,
+  adaptivePrompt?: string,
+  languageDirective?: string,
+): Promise<TeacherAction[] | undefined> {
+  const prompts = buildPrompt(PROMPT_IDS.WIDGET_TEACHER_ACTIONS, {
+    widgetType,
+    description: outline.description,
+    keyPoints: (outline.keyPoints || []).join('\n'),
+    widgetConfig: JSON.stringify(widgetConfig || {}),
+    languageDirective: languageDirective || '',
+  });
+
+  if (!prompts) return undefined;
+
+  try {
+    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+    const parsed = parseJsonResponse<{ actions?: TeacherAction[] }>(response);
+    return Array.isArray(parsed?.actions) ? parsed.actions : undefined;
+  } catch (error) {
+    log.warn(`Failed to generate widget teacher actions for "${outline.title}": ${error}`);
+    return undefined;
+  }
+}
+
 /**
  * Generate interactive page content
  * Two AI calls + post-processing:
@@ -1278,6 +1475,10 @@ export async function generateSceneActions(
   );
   const agentsText = formatAgentsForPrompt(options.agents);
 
+  if (outline.type === 'interactive' && 'html' in content && content.teacherActions?.length) {
+    return convertTeacherActionsToActions(content.teacherActions);
+  }
+
   if (outline.type === 'slide' && 'elements' in content) {
     // Format element list for AI to select from
     const elementsText = formatElementsForPrompt(content.elements);
@@ -1463,6 +1664,99 @@ function formatQuestionsForPrompt(questions: QuizQuestion[]): string {
 }
 
 /**
+ * Convert widget teacher actions to standard playback actions.
+ * Widget actions are quick iframe messages; narration remains speech so the
+ * existing playback/TTS pipeline continues to own timing.
+ */
+function convertTeacherActionsToActions(teacherActions: TeacherAction[]): Action[] {
+  const actions: Action[] = [];
+
+  for (const teacherAction of teacherActions) {
+    const actionId = `action_${nanoid(8)}`;
+    const base = {
+      id: actionId,
+      title: teacherAction.label || '',
+    };
+
+    switch (teacherAction.type) {
+      case 'speech':
+        actions.push({
+          ...base,
+          type: 'speech',
+          text: teacherAction.content || '',
+        } satisfies SpeechAction);
+        break;
+
+      case 'highlight':
+        actions.push({
+          ...base,
+          type: 'widget_highlight',
+          target: teacherAction.target || '',
+        } satisfies WidgetHighlightAction);
+        if (teacherAction.content) {
+          actions.push({
+            id: `${actionId}_speech`,
+            type: 'speech',
+            title: base.title,
+            text: teacherAction.content,
+          } satisfies SpeechAction);
+        }
+        break;
+
+      case 'setState':
+        actions.push({
+          ...base,
+          type: 'widget_setState',
+          state: teacherAction.state || {},
+        } satisfies WidgetSetStateAction);
+        if (teacherAction.content) {
+          actions.push({
+            id: `${actionId}_speech`,
+            type: 'speech',
+            title: base.title,
+            text: teacherAction.content,
+          } satisfies SpeechAction);
+        }
+        break;
+
+      case 'annotation':
+        actions.push({
+          ...base,
+          type: 'widget_annotation',
+          target: teacherAction.target || '',
+        } satisfies WidgetAnnotationAction);
+        if (teacherAction.content) {
+          actions.push({
+            id: `${actionId}_speech`,
+            type: 'speech',
+            title: base.title,
+            text: teacherAction.content,
+          } satisfies SpeechAction);
+        }
+        break;
+
+      case 'reveal':
+        actions.push({
+          ...base,
+          type: 'widget_reveal',
+          target: teacherAction.target || '',
+        } satisfies WidgetRevealAction);
+        if (teacherAction.content) {
+          actions.push({
+            id: `${actionId}_speech`,
+            type: 'speech',
+            title: base.title,
+            text: teacherAction.content,
+          } satisfies SpeechAction);
+        }
+        break;
+    }
+  }
+
+  return actions;
+}
+
+/**
  * Process and validate Actions
  */
 function processActions(actions: Action[], elements: PPTElement[], agents?: AgentInfo[]): Action[] {
@@ -1643,6 +1937,9 @@ export function createSceneWithActions(
         type: 'interactive',
         url: '',
         html: content.html,
+        widgetType: content.widgetType,
+        widgetConfig: content.widgetConfig,
+        teacherActions: content.teacherActions,
       },
       actions,
     });

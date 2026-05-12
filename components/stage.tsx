@@ -5,6 +5,7 @@ import { useStageStore } from '@/lib/store';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
+import { useWidgetIframeStore } from '@/lib/store/widget-iframe';
 import { useClassroomCollaborationState } from '@/lib/hooks/use-classroom-collaboration-state';
 import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-presentation-state';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -1089,7 +1090,14 @@ export function Stage({
     }
 
     // Create ActionEngine for playback (with audioPlayer for TTS)
-    const actionEngine = new ActionEngine(useStageStore, audioPlayerRef.current);
+    const widgetSendMessage = (type: string, payload: Record<string, unknown>) => {
+      useWidgetIframeStore.getState().getSendMessage(currentScene.id)?.(type, payload);
+    };
+    const actionEngine = new ActionEngine(
+      useStageStore,
+      audioPlayerRef.current,
+      widgetSendMessage,
+    );
 
     // Create new PlaybackEngine
     const engine = new PlaybackEngine([currentScene], actionEngine, audioPlayerRef.current, {
