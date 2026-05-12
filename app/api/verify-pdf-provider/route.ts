@@ -11,6 +11,7 @@ import {
   toGovernedProviderApiErrorResponse,
 } from '@/lib/server/ai-governance';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
+import { MINERU_CLOUD_DEFAULT_BASE } from '@/lib/pdf/constants';
 
 const log = createLogger('Verify PDF Provider');
 
@@ -46,6 +47,41 @@ export async function POST(req: NextRequest) {
       requestedSecret: (apiKey as string | undefined) || undefined,
       requestedBaseUrl: clientBaseUrl,
     });
+
+    if (providerId === 'mineru-cloud') {
+      if (!resolved.apiKey) {
+        return apiErrorWithRequestSession(
+          req,
+          'MISSING_REQUIRED_FIELD',
+          400,
+          'API Key is required for MinerU Cloud',
+        );
+      }
+
+      const cloudBase = (resolved.baseUrl || MINERU_CLOUD_DEFAULT_BASE).replace(/\/+$/, '');
+      const response = await fetch(`${cloudBase}/extract-results/batch/test-connection`, {
+        headers: {
+          Authorization: `Bearer ${resolved.apiKey}`,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        const text = await response.text().catch(() => '');
+        return apiErrorWithRequestSession(
+          req,
+          'INTERNAL_ERROR',
+          500,
+          `Authentication failed: ${text || response.statusText}`,
+        );
+      }
+
+      return apiSuccessWithRequestSession(req, {
+        message: 'Connection successful',
+        status: response.status,
+      });
+    }
 
     const resolvedBaseUrl = resolved.baseUrl;
     if (!resolvedBaseUrl) {

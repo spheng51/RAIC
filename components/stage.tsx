@@ -1460,6 +1460,7 @@ export function Stage({
   // get scene information
   const isPendingScene = currentSceneId === PENDING_SCENE_ID;
   const hasNextPending = generatingOutlines.length > 0;
+  const isCourseComplete = scenes.length > 0 && generatingOutlines.length === 0;
 
   // previous scene (gated)
   const handlePreviousScene = useCallback(() => {
@@ -1482,8 +1483,8 @@ export function Stage({
     const currentIndex = scenes.findIndex((s) => s.id === currentSceneId);
     if (currentIndex < scenes.length - 1) {
       gatedSceneSwitch(scenes[currentIndex + 1].id);
-    } else if (hasNextPending) {
-      // On last real scene → advance to pending page
+    } else if (hasNextPending || isCourseComplete) {
+      // On last real scene -> advance to pending/completion page
       commitSceneSelection(PENDING_SCENE_ID, 'pending');
     }
   }, [
@@ -1491,6 +1492,7 @@ export function Stage({
     currentSceneId,
     gatedSceneSwitch,
     hasNextPending,
+    isCourseComplete,
     isPendingScene,
     scenes,
   ]);
@@ -1498,7 +1500,7 @@ export function Stage({
   const currentSceneIndex = isPendingScene
     ? scenes.length
     : scenes.findIndex((s) => s.id === currentSceneId);
-  const totalScenesCount = scenes.length + (hasNextPending ? 1 : 0);
+  const totalScenesCount = scenes.length + (hasNextPending || isCourseComplete ? 1 : 0);
   const lessonState = useMemo(
     () =>
       buildClassroomLessonState({
@@ -2141,6 +2143,7 @@ export function Stage({
             }}
             hideToolbar={mode === 'playback' || (isPresenting && !controlsVisible)}
             isPendingScene={isPendingScene}
+            isCourseComplete={isCourseComplete}
             isGenerationFailed={
               isPendingScene && failedOutlines.some((f) => f.id === generatingOutlines[0]?.id)
             }

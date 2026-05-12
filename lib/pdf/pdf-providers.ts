@@ -143,6 +143,7 @@ import type { PDFParserConfig } from './types';
 import type { ParsedPdfContent } from '@/lib/types/pdf';
 import { PDF_PROVIDERS } from './constants';
 import { createLogger } from '@/lib/logger';
+import { parseWithMinerUCloud } from './mineru-cloud';
 
 const log = createLogger('PDFProviders');
 
@@ -174,6 +175,10 @@ export async function parsePDF(
 
     case 'mineru':
       result = await parseWithMinerU(config, pdfBuffer);
+      break;
+
+    case 'mineru-cloud':
+      result = await parseWithMinerUCloud(config, pdfBuffer);
       break;
 
     default:

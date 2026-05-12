@@ -11,6 +11,7 @@ import {
   Globe,
   AlertCircle,
   RefreshCw,
+  Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
@@ -38,7 +39,7 @@ export function SceneSidebar({
   onRetryOutline,
   homePath,
 }: SceneSidebarProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const { scenes, currentSceneId, setCurrentSceneId, generatingOutlines, generationStatus } =
     useStageStore();
@@ -515,6 +516,55 @@ export function SceneSidebar({
                     {!isFailed && !isPaused && (
                       <div className="absolute inset-0 -translate-x-full motion-safe:animate-[shimmer_2s_infinite] motion-reduce:animate-none bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" />
                     )}
+                  </div>
+                </div>
+              );
+            })()}
+
+          {generatingOutlines.length === 0 &&
+            scenes.length > 0 &&
+            (() => {
+              const isActive = currentSceneId === PENDING_SCENE_ID;
+              const label = locale === 'zh-CN' ? '课程完成' : 'Course complete';
+              return (
+                <div
+                  key="course-complete-slot"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={label}
+                  onClick={() => selectScene(PENDING_SCENE_ID)}
+                  onKeyDown={(e) => handleInteractiveKeyDown(e, () => selectScene(PENDING_SCENE_ID))}
+                  className={cn(
+                    'group relative rounded-lg flex flex-col gap-1 p-1.5 transition-all duration-200 cursor-pointer hover:bg-amber-50/70 dark:hover:bg-amber-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40',
+                    !isActive && 'opacity-70',
+                    isActive &&
+                      'bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-700 opacity-100',
+                  )}
+                >
+                  <div className="flex justify-between items-center px-2 pt-0.5">
+                    <div className="flex items-center gap-2 max-w-full">
+                      <span
+                        className={cn(
+                          'text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shrink-0',
+                          isActive
+                            ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                            : 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400',
+                        )}
+                      >
+                        {scenes.length + 1}
+                      </span>
+                      <span className="text-xs font-bold truncate text-amber-700 dark:text-amber-300">
+                        {label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="relative aspect-video w-full rounded overflow-hidden ring-1 bg-amber-50 dark:bg-amber-950/20 ring-amber-100 dark:ring-amber-900/30">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-amber-500 dark:text-amber-300">
+                      <Trophy className="w-6 h-6" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">
+                        {label}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );

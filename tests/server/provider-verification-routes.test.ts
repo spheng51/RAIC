@@ -17,7 +17,7 @@ const getServerWebSearchProvidersMock = vi.fn();
 const resolveGovernedProviderConfigMock = vi.fn();
 const resolveModelFromHeadersMock = vi.fn();
 const resolveModelMock = vi.fn();
-const searchWithTavilyMock = vi.fn();
+const searchWebMock = vi.fn();
 const testImageConnectivityMock = vi.fn();
 const testVideoConnectivityMock = vi.fn();
 const toGovernedProviderApiErrorResponseMock = vi.fn();
@@ -121,9 +121,9 @@ vi.mock('@/lib/server/ssrf-guard', () => ({
   validateUrlForSSRF: validateUrlForSSRFMock,
 }));
 
-vi.mock('@/lib/web-search/tavily', () => ({
+vi.mock('@/lib/web-search', () => ({
   formatSearchResultsAsContext: formatSearchResultsAsContextMock,
-  searchWithTavily: searchWithTavilyMock,
+  searchWeb: searchWebMock,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -164,7 +164,7 @@ describe('provider and verification routes', () => {
     resolveGovernedProviderConfigMock.mockReset();
     resolveModelFromHeadersMock.mockReset();
     resolveModelMock.mockReset();
-    searchWithTavilyMock.mockReset();
+    searchWebMock.mockReset();
     testImageConnectivityMock.mockReset();
     testVideoConnectivityMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
@@ -749,7 +749,7 @@ describe('provider and verification routes', () => {
       rewriteAttempted: false,
       finalQueryLength: 16,
     });
-    searchWithTavilyMock.mockResolvedValue({
+    searchWebMock.mockResolvedValue({
       answer: 'Search answer',
       query: 'renewable energy',
       responseTime: 123,
@@ -769,6 +769,12 @@ describe('provider and verification routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(searchWebMock).toHaveBeenCalledWith({
+      providerId: 'tavily',
+      query: 'renewable energy',
+      apiKey: 'server-key',
+      baseUrl: 'https://provider.example.com',
+    });
     expect(resolveGovernedProviderConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
         family: 'webSearch',
@@ -850,7 +856,7 @@ describe('provider and verification routes', () => {
 
     expect(response.status).toBe(400);
     expect(body.errorCode).toBe('MISSING_API_KEY');
-    expect(searchWithTavilyMock).not.toHaveBeenCalled();
+    expect(searchWebMock).not.toHaveBeenCalled();
     expect(appendAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'provider_scenario.route_denied',
@@ -877,7 +883,7 @@ describe('provider and verification routes', () => {
       rewriteAttempted: true,
       finalQueryLength: 16,
     });
-    searchWithTavilyMock.mockResolvedValue({
+    searchWebMock.mockResolvedValue({
       answer: 'Search answer',
       query: 'renewable energy',
       responseTime: 123,

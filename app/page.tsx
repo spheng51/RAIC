@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useDeferredValue, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -12,6 +12,7 @@ import {
   ImagePlus,
   Pencil,
   Trash2,
+  Search,
   Settings,
   Sun,
   Moon,
@@ -19,6 +20,8 @@ import {
   BotOff,
   ChevronUp,
   Share2,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -117,7 +120,7 @@ interface HomePageProps {
 }
 
 export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initialFormState);
@@ -133,6 +136,18 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   // Model setup state
   const currentModelId = useSettingsStore((s) => s.modelId);
   const [recentOpen, setRecentOpen] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const persistRecentOpen = useCallback((next: boolean) => {
+    setRecentOpen(next);
+    try {
+      localStorage.setItem(RECENT_OPEN_STORAGE_KEY, String(next));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Hydrate client-only state after mount (avoids SSR mismatch)
   useEffect(() => {
@@ -573,6 +588,24 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     return date.toLocaleDateString();
   };
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const filteredClassrooms = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase();
+    if (!q) return classrooms;
+    return classrooms.filter((classroom) => {
+      const haystack = [
+        classroom.name,
+        classroom.description,
+        classroom.sceneCount,
+        formatDate(classroom.updatedAt),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [classrooms, deferredSearchQuery, formatDate]);
+
   const needsModelSetup = launchMode === 'public-demo' && !currentModelId;
   const canGenerate = !!form.requirement.trim();
   const primaryActionLabel = needsModelSetup
@@ -810,6 +843,18 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                 />
               </div>
 
+              <div
+                className="hidden sm:inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-violet-200/70 bg-violet-50 px-2.5 text-[11px] font-semibold text-violet-700 shadow-sm dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300"
+                title={
+                  locale === 'zh-CN'
+                    ? 'Deep Interactive 模式可生成更丰富的互动课堂'
+                    : 'Deep Interactive mode can generate richer interactive classrooms'
+                }
+              >
+                <Sparkles className="size-3.5" />
+                Deep Interactive
+              </div>
+
               {/* Voice input */}
               <SpeechButton
                 size="md"
@@ -874,15 +919,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
             aria-expanded={recentOpen}
             aria-controls="recent-classrooms-panel"
             aria-label={t('classroom.recentClassrooms')}
-            onClick={() => {
-              const next = !recentOpen;
-              setRecentOpen(next);
-              try {
-                localStorage.setItem(RECENT_OPEN_STORAGE_KEY, String(next));
-              } catch {
-                /* ignore */
-              }
-            }}
+            onClick={() => persistRecentOpen(!recentOpen)}
             className="group w-full flex items-center gap-4 py-2 cursor-pointer"
           >
             <div className="flex-1 h-px bg-border/40 group-hover:bg-border/70 transition-colors" />
@@ -900,6 +937,77 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
             <div className="flex-1 h-px bg-border/40 group-hover:bg-border/70 transition-colors" />
           </button>
 
+          <div className="mt-3 flex w-full justify-end">
+            <AnimatePresence mode="wait">
+              {!searchOpen ? (
+                <motion.button
+                  key="search-button"
+                  ref={searchButtonRef}
+                  type="button"
+                  aria-label={locale === 'zh-CN' ? '搜索最近课堂' : 'Search recent classrooms'}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 8 }}
+                  onClick={() => {
+                    setSearchOpen(true);
+                    if (!recentOpen) persistRecentOpen(true);
+                    requestAnimationFrame(() => searchInputRef.current?.focus());
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 text-xs text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                >
+                  <Search className="size-3.5" />
+                  {locale === 'zh-CN' ? '搜索' : 'Search'}
+                </motion.button>
+              ) : (
+                <motion.div
+                  key="search-input"
+                  initial={{ opacity: 0, width: 44 }}
+                  animate={{ opacity: 1, width: 260 }}
+                  exit={{ opacity: 0, width: 44 }}
+                  className="relative"
+                >
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
+                  <input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        if (searchQuery) {
+                          setSearchQuery('');
+                        } else {
+                          setSearchOpen(false);
+                          requestAnimationFrame(() => searchButtonRef.current?.focus());
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!searchQuery) setSearchOpen(false);
+                    }}
+                    placeholder={
+                      locale === 'zh-CN' ? '按名称或日期搜索' : 'Search name or date'
+                    }
+                    aria-label={locale === 'zh-CN' ? '搜索最近课堂' : 'Search recent classrooms'}
+                    className="h-8 w-full rounded-full border border-border/60 bg-background/90 pl-8 pr-8 text-xs outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      aria-label={locale === 'zh-CN' ? '清除搜索' : 'Clear search'}
+                      onClick={() => {
+                        setSearchQuery('');
+                        searchInputRef.current?.focus();
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {/* Expandable content */}
           <AnimatePresence>
             {recentOpen && (
@@ -912,7 +1020,12 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                 className="w-full overflow-hidden"
               >
                 <div className="pt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
-                  {classrooms.map((classroom, i) => (
+                  {searchQuery.trim() && filteredClassrooms.length === 0 ? (
+                    <div className="col-span-full rounded-2xl border border-dashed border-border/70 px-6 py-10 text-center text-sm text-muted-foreground">
+                      {locale === 'zh-CN' ? '没有找到匹配的课堂' : 'No matching classrooms'}
+                    </div>
+                  ) : null}
+                  {filteredClassrooms.map((classroom, i) => (
                     <motion.div
                       key={classroom.id}
                       initial={{ opacity: 0, y: 16 }}

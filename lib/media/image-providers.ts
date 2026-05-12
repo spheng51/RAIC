@@ -10,6 +10,10 @@ import type {
   ImageProviderConfig,
 } from './types';
 import { generateWithSeedream, testSeedreamConnectivity } from './adapters/seedream-adapter';
+import {
+  generateWithOpenAIImage,
+  testOpenAIImageConnectivity,
+} from './adapters/openai-image-adapter';
 import { generateWithQwenImage, testQwenImageConnectivity } from './adapters/qwen-image-adapter';
 import { generateWithNanoBanana, testNanoBananaConnectivity } from './adapters/nano-banana-adapter';
 import {
@@ -31,6 +35,20 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
       { id: 'doubao-seedream-4-5-251128', name: 'Seedream 4.5' },
       { id: 'doubao-seedream-4-0-250828', name: 'Seedream 4.0' },
       { id: 'doubao-seedream-3-0-t2i-250415', name: 'Seedream 3.0' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+  },
+  'openai-image': {
+    id: 'openai-image',
+    name: 'OpenAI Image',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: [
+      { id: 'gpt-image-2', name: 'GPT Image 2' },
+      { id: 'gpt-image-1.5', name: 'GPT Image 1.5' },
+      { id: 'gpt-image-1', name: 'GPT Image 1' },
+      { id: 'gpt-image-1-mini', name: 'GPT Image 1 Mini' },
+      { id: 'chatgpt-image-latest', name: 'ChatGPT Image Latest' },
     ],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
@@ -104,6 +122,8 @@ export async function testImageConnectivity(
   switch (config.providerId) {
     case 'seedream':
       return testSeedreamConnectivity(config);
+    case 'openai-image':
+      return testOpenAIImageConnectivity(config);
     case 'qwen-image':
       return testQwenImageConnectivity(config);
     case 'nano-banana':
@@ -127,6 +147,8 @@ export async function generateImage(
   switch (config.providerId) {
     case 'seedream':
       return generateWithSeedream(config, options);
+    case 'openai-image':
+      return generateWithOpenAIImage(config, options);
     case 'qwen-image':
       return generateWithQwenImage(config, options);
     case 'nano-banana':

@@ -95,6 +95,12 @@
 import type { TTSModelConfig } from './types';
 import { isCustomTTSProvider } from './types';
 import { TTS_PROVIDERS } from './constants';
+import {
+  VOXCPM_AUTO_VOICE_ID,
+  VOXCPM_VLLM_MODEL_ID,
+  normalizeVoxCPMBackend,
+  type VoxCPMProviderOptions,
+} from './voxcpm';
 
 /**
  * Result of TTS generation
@@ -148,12 +154,18 @@ export async function generateTTS(
     case 'qwen-tts':
       return await generateQwenTTS(config, text);
 
+    case 'voxcpm-tts':
+      return await generateVoxCPMTTS(config, text);
+
     case 'minimax-tts':
       return await generateMiniMaxTTS(config, text);
     case 'doubao-tts':
       return await generateDoubaoTTS(config, text);
     case 'elevenlabs-tts':
       return await generateElevenLabsTTS(config, text);
+
+    case 'lemonade-tts':
+      return await generateLemonadeTTS(config, text);
 
     case 'browser-native-tts':
       throw new Error(
@@ -198,10 +210,318 @@ async function generateOpenAITTS(
   }
 
   const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || '';
   return {
     audio: new Uint8Array(arrayBuffer),
-    format: 'mp3',
+    format: getAudioResponseFormat(contentType),
   };
+}
+
+async function generateLemonadeTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  const baseUrl = (config.baseUrl || TTS_PROVIDERS['lemonade-tts'].defaultBaseUrl || '').replace(
+    /\/$/,
+    '',
+  );
+  const modelId = config.modelId || TTS_PROVIDERS['lemonade-tts'].defaultModelId;
+  const voice = config.voice || 'af_heart';
+
+  const response = await fetch(`${baseUrl}/audio/speech`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...getBackendAuthHeaders(config.apiKey),
+    },
+    body: JSON.stringify({
+      model: modelId,
+      input: text,
+      voice,
+      speed: config.speed || 1.0,
+      response_format: config.format || 'wav',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Lemonade TTS API error: ${await readTTSApiError(response)}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || '';
+  return {
+    audio: new Uint8Array(arrayBuffer),
+    format: getAudioResponseFormat(contentType),
+  };
+}
+
+async function generateVoxCPMTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  const baseUrl = (config.baseUrl || TTS_PROVIDERS['voxcpm-tts'].defaultBaseUrl || '').replace(
+    /\/$/,
+    '',
+  );
+  if (!baseUrl) {
+    throw new Error('VoxCPM base URL is required');
+  }
+
+  const options = (config.providerOptions || {}) as VoxCPMProviderOptions;
+  const backend = normalizeVoxCPMBackend(options.backend);
+  const voicePrompt =
+    options.voicePrompt ||
+    (config.voice && config.voice !== 'default' && config.voice !== VOXCPM_AUTO_VOICE_ID
+      ? config.voice
+      : undefined);
+  if (config.voice === VOXCPM_AUTO_VOICE_ID && !voicePrompt) {
+    throw new Error('VoxCPM Auto Voice requires agent context');
+  }
+
+  const cfgValue = options.cfgValue ?? 2.0;
+  const inferenceTimesteps = options.inferenceTimesteps ?? 10;
+  const targetText =
+    options.promptText?.trim() && options.referenceAudioBase64
+      ? text
+      : buildVoxCPMTargetText(text, voicePrompt);
+
+  const response =
+    backend === 'nano-vllm'
+      ? await postVoxCPMNanoVLLM(baseUrl, {
+          targetText,
+          promptText: options.promptText,
+          cfgValue,
+          referenceAudioBase64: options.referenceAudioBase64,
+          referenceAudioMimeType: options.referenceAudioMimeType,
+          referenceAudioName: options.referenceAudioName,
+        }, config.apiKey)
+      : backend === 'python-api'
+        ? await postVoxCPMPythonAPI(baseUrl, {
+            targetText,
+            promptText: options.promptText,
+            cfgValue,
+            inferenceTimesteps,
+            normalize: options.normalize ?? false,
+            denoise: options.denoise ?? false,
+            referenceAudioBase64: options.referenceAudioBase64,
+            referenceAudioMimeType: options.referenceAudioMimeType,
+            referenceAudioName: options.referenceAudioName,
+          }, config.apiKey)
+        : await postVoxCPMVLLMOmni(baseUrl, {
+            targetText,
+            promptText: options.promptText,
+            referenceAudioBase64: options.referenceAudioBase64,
+            referenceAudioMimeType: options.referenceAudioMimeType,
+            referenceAudioName: options.referenceAudioName,
+          }, config);
+
+  if (!response.ok) {
+    throw new Error(`VoxCPM TTS API error: ${await readTTSApiError(response)}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || '';
+  return {
+    audio: new Uint8Array(arrayBuffer),
+    format: getAudioResponseFormat(contentType),
+  };
+}
+
+function buildVoxCPMTargetText(text: string, voicePrompt?: string): string {
+  const prompt = voicePrompt
+    ?.replace(/[\p{C}]+/gu, ' ')
+    .replace(/[()（）]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return prompt ? `(${prompt})${text}` : text;
+}
+
+function getAudioResponseFormat(contentType: string): string {
+  if (contentType.includes('audio/wav') || contentType.includes('audio/x-wav')) return 'wav';
+  if (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) return 'mp3';
+  if (contentType.includes('audio/flac')) return 'flac';
+  if (contentType.includes('audio/ogg')) return 'ogg';
+  if (contentType.includes('audio/webm')) return 'webm';
+  return 'mp3';
+}
+
+function getVoxCPMAudioFormat(mimeType?: string, fileName?: string): string {
+  const lowerName = fileName?.toLowerCase() || '';
+  if (mimeType?.includes('wav') || lowerName.endsWith('.wav')) return 'wav';
+  if (mimeType?.includes('mpeg') || mimeType?.includes('mp3') || lowerName.endsWith('.mp3')) {
+    return 'mp3';
+  }
+  if (mimeType?.includes('flac') || lowerName.endsWith('.flac')) return 'flac';
+  if (mimeType?.includes('ogg') || lowerName.endsWith('.ogg')) return 'ogg';
+  if (mimeType?.includes('webm') || lowerName.endsWith('.webm')) return 'webm';
+  return 'wav';
+}
+
+function getVLLMOmniSpeechUrl(baseUrl: string): string {
+  return baseUrl.endsWith('/v1') ? `${baseUrl}/audio/speech` : `${baseUrl}/v1/audio/speech`;
+}
+
+function getVLLMOmniModelId(config: TTSModelConfig): string {
+  const modelId = config.modelId?.trim();
+  if (!modelId || modelId === 'VoxCPM2') return VOXCPM_VLLM_MODEL_ID;
+  return modelId;
+}
+
+function getBackendAuthHeaders(apiKey?: string): Record<string, string> {
+  return apiKey?.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {};
+}
+
+async function postVoxCPMVLLMOmni(
+  baseUrl: string,
+  params: {
+    targetText: string;
+    promptText?: string;
+    referenceAudioBase64?: string;
+    referenceAudioMimeType?: string;
+    referenceAudioName?: string;
+  },
+  config: TTSModelConfig,
+): Promise<Response> {
+  const payload: Record<string, unknown> = {
+    model: getVLLMOmniModelId(config),
+    input: params.targetText,
+    voice: 'default',
+    response_format: 'wav',
+    stream: false,
+  };
+
+  if (params.referenceAudioBase64) {
+    const referenceAudio = getVoxCPMDataAudioUrl(
+      params.referenceAudioBase64,
+      params.referenceAudioMimeType,
+      params.referenceAudioName,
+    );
+    payload.ref_audio = referenceAudio;
+    if (params.promptText?.trim()) {
+      payload.prompt_audio = referenceAudio;
+      payload.prompt_text = params.promptText.trim();
+    }
+  }
+
+  return fetch(getVLLMOmniSpeechUrl(baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...getBackendAuthHeaders(config.apiKey),
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+function getVoxCPMDataAudioUrl(base64: string, mimeType?: string, fileName?: string): string {
+  const format = getVoxCPMAudioFormat(mimeType, fileName);
+  const mediaType =
+    mimeType?.trim() ||
+    (format === 'mp3'
+      ? 'audio/mpeg'
+      : format === 'flac'
+        ? 'audio/flac'
+        : format === 'ogg'
+          ? 'audio/ogg'
+          : format === 'webm'
+            ? 'audio/webm'
+            : 'audio/wav');
+  return `data:${mediaType};base64,${base64}`;
+}
+
+function base64ToBlob(base64: string, mimeType?: string): Blob {
+  return new Blob([Buffer.from(base64, 'base64')], { type: mimeType || 'audio/wav' });
+}
+
+async function postVoxCPMPythonAPI(
+  baseUrl: string,
+  params: {
+    targetText: string;
+    promptText?: string;
+    cfgValue: number;
+    inferenceTimesteps: number;
+    normalize: boolean;
+    denoise: boolean;
+    referenceAudioBase64?: string;
+    referenceAudioMimeType?: string;
+    referenceAudioName?: string;
+  },
+  apiKey?: string,
+): Promise<Response> {
+  const formData = new FormData();
+  formData.set('text', params.targetText);
+  formData.set('cfg_value', String(params.cfgValue));
+  formData.set('inference_timesteps', String(params.inferenceTimesteps));
+  formData.set('normalize', String(params.normalize));
+  formData.set('denoise', String(params.denoise));
+
+  if (params.referenceAudioBase64) {
+    const audioBlob = base64ToBlob(params.referenceAudioBase64, params.referenceAudioMimeType);
+    const audioName = params.referenceAudioName || 'reference.wav';
+    formData.set('reference_audio', audioBlob, audioName);
+    if (params.promptText?.trim()) {
+      formData.set('prompt_audio', audioBlob, audioName);
+      formData.set('prompt_text', params.promptText.trim());
+    }
+  }
+
+  return fetch(`${baseUrl}/tts/upload`, {
+    method: 'POST',
+    headers: getBackendAuthHeaders(apiKey),
+    body: formData,
+  });
+}
+
+async function postVoxCPMNanoVLLM(
+  baseUrl: string,
+  params: {
+    targetText: string;
+    promptText?: string;
+    cfgValue: number;
+    referenceAudioBase64?: string;
+    referenceAudioMimeType?: string;
+    referenceAudioName?: string;
+  },
+  apiKey?: string,
+): Promise<Response> {
+  const payload: Record<string, unknown> = {
+    target_text: params.targetText,
+    cfg_value: params.cfgValue,
+  };
+
+  if (params.referenceAudioBase64) {
+    const format = getVoxCPMAudioFormat(params.referenceAudioMimeType, params.referenceAudioName);
+    payload.ref_audio_wav_base64 = params.referenceAudioBase64;
+    payload.ref_audio_wav_format = format;
+    if (params.promptText?.trim()) {
+      payload.prompt_wav_base64 = params.referenceAudioBase64;
+      payload.prompt_wav_format = format;
+      payload.prompt_text = params.promptText.trim();
+    }
+  }
+
+  return fetch(`${baseUrl}/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...getBackendAuthHeaders(apiKey),
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function readTTSApiError(response: Response): Promise<string> {
+  const text = await response.text().catch(() => response.statusText);
+  if (!text) return response.statusText;
+  try {
+    const json = JSON.parse(text) as { detail?: unknown; error?: { message?: string } | string };
+    if (typeof json.detail === 'string') return json.detail;
+    if (typeof json.error === 'string') return json.error;
+    if (json.error?.message) return json.error.message;
+  } catch {
+    // Use raw text below.
+  }
+  return text;
 }
 
 /**

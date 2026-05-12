@@ -33,9 +33,13 @@ import type {
   ModelInfo,
   ModelConfig,
   ThinkingConfig,
+  BuiltInProviderId,
+  ThinkingCapability,
+  ThinkingRequestAdapter,
 } from '@/lib/types/provider';
 import { createLogger } from '@/lib/logger';
 import { normalizeBuiltInOpenAICompatibleBaseUrl } from '@/lib/utils/url';
+import { getThinkingMode, pickThinkingBudget } from './thinking-config';
 // NOTE: Do NOT import thinking-context.ts here — it uses node:async_hooks
 // which is server-only, and this file is also used on the client via
 // settings.ts. The thinking context is read from globalThis instead
@@ -47,7 +51,12 @@ const log = createLogger('AIProviders');
 export type { ProviderId, ProviderConfig, ModelInfo, ModelConfig };
 
 /** Provider IDs whose logos are monochrome-dark and need `dark:invert` in dark mode */
-export const MONO_LOGO_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'ollama', 'lmstudio']);
+export const MONO_LOGO_PROVIDERS: ReadonlySet<string> = new Set([
+  'openai',
+  'openrouter',
+  'ollama',
+  'lmstudio',
+]);
 
 export const MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
 
@@ -1078,6 +1087,179 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     ],
   },
 
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    type: 'openai',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    requiresApiKey: true,
+    icon: '/logos/openrouter.svg',
+    models: [
+      {
+        id: 'openai/gpt-5.1',
+        name: 'OpenAI GPT-5.1',
+        contextWindow: 400000,
+        outputWindow: 128000,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            control: 'effort',
+            requestAdapter: 'openrouter',
+            effortValues: ['none', 'minimal', 'low', 'medium', 'high'],
+            defaultEffort: 'medium',
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: false,
+          },
+        },
+      },
+      {
+        id: 'anthropic/claude-sonnet-4.5',
+        name: 'Claude Sonnet 4.5',
+        contextWindow: 200000,
+        outputWindow: 64000,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
+        id: 'google/gemini-3-pro-preview',
+        name: 'Gemini 3 Pro Preview',
+        contextWindow: 1000000,
+        outputWindow: 65536,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
+        id: 'deepseek/deepseek-v4-flash',
+        name: 'DeepSeek V4 Flash',
+        contextWindow: 128000,
+        outputWindow: 32768,
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+    ],
+  },
+
+  'tencent-hunyuan': {
+    id: 'tencent-hunyuan',
+    name: 'Tencent Hunyuan',
+    type: 'openai',
+    defaultBaseUrl: 'https://tokenhub.tencentmaas.com/v1',
+    alternateBaseUrls: [
+      { label: 'China', url: 'https://tokenhub.tencentmaas.com/v1' },
+      { label: 'International', url: 'https://tokenhub-intl.tencentmaas.com/v1' },
+    ],
+    requiresApiKey: true,
+    icon: '/logos/tencent-hunyuan.svg',
+    models: [
+      {
+        id: 'hy3-preview',
+        name: 'Tencent Hy3 Preview',
+        contextWindow: 256000,
+        outputWindow: 32768,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            control: 'effort',
+            requestAdapter: 'hunyuan',
+            effortValues: ['low', 'medium', 'high'],
+            defaultEffort: 'medium',
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+    ],
+  },
+
+  xiaomi: {
+    id: 'xiaomi',
+    name: 'Xiaomi MiMo',
+    type: 'openai',
+    defaultBaseUrl: 'https://api.xiaomimimo.com/v1',
+    requiresApiKey: true,
+    icon: '/logos/xiaomi.svg',
+    models: [
+      {
+        id: 'mimo-v2.5-pro',
+        name: 'MiMo v2.5 Pro',
+        contextWindow: 128000,
+        outputWindow: 32768,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            control: 'toggle',
+            requestAdapter: 'xiaomi',
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'mimo-v2.5',
+        name: 'MiMo v2.5',
+        contextWindow: 128000,
+        outputWindow: 32768,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            control: 'toggle',
+            requestAdapter: 'xiaomi',
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+    ],
+  },
+
+  lemonade: {
+    id: 'lemonade',
+    name: 'Lemonade',
+    type: 'openai',
+    defaultBaseUrl: 'http://127.0.0.1:8000/v1',
+    requiresApiKey: false,
+    supportsOptionalApiKey: true,
+    icon: '/logos/lemonade.svg',
+    models: [
+      {
+        id: 'Qwen3.5-4B-GGUF',
+        name: 'Qwen3.5 4B GGUF',
+        contextWindow: 32768,
+        outputWindow: 8192,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: false,
+          thinking: {
+            control: 'toggle-budget',
+            requestAdapter: 'lemonade',
+            budgetRange: { min: 0, max: 8192, step: 256, disableValue: 0 },
+            defaultBudgetTokens: 1024,
+            toggleable: true,
+            budgetAdjustable: true,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'gpt-oss-20b',
+        name: 'GPT-OSS 20B',
+        contextWindow: 131072,
+        outputWindow: 32768,
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+    ],
+  },
+
   grok: {
     id: 'grok',
     name: 'Grok',
@@ -1295,6 +1477,139 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
   },
 };
 
+function annotateLegacyThinkingCapability(
+  providerId: ProviderId,
+  modelId: string,
+  thinking: ThinkingCapability,
+): void {
+  if (thinking.control) return;
+
+  if (providerId === 'openai') {
+    const gpt55 = /^gpt-5\.5(?:-|$)/.test(modelId);
+    Object.assign(thinking, {
+      control: 'effort',
+      requestAdapter: 'openai',
+      defaultMode: gpt55 ? 'enabled' : 'disabled',
+      effortValues: gpt55
+        ? ['low', 'medium', 'high', 'xhigh']
+        : ['none', 'minimal', 'low', 'medium', 'high'],
+      defaultEffort: gpt55 ? 'medium' : 'none',
+    } satisfies Partial<ThinkingCapability>);
+    return;
+  }
+
+  if (providerId === 'anthropic') {
+    const budgetOnly = modelId === 'claude-haiku-4-5';
+    Object.assign(
+      thinking,
+      budgetOnly
+        ? ({
+            control: 'toggle-budget',
+            requestAdapter: 'anthropic',
+            defaultMode: 'disabled',
+            budgetRange: { min: 1024, max: 64000, step: 1024 },
+            defaultBudgetTokens: 1024,
+          } satisfies Partial<ThinkingCapability>)
+        : ({
+            control: 'effort',
+            requestAdapter: 'anthropic',
+            defaultMode: thinking.defaultEnabled === false ? 'disabled' : 'enabled',
+            effortValues: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+            defaultEffort: thinking.defaultEnabled === false ? 'none' : 'medium',
+            anthropicThinking: { type: modelId.includes('4-6') ? 'adaptive' : 'enabled' },
+          } satisfies Partial<ThinkingCapability>),
+    );
+    return;
+  }
+
+  if (providerId === 'google') {
+    if (modelId.startsWith('gemini-3')) {
+      Object.assign(thinking, {
+        control: 'level',
+        requestAdapter: 'google',
+        levelValues: ['minimal', 'low', 'medium', 'high'],
+        defaultLevel: modelId.includes('flash') ? 'low' : 'high',
+      } satisfies Partial<ThinkingCapability>);
+    } else {
+      Object.assign(thinking, {
+        control: 'toggle-budget',
+        requestAdapter: 'google',
+        defaultMode: 'enabled',
+        budgetRange: {
+          min: modelId === 'gemini-2.5-pro' ? 128 : 0,
+          max: 24576,
+          step: 128,
+          allowDynamic: true,
+          disableValue: modelId === 'gemini-2.5-pro' ? 128 : 0,
+        },
+        defaultBudgetTokens: -1,
+      } satisfies Partial<ThinkingCapability>);
+    }
+    return;
+  }
+
+  const adapterByProvider: Partial<Record<ProviderId, ThinkingCapability['requestAdapter']>> = {
+    kimi: 'kimi',
+    glm: 'glm',
+    xiaomi: 'xiaomi',
+  };
+  const toggleAdapter = adapterByProvider[providerId];
+  if (toggleAdapter) {
+    Object.assign(thinking, {
+      control: 'toggle',
+      requestAdapter: toggleAdapter,
+      defaultMode: thinking.defaultEnabled === false ? 'disabled' : 'enabled',
+    } satisfies Partial<ThinkingCapability>);
+    return;
+  }
+
+  if (providerId === 'qwen' || providerId === 'siliconflow' || providerId === 'lemonade') {
+    Object.assign(thinking, {
+      control: 'toggle-budget',
+      requestAdapter:
+        providerId === 'lemonade' ? 'lemonade' : providerId === 'qwen' ? 'qwen' : 'siliconflow',
+      defaultMode: thinking.defaultEnabled === false ? 'disabled' : 'enabled',
+      budgetRange: { min: 0, max: 8192, step: 256, disableValue: 0, allowDynamic: true },
+      defaultBudgetTokens: providerId === 'lemonade' ? undefined : -1,
+    } satisfies Partial<ThinkingCapability>);
+    return;
+  }
+
+  if (providerId === 'deepseek') {
+    Object.assign(thinking, {
+      control: 'effort',
+      requestAdapter: 'deepseek',
+      defaultMode: 'enabled',
+      effortValues: ['none', 'high', 'max'],
+      defaultEffort: 'high',
+    } satisfies Partial<ThinkingCapability>);
+    return;
+  }
+
+  if (providerId === 'doubao') {
+    Object.assign(thinking, {
+      control: 'effort',
+      requestAdapter: 'doubao',
+      defaultMode: thinking.defaultEnabled === false ? 'disabled' : 'enabled',
+      effortValues: ['minimal', 'low', 'medium', 'high'],
+      defaultEffort: 'medium',
+    } satisfies Partial<ThinkingCapability>);
+    return;
+  }
+
+  Object.assign(thinking, {
+    control: 'none',
+    requestAdapter: 'none',
+  } satisfies Partial<ThinkingCapability>);
+}
+
+for (const provider of Object.values(PROVIDERS)) {
+  for (const model of provider.models) {
+    const thinking = model.capabilities?.thinking;
+    if (thinking) annotateLegacyThinkingCapability(provider.id, model.id, thinking);
+  }
+}
+
 /**
  * Get provider config (from built-in or unified config in localStorage)
  */
@@ -1344,39 +1659,138 @@ export interface ModelWithInfo {
  * Return vendor-specific body params to inject for OpenAI-compatible providers.
  * Called from the custom fetch wrapper inside getModel().
  */
+function getCatalogThinkingCapability(providerId: ProviderId, modelId: string) {
+  return getProviderConfig(providerId)?.models.find((model) => model.id === modelId)?.capabilities
+    ?.thinking;
+}
+
+function getCompatThinkingAdapter(providerId: ProviderId, modelId: string) {
+  const capability = getCatalogThinkingCapability(providerId, modelId);
+  const fallbackAdapters: Partial<Record<BuiltInProviderId, ThinkingRequestAdapter>> = {
+    kimi: 'kimi',
+    deepseek: 'deepseek',
+    glm: 'glm',
+    qwen: 'qwen',
+    siliconflow: 'siliconflow',
+    doubao: 'doubao',
+    openrouter: 'openrouter',
+    'tencent-hunyuan': 'hunyuan',
+    xiaomi: 'xiaomi',
+    lemonade: 'lemonade',
+  };
+  const adapter =
+    capability?.requestAdapter || fallbackAdapters[providerId as BuiltInProviderId];
+
+  return { adapter, capability };
+}
+
+/**
+ * Return vendor-specific body params to inject for OpenAI-compatible providers.
+ * Called from the custom fetch wrapper inside getModel().
+ */
 function getCompatThinkingBodyParams(
   providerId: ProviderId,
+  modelId: string,
   config: ThinkingConfig,
 ): Record<string, unknown> | undefined {
-  if (config.enabled === false) {
-    switch (providerId) {
-      // Kimi / DeepSeek / GLM use { thinking: { type: "disabled" } }
-      case 'kimi':
-      case 'deepseek':
-      case 'glm':
+  const { adapter, capability } = getCompatThinkingAdapter(providerId, modelId);
+  if (!adapter || capability?.control === 'none') return undefined;
+
+  const mode = getThinkingMode(config);
+  const budget = capability ? pickThinkingBudget(capability, config) : config.budgetTokens;
+
+  switch (adapter) {
+    case 'kimi':
+    case 'glm':
+    case 'xiaomi':
+      if (mode === 'disabled') return { thinking: { type: 'disabled' } };
+      if (mode === 'enabled') return { thinking: { type: 'enabled' } };
+      return undefined;
+
+    case 'deepseek': {
+      if (mode === 'disabled' || config.effort === 'none') {
         return { thinking: { type: 'disabled' } };
-      // Qwen / SiliconFlow use { enable_thinking: false }
-      case 'qwen':
-      case 'siliconflow':
-        return { enable_thinking: false };
-      default:
-        return undefined;
+      }
+      if (mode === 'enabled' || config.effort) {
+        return {
+          thinking: { type: 'enabled' },
+          reasoning_effort:
+            config.effort === 'max' || config.effort === 'xhigh' ? 'max' : 'high',
+        };
+      }
+      return undefined;
     }
-  }
-  if (config.enabled === true) {
-    switch (providerId) {
-      case 'kimi':
-      case 'deepseek':
-      case 'glm':
-        return { thinking: { type: 'enabled' } };
-      case 'qwen':
-      case 'siliconflow':
-        return { enable_thinking: true };
-      default:
-        return undefined;
+
+    case 'qwen': {
+      if (mode === 'disabled') return { enable_thinking: false };
+      const body: Record<string, unknown> = {};
+      if (mode === 'enabled') body.enable_thinking = true;
+      if (budget !== undefined) body.thinking_budget = budget;
+      return Object.keys(body).length > 0 ? body : undefined;
     }
+
+    case 'siliconflow': {
+      const body: Record<string, unknown> = {};
+      if (mode === 'disabled') body.enable_thinking = false;
+      if (mode === 'enabled') body.enable_thinking = true;
+      if (budget !== undefined) body.thinking_budget = budget;
+      return Object.keys(body).length > 0 ? body : undefined;
+    }
+
+    case 'doubao': {
+      if (config.effort) return { reasoning_effort: config.effort };
+      if (mode === 'auto') return { thinking: { type: 'auto' } };
+      if (mode === 'disabled') return { thinking: { type: 'disabled' } };
+      if (mode === 'enabled') return { thinking: { type: 'enabled' } };
+      return undefined;
+    }
+
+    case 'openrouter': {
+      const reasoning: Record<string, unknown> = {};
+      if (mode === 'disabled') reasoning.enabled = false;
+      if (mode === 'enabled') reasoning.enabled = true;
+      if (config.effort) reasoning.effort = config.effort;
+      if (budget !== undefined) reasoning.max_tokens = budget;
+      if (typeof config.excludeReasoningOutput === 'boolean') {
+        reasoning.exclude = config.excludeReasoningOutput;
+      }
+      return Object.keys(reasoning).length > 0 ? { reasoning } : undefined;
+    }
+
+    case 'hunyuan': {
+      let reasoningEffort: 'no_think' | 'low' | 'high' | undefined;
+      if (mode === 'disabled' || config.effort === 'none') {
+        reasoningEffort = 'no_think';
+      } else if (config.effort === 'high' || config.effort === 'max' || config.effort === 'xhigh') {
+        reasoningEffort = 'high';
+      } else if (
+        config.effort === 'low' ||
+        config.effort === 'medium' ||
+        config.effort === 'minimal'
+      ) {
+        reasoningEffort = 'low';
+      } else if (mode === 'enabled') {
+        reasoningEffort = capability?.defaultEffort === 'high' ? 'high' : 'low';
+      }
+      return reasoningEffort
+        ? { chat_template_kwargs: { reasoning_effort: reasoningEffort } }
+        : undefined;
+    }
+
+    case 'lemonade': {
+      if (!mode && budget === undefined) return undefined;
+      const chatTemplateKwargs: Record<string, unknown> = {
+        enable_thinking: mode === 'enabled',
+      };
+      if (mode === 'enabled' && budget !== undefined) {
+        chatTemplateKwargs.thinking_budget = budget;
+      }
+      return { chat_template_kwargs: chatTemplateKwargs };
+    }
+
+    default:
+      return undefined;
   }
-  return undefined;
 }
 
 const GROK_MODEL_ALIASES: Record<string, string> = {
@@ -1476,7 +1890,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
             | undefined;
           const thinking = thinkingCtx?.getStore?.() as ThinkingConfig | undefined;
           if (thinking && init?.body && typeof init.body === 'string') {
-            const extra = getCompatThinkingBodyParams(providerId, thinking);
+            const extra = getCompatThinkingBodyParams(providerId, normalizedModelId, thinking);
             if (extra) {
               try {
                 const body = JSON.parse(init.body);

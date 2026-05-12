@@ -2,7 +2,7 @@
  * Web Search API
  *
  * POST /api/web-search
- * Simple JSON request/response using Tavily search.
+ * Simple JSON request/response using the configured web-search provider.
  */
 
 import { NextRequest } from 'next/server';
@@ -25,7 +25,9 @@ import {
 } from '@/lib/server/search-query-builder';
 import { resolveScenarioManagedProviderRoute } from '@/lib/server/provider-scenario-routing';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
-import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
+import { formatSearchResultsAsContext, searchWeb } from '@/lib/web-search';
+import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
+import type { WebSearchProviderId } from '@/lib/web-search/types';
 
 const log = createLogger('WebSearch');
 
@@ -36,11 +38,15 @@ export async function POST(req: NextRequest) {
     const {
       query: requestQuery,
       pdfText,
+      providerId: requestProviderId,
       apiKey: clientApiKey,
+      baseUrl: clientBaseUrl,
     } = body as {
       query?: string;
       pdfText?: string;
+      providerId?: WebSearchProviderId;
       apiKey?: string;
+      baseUrl?: string;
     };
     query = requestQuery;
 
@@ -49,20 +55,24 @@ export async function POST(req: NextRequest) {
     }
 
     const auth = await getRequestAuth(req);
+    const providerId: WebSearchProviderId =
+      requestProviderId && WEB_SEARCH_PROVIDERS[requestProviderId] ? requestProviderId : 'tavily';
     const resolvedWebSearch =
       (await resolveScenarioManagedProviderRoute({
         auth,
         routeId: 'web-search',
         taskBucket: 'webSearch',
         family: 'webSearch',
-        requestedProviderId: 'tavily',
+        requestedProviderId: providerId,
         requestedSecret: clientApiKey || undefined,
+        requestedBaseUrl: clientBaseUrl || undefined,
       })) ||
       (await resolveGovernedProviderConfig({
         auth,
         family: 'webSearch',
-        providerId: 'tavily',
+        providerId,
         requestedSecret: clientApiKey || undefined,
+        requestedBaseUrl: clientBaseUrl || undefined,
       }));
 
     const boundedPdfText = pdfText?.slice(0, SEARCH_QUERY_REWRITE_EXCERPT_LENGTH);
@@ -97,7 +107,8 @@ export async function POST(req: NextRequest) {
       finalQueryLength: searchQuery.finalQueryLength,
     });
 
-    const result = await searchWithTavily({
+    const result = await searchWeb({
+      providerId: resolvedWebSearch.providerId as WebSearchProviderId,
       query: searchQuery.query,
       apiKey: resolvedWebSearch.apiKey,
       baseUrl: resolvedWebSearch.baseUrl,

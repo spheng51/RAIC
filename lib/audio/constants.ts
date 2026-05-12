@@ -36,6 +36,12 @@ import type {
   ASRProviderId,
   ASRProviderConfig,
 } from './types';
+import {
+  VOXCPM_AUTO_VOICE,
+  VOXCPM_AUTO_VOICE_ID,
+  VOXCPM_TTS_PROVIDER_ID,
+  VOXCPM_VLLM_MODEL_ID,
+} from './voxcpm';
 
 export const AUDIO_MODEL_REGISTRY_CHECKED_AT = '2026-05-10';
 
@@ -739,6 +745,23 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
     },
   },
 
+  'voxcpm-tts': {
+    id: VOXCPM_TTS_PROVIDER_ID,
+    name: 'VoxCPM2',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://127.0.0.1:8000',
+    icon: '/logos/voxcpm-icon.png',
+    models: [{ id: VOXCPM_VLLM_MODEL_ID, name: 'VoxCPM2' }],
+    defaultModelId: VOXCPM_VLLM_MODEL_ID,
+    voices: [VOXCPM_AUTO_VOICE],
+    supportedFormats: ['mp3', 'wav'],
+    speedRange: {
+      min: 0.5,
+      max: 2.0,
+      default: 1.0,
+    },
+  },
+
   'doubao-tts': {
     id: 'doubao-tts',
     name: '豆包 TTS 2.0（火山引擎）',
@@ -923,6 +946,32 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
     ],
     supportedFormats: ['browser'], // Browser native audio
     speedRange: { min: 0.1, max: 10.0, default: 1.0 },
+  },
+
+  'lemonade-tts': {
+    id: 'lemonade-tts',
+    name: 'Lemonade TTS',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://localhost:13305/v1',
+    icon: '/logos/lemonade.svg',
+    models: [{ id: 'kokoro-v1', name: 'Kokoro v1' }],
+    defaultModelId: 'kokoro-v1',
+    voices: [
+      { id: 'af_heart', name: 'Heart', language: 'en-US', gender: 'female' },
+      { id: 'af_alloy', name: 'Alloy', language: 'en-US', gender: 'female' },
+      { id: 'af_bella', name: 'Bella', language: 'en-US', gender: 'female' },
+      { id: 'am_adam', name: 'Adam', language: 'en-US', gender: 'male' },
+      { id: 'am_echo', name: 'Echo', language: 'en-US', gender: 'male' },
+      { id: 'bf_alice', name: 'Alice', language: 'en-GB', gender: 'female' },
+      { id: 'bm_daniel', name: 'Daniel', language: 'en-GB', gender: 'male' },
+      { id: 'zf_xiaobei', name: 'Xiaobei', language: 'zh-CN', gender: 'female' },
+      { id: 'zm_yunjian', name: 'Yunjian', language: 'zh-CN', gender: 'male' },
+      { id: 'jf_alpha', name: 'Alpha', language: 'ja-JP', gender: 'female' },
+      { id: 'ef_dora', name: 'Dora', language: 'es-ES', gender: 'female' },
+      { id: 'ff_siwis', name: 'Siwis', language: 'fr-FR', gender: 'female' },
+    ],
+    supportedFormats: ['wav'],
+    speedRange: { min: 0.25, max: 4.0, default: 1.0 },
   },
 };
 
@@ -1123,6 +1172,25 @@ export const ASR_PROVIDERS: Record<BuiltInASRProviderId, ASRProviderConfig> = {
     ],
     supportedFormats: ['webm'], // MediaRecorder format
   },
+
+  'lemonade-asr': {
+    id: 'lemonade-asr',
+    name: 'Lemonade ASR',
+    requiresApiKey: false,
+    defaultBaseUrl: 'http://localhost:13305/v1',
+    icon: '/logos/lemonade.svg',
+    models: [
+      { id: 'Whisper-Base', name: 'Whisper Base' },
+      { id: 'Whisper-Large-v3', name: 'Whisper Large v3' },
+      { id: 'Whisper-Large-v3-Turbo', name: 'Whisper Large v3 Turbo' },
+      { id: 'Whisper-Medium', name: 'Whisper Medium' },
+      { id: 'Whisper-Small', name: 'Whisper Small' },
+      { id: 'Whisper-Tiny', name: 'Whisper Tiny' },
+    ],
+    defaultModelId: 'Whisper-Base',
+    supportedLanguages: CUSTOM_ASR_DEFAULT_LANGUAGES,
+    supportedFormats: ['wav'],
+  },
 };
 
 /**
@@ -1134,9 +1202,11 @@ export const DEFAULT_TTS_VOICES: Record<BuiltInTTSProviderId, string> = {
   'azure-tts': 'zh-CN-XiaoxiaoNeural',
   'glm-tts': 'tongtong',
   'qwen-tts': 'Cherry',
+  'voxcpm-tts': VOXCPM_AUTO_VOICE_ID,
   'doubao-tts': 'zh_female_vv_uranus_bigtts',
   'elevenlabs-tts': 'EXAVITQu4vr4xnSDxMaL',
   'minimax-tts': 'female-yujie',
+  'lemonade-tts': 'af_heart',
   'browser-native-tts': 'default',
 };
 
@@ -1145,9 +1215,11 @@ export const DEFAULT_TTS_MODELS: Record<BuiltInTTSProviderId, string> = {
   'azure-tts': '',
   'glm-tts': 'glm-tts',
   'qwen-tts': 'qwen3-tts-flash',
+  'voxcpm-tts': VOXCPM_VLLM_MODEL_ID,
   'doubao-tts': '',
   'elevenlabs-tts': 'eleven_multilingual_v2',
   'minimax-tts': 'speech-2.8-hd',
+  'lemonade-tts': 'kokoro-v1',
   'browser-native-tts': '',
 };
 

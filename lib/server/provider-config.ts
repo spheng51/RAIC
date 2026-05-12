@@ -56,8 +56,14 @@ const LLM_ENV_MAP: Record<string, string> = {
   GLM: 'glm',
   SILICONFLOW: 'siliconflow',
   DOUBAO: 'doubao',
+  OPENROUTER: 'openrouter',
   GROK: 'grok',
+  TENCENT: 'tencent-hunyuan',
+  TENCENT_HUNYUAN: 'tencent-hunyuan',
+  XIAOMI: 'xiaomi',
+  MIMO: 'xiaomi',
   OLLAMA: 'ollama',
+  LEMONADE: 'lemonade',
   LMSTUDIO: 'lmstudio',
 };
 
@@ -66,22 +72,27 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_AZURE: 'azure-tts',
   TTS_GLM: 'glm-tts',
   TTS_QWEN: 'qwen-tts',
+  TTS_VOXCPM: 'voxcpm-tts',
   TTS_DOUBAO: 'doubao-tts',
   TTS_ELEVENLABS: 'elevenlabs-tts',
   TTS_MINIMAX: 'minimax-tts',
+  TTS_LEMONADE: 'lemonade-tts',
 };
 
 const ASR_ENV_MAP: Record<string, string> = {
   ASR_OPENAI: 'openai-whisper',
   ASR_QWEN: 'qwen-asr',
+  ASR_LEMONADE: 'lemonade-asr',
 };
 
 const PDF_ENV_MAP: Record<string, string> = {
   PDF_UNPDF: 'unpdf',
   PDF_MINERU: 'mineru',
+  PDF_MINERU_CLOUD: 'mineru-cloud',
 };
 
 const IMAGE_ENV_MAP: Record<string, string> = {
+  IMAGE_OPENAI: 'openai-image',
   IMAGE_SEEDREAM: 'seedream',
   IMAGE_QWEN_IMAGE: 'qwen-image',
   IMAGE_NANO_BANANA: 'nano-banana',
@@ -100,6 +111,7 @@ const VIDEO_ENV_MAP: Record<string, string> = {
 
 const WEB_SEARCH_ENV_MAP: Record<string, string> = {
   TAVILY: 'tavily',
+  BOCHA: 'bocha',
 };
 
 // ---------------------------------------------------------------------------
@@ -204,19 +216,48 @@ function loadEnvSection(
 // ---------------------------------------------------------------------------
 
 const DEFAULT_FILENAME = 'server-providers.yml';
+const OPENAI_IMAGE_PROVIDER_ID = 'openai-image';
 
 /** Cache keyed by YAML filename (empty string = default file). */
 const _configs: Map<string, ServerConfig> = new Map();
 
+function applyOpenAIImageFallback(
+  imageConfig: Record<string, ServerProviderEntry>,
+  yamlImageSection: Record<string, Partial<ServerProviderEntry>> | undefined,
+): Record<string, ServerProviderEntry> {
+  if (imageConfig[OPENAI_IMAGE_PROVIDER_ID]) return imageConfig;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return imageConfig;
+
+  const yamlOpenAIImage = yamlImageSection?.[OPENAI_IMAGE_PROVIDER_ID];
+  imageConfig[OPENAI_IMAGE_PROVIDER_ID] = {
+    apiKey,
+    baseUrl:
+      yamlOpenAIImage?.baseUrl || process.env.IMAGE_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL,
+    models: yamlOpenAIImage?.models,
+    proxy: yamlOpenAIImage?.proxy,
+  };
+  return imageConfig;
+}
+
 function buildConfig(yamlData: YamlData): ServerConfig {
+  const image = applyOpenAIImageFallback(loadEnvSection(IMAGE_ENV_MAP, yamlData.image), yamlData.image);
+
   return {
     providers: loadEnvSection(LLM_ENV_MAP, yamlData.providers, {
-      keylessProviders: new Set(['ollama', 'lmstudio']),
+      keylessProviders: new Set(['ollama', 'lmstudio', 'lemonade']),
     }),
-    tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts),
-    asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr),
-    pdf: loadEnvSection(PDF_ENV_MAP, yamlData.pdf, { requiresBaseUrl: true }),
-    image: loadEnvSection(IMAGE_ENV_MAP, yamlData.image),
+    tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts, {
+      keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts']),
+    }),
+    asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr, {
+      keylessProviders: new Set(['lemonade-asr']),
+    }),
+    pdf: loadEnvSection(PDF_ENV_MAP, yamlData.pdf, {
+      keylessProviders: new Set(['unpdf', 'mineru']),
+    }),
+    image,
     video: loadEnvSection(VIDEO_ENV_MAP, yamlData.video),
     webSearch: loadEnvSection(WEB_SEARCH_ENV_MAP, yamlData['web-search']),
   };
