@@ -20,7 +20,7 @@ import {
   BotOff,
   ChevronUp,
   Share2,
-  Sparkles,
+  Atom,
   X,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -78,6 +78,7 @@ const log = createLogger('Home');
 
 const WEB_SEARCH_STORAGE_KEY = 'webSearchEnabled';
 const LANGUAGE_STORAGE_KEY = 'generationLanguage';
+const INTERACTIVE_MODE_STORAGE_KEY = 'interactiveModeEnabled';
 const RECENT_OPEN_STORAGE_KEY = 'recentClassroomsOpen';
 
 interface FormState {
@@ -85,6 +86,7 @@ interface FormState {
   requirement: string;
   language: 'zh-CN' | 'en-US';
   webSearch: boolean;
+  interactiveMode: boolean;
 }
 
 interface ServerClassroomSummary {
@@ -94,6 +96,7 @@ interface ServerClassroomSummary {
   sceneCount: number;
   createdAt: string;
   updatedAt: string;
+  interactiveMode?: boolean;
 }
 
 interface ScheduledClassesApiBody {
@@ -108,6 +111,7 @@ const initialFormState: FormState = {
   requirement: '',
   language: 'zh-CN',
   webSearch: false,
+  interactiveMode: false,
 };
 
 function parseServerTimestamp(value: string) {
@@ -160,8 +164,10 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     try {
       const savedWebSearch = localStorage.getItem(WEB_SEARCH_STORAGE_KEY);
       const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      const savedInteractiveMode = localStorage.getItem(INTERACTIVE_MODE_STORAGE_KEY);
       const updates: Partial<FormState> = {};
       if (savedWebSearch === 'true') updates.webSearch = true;
+      if (savedInteractiveMode === 'true') updates.interactiveMode = true;
       if (savedLanguage === 'zh-CN' || savedLanguage === 'en-US') {
         updates.language = savedLanguage;
       } else {
@@ -226,6 +232,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           sceneCount: classroom.sceneCount,
           createdAt: parseServerTimestamp(classroom.createdAt),
           updatedAt: parseServerTimestamp(classroom.updatedAt),
+          interactiveMode: classroom.interactiveMode,
         }));
         setClassrooms(serverClassrooms);
         setThumbnails({});
@@ -311,6 +318,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       userNickname: userProfile.nickname || undefined,
       userBio: userProfile.bio || undefined,
       webSearch: form.webSearch || undefined,
+      interactiveMode: form.interactiveMode || undefined,
     };
     const scheduledClass = {
       title: normalized.value.title,
@@ -454,6 +462,9 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     try {
       if (field === 'webSearch') localStorage.setItem(WEB_SEARCH_STORAGE_KEY, String(value));
       if (field === 'language') localStorage.setItem(LANGUAGE_STORAGE_KEY, String(value));
+      if (field === 'interactiveMode') {
+        localStorage.setItem(INTERACTIVE_MODE_STORAGE_KEY, String(value));
+      }
       if (field === 'requirement') updateRequirementCache(value as string);
     } catch {
       /* ignore */
@@ -530,6 +541,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
+        interactiveMode: form.interactiveMode || undefined,
       };
 
       let pdfStorageKey: string | undefined;
@@ -843,17 +855,33 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                 />
               </div>
 
-              <div
-                className="hidden sm:inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-violet-200/70 bg-violet-50 px-2.5 text-[11px] font-semibold text-violet-700 shadow-sm dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300"
-                title={
-                  locale === 'zh-CN'
-                    ? 'Deep Interactive 模式可生成更丰富的互动课堂'
-                    : 'Deep Interactive mode can generate richer interactive classrooms'
-                }
-              >
-                <Sparkles className="size-3.5" />
-                Deep Interactive
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-pressed={form.interactiveMode}
+                    aria-label={t('toolbar.interactiveModeLabel')}
+                    onClick={() => updateForm('interactiveMode', !form.interactiveMode)}
+                    className={cn(
+                      'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold shadow-sm transition-colors',
+                      form.interactiveMode
+                        ? 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/45 dark:text-violet-200'
+                        : 'border-border/60 bg-background/80 text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {form.interactiveMode ? (
+                      <span className="absolute inset-0 rounded-lg border border-violet-300/70 opacity-60 motion-safe:animate-[interactive-mode-breathe_1.8s_ease-in-out_infinite] dark:border-violet-500/60" />
+                    ) : null}
+                    <Atom className="relative size-3.5" />
+                    <span className="relative hidden sm:inline">
+                      {t('toolbar.interactiveModeLabel')}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={8}>
+                  {t('toolbar.interactiveModeHint')}
+                </TooltipContent>
+              </Tooltip>
 
               {/* Voice input */}
               <SpeechButton
@@ -1495,6 +1523,20 @@ function ClassroomCard({
           >
             <Share2 className="size-3.5" />
           </Button>
+        ) : null}
+
+        {classroom.interactiveMode ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="absolute bottom-2 left-2 inline-flex size-7 items-center justify-center rounded-full bg-violet-600/90 text-white shadow-sm backdrop-blur">
+                <Atom className="size-3.5" />
+                <span className="sr-only">{t('toolbar.interactiveModeLabel')}</span>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+              {t('toolbar.interactiveModeLabel')}
+            </TooltipContent>
+          </Tooltip>
         ) : null}
 
         {/* Delete — top-right, only on hover */}

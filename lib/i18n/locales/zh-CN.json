@@ -45,6 +45,8 @@
     "webSearchOn": "已开启",
     "webSearchOff": "点击开启",
     "webSearchDesc": "生成前搜索网络获取最新资料，让内容更丰富准确",
+    "interactiveModeLabel": "深度互动",
+    "interactiveModeHint": "生成更多可操作的互动组件课堂",
     "webSearchProvider": "搜索引擎",
     "webSearchNoProvider": "请在设置中配置搜索引擎 API Key",
     "selectProvider": "选择模型服务商",
@@ -106,7 +108,11 @@
       "wb_clear": "清空白板",
       "wb_delete": "删除元素",
       "wb_close": "关闭白板",
-      "discussion": "课堂讨论"
+      "discussion": "课堂讨论",
+      "widget_highlight": "组件高亮",
+      "widget_setState": "组件状态",
+      "widget_annotation": "组件标注",
+      "widget_reveal": "组件揭示"
     },
     "status": {
       "inputStreaming": "等待中",

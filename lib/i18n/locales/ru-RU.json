@@ -45,6 +45,8 @@
     "webSearchOn": "Включено",
     "webSearchOff": "Нажмите для включения",
     "webSearchDesc": "Поиск актуальной информации в интернете перед генерацией",
+    "interactiveModeLabel": "Deep Interactive",
+    "interactiveModeHint": "Создавать интерактивные занятия с виджетами",
     "webSearchProvider": "Поисковый движок",
     "webSearchNoProvider": "Настройте API-ключ поиска в Настройках",
     "selectProvider": "Выбрать провайдера",
@@ -106,7 +108,11 @@
       "wb_clear": "Очистить доску",
       "wb_delete": "Удалить элемент",
       "wb_close": "Закрыть доску",
-      "discussion": "Обсуждение"
+      "discussion": "Обсуждение",
+      "widget_highlight": "Выделение виджета",
+      "widget_setState": "Состояние виджета",
+      "widget_annotation": "Аннотация виджета",
+      "widget_reveal": "Раскрытие виджета"
     },
     "status": {
       "inputStreaming": "Ожидание",

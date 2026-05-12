@@ -91,6 +91,7 @@ export interface ClassroomSummary {
   sceneCount: number;
   createdAt: string;
   updatedAt: string;
+  interactiveMode?: boolean;
 }
 
 type PersistedClassroomLike =
@@ -233,6 +234,7 @@ function summarizeClassroom(classroom: PersistedClassroomData): ClassroomSummary
     name: classroom.stage.name || 'Untitled classroom',
     description: classroom.stage.description,
     sceneCount: classroom.scenes.length,
+    interactiveMode: classroom.stage.interactiveMode,
     createdAt:
       classroom.createdAt || stageTimestampToIso(classroom.stage.createdAt, classroom.updatedAt),
     updatedAt:

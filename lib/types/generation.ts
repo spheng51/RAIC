@@ -7,6 +7,7 @@
 
 import type { ActionType } from './action';
 import type { MediaGenerationRequest } from '@/lib/media/types';
+import type { WidgetConfig, TeacherAction, WidgetType } from './widgets';
 
 // ==================== PDF Image Types ====================
 
@@ -68,6 +69,7 @@ export interface UserRequirements {
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
+  interactiveMode?: boolean; // Enable widget-first Deep Interactive generation
 }
 
 /**
@@ -86,6 +88,24 @@ export interface LegacyUserRequirements {
 }
 
 // ==================== Stage 1 Output: Scene Outlines (Simplified) ====================
+
+/**
+ * Widget outline configuration for interactive scenes.
+ */
+export interface WidgetOutline {
+  concept?: string;
+  keyVariables?: string[]; // simulation
+  diagramType?: 'flowchart' | 'mindmap' | 'hierarchy' | 'system'; // diagram
+  language?: 'python' | 'javascript' | 'typescript' | 'java' | 'cpp'; // code
+  gameType?: 'quiz' | 'puzzle' | 'strategy' | 'card' | 'action'; // game
+  visualizationType?: 'molecular' | 'solar' | 'anatomy' | 'geometry' | 'physics' | 'custom';
+  objects?: string[]; // visualization3d
+  interactions?: string[]; // visualization3d
+  challenge?: string; // game
+  playerControls?: string[]; // game
+  nodeCount?: number; // diagram
+  challengeType?: string; // code
+}
 
 /**
  * Simplified scene outline
@@ -112,13 +132,19 @@ export interface SceneOutline {
     difficulty: 'easy' | 'medium' | 'hard';
     questionTypes: ('single' | 'multiple' | 'text')[];
   };
-  // Interactive-specific config
+  /**
+   * @deprecated Use widgetType + widgetOutline for Deep Interactive scenes.
+   * Legacy interactive config remains supported for existing classrooms.
+   */
   interactiveConfig?: {
     conceptName: string;
     conceptOverview: string;
     designIdea: string;
     subject?: string;
   };
+  // Deep Interactive widget fields
+  widgetType?: WidgetType;
+  widgetOutline?: WidgetOutline;
   // PBL-specific config
   pblConfig?: {
     projectTopic: string;
@@ -225,6 +251,9 @@ export interface ScientificModel {
 export interface GeneratedInteractiveContent {
   html: string;
   scientificModel?: ScientificModel;
+  widgetType?: WidgetType;
+  widgetConfig?: WidgetConfig;
+  teacherActions?: TeacherAction[];
 }
 
 // ==================== Legacy Types (for compatibility) ====================

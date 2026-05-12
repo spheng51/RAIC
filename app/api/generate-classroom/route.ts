@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
       ...(rawBody.pdfFileName?.trim() ? { pdfFileName: rawBody.pdfFileName.trim() } : {}),
       ...(rawBody.language ? { language: rawBody.language } : {}),
       ...(rawBody.enableWebSearch != null ? { enableWebSearch: rawBody.enableWebSearch } : {}),
+      ...(rawBody.interactiveMode != null ? { interactiveMode: rawBody.interactiveMode } : {}),
       ...(rawBody.selectedModel?.trim() ? { selectedModel: rawBody.selectedModel.trim() } : {}),
       ...(rawBody.enableImageGeneration != null
         ? { enableImageGeneration: rawBody.enableImageGeneration }

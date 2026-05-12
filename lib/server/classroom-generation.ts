@@ -51,6 +51,7 @@ export interface GenerateClassroomInput {
   pdfFileName?: string;
   language?: string;
   enableWebSearch?: boolean;
+  interactiveMode?: boolean;
   selectedModel?: string;
   enableImageGeneration?: boolean;
   enableVideoGeneration?: boolean;
@@ -294,6 +295,7 @@ export async function generateClassroom(
   const requirements: UserRequirements = {
     requirement,
     language: lang,
+    interactiveMode: input.interactiveMode || undefined,
   };
   const pdfText = pdfContent?.text || undefined;
 
@@ -417,6 +419,7 @@ export async function generateClassroom(
       selectedModel: input.selectedModel || modelString,
     },
     languageDirective,
+    interactiveMode: input.interactiveMode || undefined,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     // For LLM-generated agents, embed full configs so the client can

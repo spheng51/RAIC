@@ -58,6 +58,7 @@ export interface StageRecord {
   sourceContext?: ClassroomSourceContext;
   currentSceneId?: string;
   agentIds?: string[]; // Agent IDs selected at creation time
+  interactiveMode?: boolean;
 }
 
 /**
