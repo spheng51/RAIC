@@ -70,6 +70,9 @@ export interface UserRequirements {
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
   interactiveMode?: boolean; // Enable widget-first Deep Interactive generation
+  creationMode?: 'course' | 'game-arcade'; // Course generation mode
+  gameTemplateId?: GameTemplateId; // Template arcade choice for classroom games
+  gameCreativeBrief?: string; // Game-specific creative direction
 }
 
 /**
@@ -98,6 +101,10 @@ export interface WidgetOutline {
   diagramType?: 'flowchart' | 'mindmap' | 'hierarchy' | 'system'; // diagram
   language?: 'python' | 'javascript' | 'typescript' | 'java' | 'cpp'; // code
   gameType?: 'quiz' | 'puzzle' | 'strategy' | 'card' | 'action'; // game
+  gameTemplateId?: GameTemplateId; // game
+  gameGoal?: string; // game
+  coreMechanic?: string; // game
+  difficultyCurve?: 'gentle' | 'standard' | 'spiky'; // game
   visualizationType?: 'molecular' | 'solar' | 'anatomy' | 'geometry' | 'physics' | 'custom';
   objects?: string[]; // visualization3d
   interactions?: string[]; // visualization3d
@@ -106,6 +113,14 @@ export interface WidgetOutline {
   nodeCount?: number; // diagram
   challengeType?: string; // code
 }
+
+export type GameTemplateId =
+  | 'physics-challenge'
+  | 'puzzle-lab'
+  | 'strategy-sim'
+  | 'card-match'
+  | 'code-quest'
+  | 'boss-review';
 
 /**
  * Simplified scene outline

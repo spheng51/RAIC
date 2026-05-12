@@ -49,6 +49,9 @@
     "interactiveModeOn": "On",
     "interactiveModeOff": "Off",
     "interactiveModeHint": "Generate hands-on widget-based classrooms",
+    "courseMode": "Course",
+    "gameMode": "Game",
+    "gameTemplateLabel": "Arcade template",
     "webSearchProvider": "Search engine",
     "webSearchNoProvider": "Configure search API key in Settings",
     "selectProvider": "Select provider",
@@ -525,6 +528,7 @@
     "pdfSizeLimit": "Supports PDF files up to 50MB",
     "generateFailed": "Failed to generate classroom, please try again",
     "requirementPlaceholder": "Tell me anything you want to learn, e.g.\n\"Teach me Python from scratch in 30 minutes\"\n\"Explain Fourier Transform on the whiteboard\"\n\"How to play the board game Avalon\"",
+    "gameRequirementPlaceholder": "Describe the classroom game you want, e.g.\n\"Turn orbital mechanics into a physics challenge\"\n\"Make a puzzle game for cellular respiration\"",
     "requirementRequired": "Please enter course requirements",
     "fileTooLarge": "File too large. Please select a PDF file smaller than 50MB"
   },

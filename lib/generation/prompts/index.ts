@@ -25,6 +25,7 @@ export {
 export const PROMPT_IDS = {
   REQUIREMENTS_TO_OUTLINES: 'requirements-to-outlines',
   INTERACTIVE_OUTLINES: 'interactive-outlines',
+  GAME_ARCADE_OUTLINES: 'game-arcade-outlines',
   WEB_SEARCH_QUERY_REWRITE: 'web-search-query-rewrite',
   SLIDE_CONTENT: 'slide-content',
   QUIZ_CONTENT: 'quiz-content',
