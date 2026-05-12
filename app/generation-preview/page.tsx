@@ -258,6 +258,7 @@ function GenerationPreviewContent() {
         ...(currentSession.pdfFileName ? { pdfFileName: currentSession.pdfFileName } : {}),
         language: currentSession.requirements.language,
         enableWebSearch: !!currentSession.requirements.webSearch,
+        interactiveMode: !!currentSession.requirements.interactiveMode,
         selectedModel: getCurrentModelConfig().modelString,
         enableImageGeneration: !!settings.imageGenerationEnabled,
         ...(settings.imageGenerationEnabled && settings.imageProviderId
@@ -629,6 +630,7 @@ function GenerationPreviewContent() {
         learningGoal: currentSession.requirements.requirement.trim() || undefined,
         language: currentSession.requirements.language || 'zh-CN',
         style: 'professional',
+        interactiveMode: currentSession.requirements.interactiveMode || undefined,
         sourceContext: {
           pdfAttached: Boolean(
             currentSession.pdfFileName || currentSession.pdfText || currentSession.pdfStorageKey,

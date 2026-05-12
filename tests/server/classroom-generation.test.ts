@@ -95,24 +95,27 @@ describe('generateClassroom', () => {
 
     generateSceneOutlinesFromRequirementsMock.mockResolvedValue({
       success: true,
-      data: [
-        {
-          id: 'outline-1',
-          type: 'quiz',
-          title: 'Scene 1',
-          description: 'Introduce the topic',
-          keyPoints: ['Point 1'],
-          order: 0,
-        },
-        {
-          id: 'outline-2',
-          type: 'quiz',
-          title: 'Scene 2',
-          description: 'Deepen the topic',
-          keyPoints: ['Point 2'],
-          order: 1,
-        },
-      ],
+      data: {
+        languageDirective: 'Respond in English.',
+        outlines: [
+          {
+            id: 'outline-1',
+            type: 'quiz',
+            title: 'Scene 1',
+            description: 'Introduce the topic',
+            keyPoints: ['Point 1'],
+            order: 0,
+          },
+          {
+            id: 'outline-2',
+            type: 'quiz',
+            title: 'Scene 2',
+            description: 'Deepen the topic',
+            keyPoints: ['Point 2'],
+            order: 1,
+          },
+        ],
+      },
     });
 
     executeScenesWithPolicyMock.mockImplementation(

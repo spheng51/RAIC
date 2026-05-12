@@ -1678,8 +1678,7 @@ function getCompatThinkingAdapter(providerId: ProviderId, modelId: string) {
     xiaomi: 'xiaomi',
     lemonade: 'lemonade',
   };
-  const adapter =
-    capability?.requestAdapter || fallbackAdapters[providerId as BuiltInProviderId];
+  const adapter = capability?.requestAdapter || fallbackAdapters[providerId as BuiltInProviderId];
 
   return { adapter, capability };
 }
@@ -1714,8 +1713,7 @@ function getCompatThinkingBodyParams(
       if (mode === 'enabled' || config.effort) {
         return {
           thinking: { type: 'enabled' },
-          reasoning_effort:
-            config.effort === 'max' || config.effort === 'xhigh' ? 'max' : 'high',
+          reasoning_effort: config.effort === 'max' || config.effort === 'xhigh' ? 'max' : 'high',
         };
       }
       return undefined;

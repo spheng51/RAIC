@@ -17,6 +17,10 @@ function getTomorrowScheduleParts() {
   };
 }
 
+async function readGenerationSession(page: import('@playwright/test').Page) {
+  return page.evaluate(() => JSON.parse(sessionStorage.getItem('generationSession') || 'null'));
+}
+
 test.describe('Home → Generation', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript((settings) => {
@@ -51,37 +55,81 @@ test.describe('Home → Generation', () => {
     expect(page.url()).toContain('/generation-preview');
   });
 
-  test(
-    'public demo schedule creates a class and keeps it after refresh',
-    async ({ page, mockApi }) => {
-      await mockApi.setupGenerationMocks();
+  test('Deep Interactive switch toggles, persists, and controls generation payload', async ({
+    page,
+  }) => {
+    await page.route('**/api/generate/scene-outlines-stream', (route) => {
+      route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Generation intentionally stopped by e2e toggle test' }),
+      });
+    });
 
-      const home = new HomePage(page);
-      await home.goto();
+    const home = new HomePage(page);
+    await home.goto();
 
-      const schedule = page.getByTestId('schedule-classes-box');
-      await expect(schedule).toBeVisible();
-      await expect(schedule.getByText('No classes scheduled')).toBeVisible();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(home.deepInteractiveState).toHaveText('Off');
 
-      const scheduleStart = getTomorrowScheduleParts();
-      await schedule.getByRole('button', { name: 'Add' }).click();
-      await page.getByLabel('Class title').fill('Design critique');
-      await page.getByLabel('Date').fill(scheduleStart.date);
-      await page.getByLabel('Time').fill(scheduleStart.time);
-      await page.getByLabel('Duration').fill('45');
-      await Promise.all([
-        page.waitForURL(/\/classroom\//),
-        page.getByRole('button', { name: 'Create' }).click(),
-      ]);
+    await home.deepInteractiveSwitch.click();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(home.deepInteractiveState).toHaveText('On');
 
-      await home.goto();
-      await expect(
-        page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
-      ).toBeVisible({ timeout: 10_000 });
-      await page.reload();
-      await expect(
-        page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
-      ).toBeVisible();
-    },
-  );
+    await page.reload();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(home.deepInteractiveState).toHaveText('On');
+
+    await home.fillRequirement('Build an orbital mechanics lab');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const enabledSession = await readGenerationSession(page);
+    expect(enabledSession.requirements.interactiveMode).toBe(true);
+
+    await home.goto();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await home.deepInteractiveSwitch.click();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(home.deepInteractiveState).toHaveText('Off');
+
+    await home.fillRequirement('Build a standard lecture');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const disabledSession = await readGenerationSession(page);
+    expect(disabledSession.requirements.interactiveMode).toBeUndefined();
+  });
+
+  test('public demo schedule creates a class and keeps it after refresh', async ({
+    page,
+    mockApi,
+  }) => {
+    await mockApi.setupGenerationMocks();
+
+    const home = new HomePage(page);
+    await home.goto();
+
+    const schedule = page.getByTestId('schedule-classes-box');
+    await expect(schedule).toBeVisible();
+    await expect(schedule.getByText('No classes scheduled')).toBeVisible();
+
+    const scheduleStart = getTomorrowScheduleParts();
+    await schedule.getByRole('button', { name: 'Add' }).click();
+    await page.getByLabel('Class title').fill('Design critique');
+    await page.getByLabel('Date').fill(scheduleStart.date);
+    await page.getByLabel('Time').fill(scheduleStart.time);
+    await page.getByLabel('Duration').fill('45');
+    await Promise.all([
+      page.waitForURL(/\/classroom\//),
+      page.getByRole('button', { name: 'Create' }).click(),
+    ]);
+
+    await home.goto();
+    await expect(
+      page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.reload();
+    await expect(
+      page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
+    ).toBeVisible();
+  });
 });

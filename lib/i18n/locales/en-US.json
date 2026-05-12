@@ -45,6 +45,10 @@
     "webSearchOn": "Enabled",
     "webSearchOff": "Click to enable",
     "webSearchDesc": "Search the web for up-to-date information before generation",
+    "interactiveModeLabel": "Deep Interactive",
+    "interactiveModeOn": "On",
+    "interactiveModeOff": "Off",
+    "interactiveModeHint": "Generate hands-on widget-based classrooms",
     "webSearchProvider": "Search engine",
     "webSearchNoProvider": "Configure search API key in Settings",
     "selectProvider": "Select provider",
@@ -106,7 +110,11 @@
       "wb_clear": "Clear Whiteboard",
       "wb_delete": "Delete Element",
       "wb_close": "Close Whiteboard",
-      "discussion": "Discussion"
+      "discussion": "Discussion",
+      "widget_highlight": "Widget Highlight",
+      "widget_setState": "Widget State",
+      "widget_annotation": "Widget Annotation",
+      "widget_reveal": "Widget Reveal"
     },
     "status": {
       "inputStreaming": "Waiting",

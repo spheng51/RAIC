@@ -181,6 +181,18 @@
   }
 }
 
+@keyframes interactive-mode-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.04);
+  }
+}
+
 /* Hide scrollbar by default, show on hover */
 @utility scrollbar-hide {
   &::-webkit-scrollbar {

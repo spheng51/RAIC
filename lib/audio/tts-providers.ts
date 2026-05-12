@@ -287,33 +287,45 @@ async function generateVoxCPMTTS(
 
   const response =
     backend === 'nano-vllm'
-      ? await postVoxCPMNanoVLLM(baseUrl, {
-          targetText,
-          promptText: options.promptText,
-          cfgValue,
-          referenceAudioBase64: options.referenceAudioBase64,
-          referenceAudioMimeType: options.referenceAudioMimeType,
-          referenceAudioName: options.referenceAudioName,
-        }, config.apiKey)
-      : backend === 'python-api'
-        ? await postVoxCPMPythonAPI(baseUrl, {
+      ? await postVoxCPMNanoVLLM(
+          baseUrl,
+          {
             targetText,
             promptText: options.promptText,
             cfgValue,
-            inferenceTimesteps,
-            normalize: options.normalize ?? false,
-            denoise: options.denoise ?? false,
             referenceAudioBase64: options.referenceAudioBase64,
             referenceAudioMimeType: options.referenceAudioMimeType,
             referenceAudioName: options.referenceAudioName,
-          }, config.apiKey)
-        : await postVoxCPMVLLMOmni(baseUrl, {
-            targetText,
-            promptText: options.promptText,
-            referenceAudioBase64: options.referenceAudioBase64,
-            referenceAudioMimeType: options.referenceAudioMimeType,
-            referenceAudioName: options.referenceAudioName,
-          }, config);
+          },
+          config.apiKey,
+        )
+      : backend === 'python-api'
+        ? await postVoxCPMPythonAPI(
+            baseUrl,
+            {
+              targetText,
+              promptText: options.promptText,
+              cfgValue,
+              inferenceTimesteps,
+              normalize: options.normalize ?? false,
+              denoise: options.denoise ?? false,
+              referenceAudioBase64: options.referenceAudioBase64,
+              referenceAudioMimeType: options.referenceAudioMimeType,
+              referenceAudioName: options.referenceAudioName,
+            },
+            config.apiKey,
+          )
+        : await postVoxCPMVLLMOmni(
+            baseUrl,
+            {
+              targetText,
+              promptText: options.promptText,
+              referenceAudioBase64: options.referenceAudioBase64,
+              referenceAudioMimeType: options.referenceAudioMimeType,
+              referenceAudioName: options.referenceAudioName,
+            },
+            config,
+          );
 
   if (!response.ok) {
     throw new Error(`VoxCPM TTS API error: ${await readTTSApiError(response)}`);

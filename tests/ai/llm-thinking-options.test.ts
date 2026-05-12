@@ -5,7 +5,9 @@ const aiMock = vi.hoisted(() => ({
   streamText: vi.fn(),
 }));
 
-const runMock = vi.hoisted(() => vi.fn((_thinking: unknown, callback: () => unknown) => callback()));
+const runMock = vi.hoisted(() =>
+  vi.fn((_thinking: unknown, callback: () => unknown) => callback()),
+);
 
 vi.mock('ai', () => ({
   generateText: aiMock.generateText,

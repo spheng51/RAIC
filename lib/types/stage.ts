@@ -3,6 +3,7 @@ import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
 import type { GenerationCompletionStatus, GenerationWarning } from '@/lib/types/generation';
+import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widgets';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
@@ -100,6 +101,11 @@ export interface Stage {
   generationWarnings?: GenerationWarning[];
   sharedSimulation?: SharedSimulation;
   liveMeeting?: ClassroomLiveMeeting;
+  /**
+   * True when this classroom was generated with Deep Interactive Mode enabled.
+   * Absent on legacy classrooms and regular-mode generations.
+   */
+  interactiveMode?: boolean;
 }
 
 /**
@@ -180,6 +186,9 @@ export interface InteractiveContent {
   url: string; // URL of the interactive page
   // Optional: embedded HTML content
   html?: string;
+  widgetType?: WidgetType;
+  widgetConfig?: WidgetConfig;
+  teacherActions?: TeacherAction[];
 }
 
 /**

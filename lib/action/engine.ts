@@ -28,11 +28,17 @@ import type {
   WbDrawTableAction,
   WbDeleteAction,
   WbDrawLineAction,
+  WidgetAnnotationAction,
+  WidgetHighlightAction,
+  WidgetRevealAction,
+  WidgetSetStateAction,
 } from '@/lib/types/action';
 import katex from 'katex';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ActionEngine');
+
+export type WidgetMessageCallback = (type: string, payload: Record<string, unknown>) => void;
 
 // ==================== SVG Paths for Shapes ====================
 
@@ -57,12 +63,22 @@ export class ActionEngine {
   private stageStore: StageStore;
   private stageAPI: ReturnType<typeof createStageAPI>;
   private audioPlayer: AudioPlayer | null;
+  private widgetMessageCallback: WidgetMessageCallback | null;
   private effectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(stageStore: StageStore, audioPlayer?: AudioPlayer) {
+  constructor(
+    stageStore: StageStore,
+    audioPlayer?: AudioPlayer,
+    widgetMessageCallback?: WidgetMessageCallback | null,
+  ) {
     this.stageStore = stageStore;
     this.stageAPI = createStageAPI(stageStore);
     this.audioPlayer = audioPlayer ?? null;
+    this.widgetMessageCallback = widgetMessageCallback ?? null;
+  }
+
+  setWidgetMessageCallback(callback: WidgetMessageCallback | null): void {
+    this.widgetMessageCallback = callback;
   }
 
   /** Clean up timers when the engine is no longer needed */
@@ -122,6 +138,14 @@ export class ActionEngine {
       case 'discussion':
         // Discussion lifecycle is managed externally via engine callbacks
         return;
+      case 'widget_highlight':
+        return this.executeWidgetHighlight(action);
+      case 'widget_setState':
+        return this.executeWidgetSetState(action);
+      case 'widget_annotation':
+        return this.executeWidgetAnnotation(action);
+      case 'widget_reveal':
+        return this.executeWidgetReveal(action);
     }
   }
 
@@ -529,5 +553,36 @@ export class ActionEngine {
     useCanvasStore.getState().setWhiteboardOpen(false);
     // Wait for close animation (500ms ease-out tween)
     await delay(700);
+  }
+
+  private sendWidgetMessage(type: string, payload: Record<string, unknown>): void {
+    if (!this.widgetMessageCallback) {
+      log.warn(`Widget message callback not set, cannot send: ${type}`);
+      return;
+    }
+    this.widgetMessageCallback(type, payload);
+  }
+
+  private async executeWidgetHighlight(action: WidgetHighlightAction): Promise<void> {
+    this.sendWidgetMessage('HIGHLIGHT_ELEMENT', { target: action.target });
+    await delay(300);
+  }
+
+  private async executeWidgetSetState(action: WidgetSetStateAction): Promise<void> {
+    this.sendWidgetMessage('SET_WIDGET_STATE', { state: action.state });
+    await delay(300);
+  }
+
+  private async executeWidgetAnnotation(action: WidgetAnnotationAction): Promise<void> {
+    this.sendWidgetMessage('ANNOTATE_ELEMENT', {
+      target: action.target,
+      content: action.content,
+    });
+    await delay(300);
+  }
+
+  private async executeWidgetReveal(action: WidgetRevealAction): Promise<void> {
+    this.sendWidgetMessage('REVEAL_ELEMENT', { target: action.target });
+    await delay(300);
   }
 }

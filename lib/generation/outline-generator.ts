@@ -93,8 +93,11 @@ export async function generateSceneOutlinesFromRequirements(
   const mediaEnabled = imageEnabled || videoEnabled;
   const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
-  // Use simplified prompt variables
-  const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
+  // Use the widget-first outline prompt only when Deep Interactive is explicitly enabled.
+  const outlinePromptId = requirements.interactiveMode
+    ? PROMPT_IDS.INTERACTIVE_OUTLINES
+    : PROMPT_IDS.REQUIREMENTS_TO_OUTLINES;
+  const prompts = buildPrompt(outlinePromptId, {
     // New simplified variables
     requirement: requirements.requirement,
     language: requirements.language,
@@ -184,16 +187,17 @@ export async function generateSceneOutlinesFromRequirements(
 
 /**
  * Apply type fallbacks for outlines that can't be generated as their declared type.
- * - interactive without interactiveConfig → slide
+ * - interactive without either legacy interactiveConfig or widget metadata → slide
  * - pbl without pblConfig or languageModel → slide
  */
 export function applyOutlineFallbacks(
   outline: SceneOutline,
   hasLanguageModel: boolean,
 ): SceneOutline {
-  if (outline.type === 'interactive' && !outline.interactiveConfig) {
+  const hasWidgetMetadata = Boolean(outline.widgetType && outline.widgetOutline);
+  if (outline.type === 'interactive' && !outline.interactiveConfig && !hasWidgetMetadata) {
     log.warn(
-      `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
+      `Interactive outline "${outline.title}" missing interactive config, falling back to slide`,
     );
     return { ...outline, type: 'slide' };
   }
