@@ -302,5 +302,13 @@ pdf:
 
       expect(providers.mineru).toBeUndefined();
     });
+
+    it('excludes MinerU env config when only API_KEY is set (no baseUrl)', async () => {
+      vi.stubEnv('PDF_MINERU_API_KEY', 'sk-fake');
+      const { getServerPDFProviders } = await import('@/lib/server/provider-config');
+      const providers = getServerPDFProviders();
+
+      expect(providers.mineru).toBeUndefined();
+    });
   });
 });

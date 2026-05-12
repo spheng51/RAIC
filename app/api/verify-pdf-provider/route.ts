@@ -67,13 +67,19 @@ export async function POST(req: NextRequest) {
         signal: AbortSignal.timeout(10000),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (!response.ok) {
         const text = await response.text().catch(() => '');
+        const message =
+          response.status === 401 || response.status === 403
+            ? `Authentication failed: ${text || response.statusText}`
+            : `MinerU Cloud verification failed (${response.status}): ${
+                text || response.statusText
+              }`;
         return apiErrorWithRequestSession(
           req,
           'INTERNAL_ERROR',
           500,
-          `Authentication failed: ${text || response.statusText}`,
+          message,
         );
       }
 

@@ -152,15 +152,21 @@ function loadEnvSection(
   {
     requiresBaseUrl = false,
     keylessProviders = new Set<string>(),
-  }: { requiresBaseUrl?: boolean; keylessProviders?: Set<string> } = {},
+    baseUrlRequiredProviders = new Set<string>(),
+  }: {
+    requiresBaseUrl?: boolean;
+    keylessProviders?: Set<string>;
+    baseUrlRequiredProviders?: Set<string>;
+  } = {},
 ): Record<string, ServerProviderEntry> {
   const result: Record<string, ServerProviderEntry> = {};
 
   // First, add everything from YAML as defaults
   if (yamlSection) {
     for (const [id, entry] of Object.entries(yamlSection)) {
+      const providerRequiresBaseUrl = requiresBaseUrl || baseUrlRequiredProviders.has(id);
       if (
-        requiresBaseUrl
+        providerRequiresBaseUrl
           ? !!entry?.baseUrl
           : entry?.apiKey || (entry?.baseUrl && keylessProviders.has(id))
       ) {
@@ -195,12 +201,14 @@ function loadEnvSection(
     }
 
     // Activate on API key, or base URL alone for keyless providers (e.g. Ollama, LM Studio)
+    const providerRequiresBaseUrl = requiresBaseUrl || baseUrlRequiredProviders.has(providerId);
     if (
-      requiresBaseUrl
+      providerRequiresBaseUrl
         ? !envBaseUrl
         : !(envApiKey || (envBaseUrl && keylessProviders.has(providerId)))
-    )
+    ) {
       continue;
+    }
     result[providerId] = {
       apiKey: envApiKey || '',
       baseUrl: envBaseUrl,
@@ -256,6 +264,7 @@ function buildConfig(yamlData: YamlData): ServerConfig {
     }),
     pdf: loadEnvSection(PDF_ENV_MAP, yamlData.pdf, {
       keylessProviders: new Set(['unpdf', 'mineru']),
+      baseUrlRequiredProviders: new Set(['mineru']),
     }),
     image,
     video: loadEnvSection(VIDEO_ENV_MAP, yamlData.video),

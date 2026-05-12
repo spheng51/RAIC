@@ -25,6 +25,7 @@ import {
 } from '@/lib/server/search-query-builder';
 import { resolveScenarioManagedProviderRoute } from '@/lib/server/provider-scenario-routing';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 import { formatSearchResultsAsContext, searchWeb } from '@/lib/web-search';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
@@ -57,6 +58,13 @@ export async function POST(req: NextRequest) {
     const auth = await getRequestAuth(req);
     const providerId: WebSearchProviderId =
       requestProviderId && WEB_SEARCH_PROVIDERS[requestProviderId] ? requestProviderId : 'tavily';
+    if (clientBaseUrl && process.env.NODE_ENV === 'production') {
+      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
+      if (ssrfError) {
+        return apiErrorWithRequestSession(req, 'INVALID_URL', 403, ssrfError);
+      }
+    }
+
     const resolvedWebSearch =
       (await resolveScenarioManagedProviderRoute({
         auth,

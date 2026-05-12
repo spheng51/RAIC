@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const buildSearchQueryMock = vi.fn();
@@ -146,6 +146,10 @@ const authContext = {
 };
 
 describe('provider and verification routes', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.resetModules();
     appendAuditLogMock.mockReset();
@@ -519,6 +523,25 @@ describe('provider and verification routes', () => {
     });
   });
 
+  it('fails MinerU Cloud verification on non-success responses', async () => {
+    fetchMock.mockResolvedValue(new Response('rate limited', { status: 429 }));
+
+    const { POST } = await import('@/app/api/verify-pdf-provider/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-pdf-provider', {
+        method: 'POST',
+        body: JSON.stringify({
+          providerId: 'mineru-cloud',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.errorCode).toBe('INTERNAL_ERROR');
+    expect(body.error).toContain('MinerU Cloud verification failed (429)');
+  });
+
   it('rejects video-provider verification when no API key is available', async () => {
     resolveGovernedProviderConfigMock.mockResolvedValue({
       apiKey: '',
@@ -732,6 +755,30 @@ describe('provider and verification routes', () => {
 
     expect(response.status).toBe(400);
     expect(body.errorCode).toBe('MISSING_REQUIRED_FIELD');
+  });
+
+  it('rejects unsafe web-search client base URLs before provider resolution in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    validateUrlForSSRFMock.mockResolvedValueOnce('Local/private network URLs are not allowed');
+
+    const { POST } = await import('@/app/api/web-search/route');
+    const response = await POST(
+      new NextRequest('https://open-raic.com/api/web-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'renewable energy',
+          apiKey: 'client-key',
+          baseUrl: 'http://127.0.0.1:8123',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.errorCode).toBe('INVALID_URL');
+    expect(validateUrlForSSRFMock).toHaveBeenCalledWith('http://127.0.0.1:8123');
+    expect(resolveGovernedProviderConfigMock).not.toHaveBeenCalled();
+    expect(searchWebMock).not.toHaveBeenCalled();
   });
 
   it('routes web search through the scenario-managed provider and emits audit telemetry', async () => {
