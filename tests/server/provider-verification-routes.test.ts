@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const buildSearchQueryMock = vi.fn();
@@ -17,7 +17,7 @@ const getServerWebSearchProvidersMock = vi.fn();
 const resolveGovernedProviderConfigMock = vi.fn();
 const resolveModelFromHeadersMock = vi.fn();
 const resolveModelMock = vi.fn();
-const searchWithTavilyMock = vi.fn();
+const searchWebMock = vi.fn();
 const testImageConnectivityMock = vi.fn();
 const testVideoConnectivityMock = vi.fn();
 const toGovernedProviderApiErrorResponseMock = vi.fn();
@@ -121,9 +121,9 @@ vi.mock('@/lib/server/ssrf-guard', () => ({
   validateUrlForSSRF: validateUrlForSSRFMock,
 }));
 
-vi.mock('@/lib/web-search/tavily', () => ({
+vi.mock('@/lib/web-search', () => ({
   formatSearchResultsAsContext: formatSearchResultsAsContextMock,
-  searchWithTavily: searchWithTavilyMock,
+  searchWeb: searchWebMock,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -146,6 +146,10 @@ const authContext = {
 };
 
 describe('provider and verification routes', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.resetModules();
     appendAuditLogMock.mockReset();
@@ -164,7 +168,7 @@ describe('provider and verification routes', () => {
     resolveGovernedProviderConfigMock.mockReset();
     resolveModelFromHeadersMock.mockReset();
     resolveModelMock.mockReset();
-    searchWithTavilyMock.mockReset();
+    searchWebMock.mockReset();
     testImageConnectivityMock.mockReset();
     testVideoConnectivityMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
@@ -519,6 +523,25 @@ describe('provider and verification routes', () => {
     });
   });
 
+  it('fails MinerU Cloud verification on non-success responses', async () => {
+    fetchMock.mockResolvedValue(new Response('rate limited', { status: 429 }));
+
+    const { POST } = await import('@/app/api/verify-pdf-provider/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-pdf-provider', {
+        method: 'POST',
+        body: JSON.stringify({
+          providerId: 'mineru-cloud',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.errorCode).toBe('INTERNAL_ERROR');
+    expect(body.error).toContain('MinerU Cloud verification failed (429)');
+  });
+
   it('rejects video-provider verification when no API key is available', async () => {
     resolveGovernedProviderConfigMock.mockResolvedValue({
       apiKey: '',
@@ -734,6 +757,30 @@ describe('provider and verification routes', () => {
     expect(body.errorCode).toBe('MISSING_REQUIRED_FIELD');
   });
 
+  it('rejects unsafe web-search client base URLs before provider resolution in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    validateUrlForSSRFMock.mockResolvedValueOnce('Local/private network URLs are not allowed');
+
+    const { POST } = await import('@/app/api/web-search/route');
+    const response = await POST(
+      new NextRequest('https://open-raic.com/api/web-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'renewable energy',
+          apiKey: 'client-key',
+          baseUrl: 'http://127.0.0.1:8123',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.errorCode).toBe('INVALID_URL');
+    expect(validateUrlForSSRFMock).toHaveBeenCalledWith('http://127.0.0.1:8123');
+    expect(resolveGovernedProviderConfigMock).not.toHaveBeenCalled();
+    expect(searchWebMock).not.toHaveBeenCalled();
+  });
+
   it('routes web search through the scenario-managed provider and emits audit telemetry', async () => {
     getProviderScenarioProfileMock.mockReturnValue({
       id: 'teacher-differentiation-v1',
@@ -749,7 +796,7 @@ describe('provider and verification routes', () => {
       rewriteAttempted: false,
       finalQueryLength: 16,
     });
-    searchWithTavilyMock.mockResolvedValue({
+    searchWebMock.mockResolvedValue({
       answer: 'Search answer',
       query: 'renewable energy',
       responseTime: 123,
@@ -769,6 +816,12 @@ describe('provider and verification routes', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(searchWebMock).toHaveBeenCalledWith({
+      providerId: 'tavily',
+      query: 'renewable energy',
+      apiKey: 'server-key',
+      baseUrl: 'https://provider.example.com',
+    });
     expect(resolveGovernedProviderConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
         family: 'webSearch',
@@ -850,7 +903,7 @@ describe('provider and verification routes', () => {
 
     expect(response.status).toBe(400);
     expect(body.errorCode).toBe('MISSING_API_KEY');
-    expect(searchWithTavilyMock).not.toHaveBeenCalled();
+    expect(searchWebMock).not.toHaveBeenCalled();
     expect(appendAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'provider_scenario.route_denied',
@@ -877,7 +930,7 @@ describe('provider and verification routes', () => {
       rewriteAttempted: true,
       finalQueryLength: 16,
     });
-    searchWithTavilyMock.mockResolvedValue({
+    searchWebMock.mockResolvedValue({
       answer: 'Search answer',
       query: 'renewable energy',
       responseTime: 123,

@@ -101,6 +101,7 @@ You are an educational content designer. Generate well-structured slide componen
 
 ---
 
+{{#if imageElementEnabled}}
 ### ImageElement
 
 ```json
@@ -129,6 +130,8 @@ You are an educational content designer. Generate well-structured slide componen
 - **When dimensions are NOT provided**: Use 4:3 default (width:height ≈ 1.33)
 - Ensure the image stays within canvas margins (50px from each edge)
 
+{{/if}}
+{{#if generatedImageEnabled}}
 #### AI-Generated Images (gen*img*\*)
 
 If the scene outline includes `mediaGenerations`, you may also use generated image placeholders:
@@ -139,8 +142,10 @@ If the scene outline includes `mediaGenerations`, you may also use generated ima
 - Default aspect ratio for generated images: 16:9 (width:height = 16:9)
 - For generated images, calculate: `height = width / 1.778` (16:9 ratio) unless a different ratio is specified
 
+{{/if}}
 ---
 
+{{#if generatedVideoEnabled}}
 ### VideoElement
 
 ```json
@@ -168,6 +173,7 @@ If the scene outline includes `mediaGenerations`, you may also use generated ima
 
 ---
 
+{{/if}}
 ### ShapeElement
 
 ```json

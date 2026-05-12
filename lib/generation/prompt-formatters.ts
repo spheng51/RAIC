@@ -139,3 +139,17 @@ export function buildVisionUserContent(
   }
   return parts;
 }
+
+/**
+ * Build language instruction text from course-level directive and optional
+ * per-scene note. Downstream prompts use this instead of inferring language
+ * independently from titles or key points.
+ */
+export function buildLanguageText(directive?: string, sceneNote?: string): string {
+  if (!directive && !sceneNote) return '';
+  let text = directive || '';
+  if (sceneNote) {
+    text += (text ? '\n\n' : '') + `Additional language note for this scene: ${sceneNote}`;
+  }
+  return text;
+}

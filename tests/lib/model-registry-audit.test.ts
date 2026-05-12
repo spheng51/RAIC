@@ -43,6 +43,9 @@ describe('model registry audit 2026-05-10', () => {
     expect(ids(TTS_PROVIDERS['elevenlabs-tts'].models)).toEqual(
       expect.arrayContaining(['eleven_v3', 'eleven_turbo_v2_5', 'eleven_multilingual_v2']),
     );
+    expect(ids(TTS_PROVIDERS['voxcpm-tts'].models)).toContain('voxcpm2');
+    expect(ids(TTS_PROVIDERS['lemonade-tts'].models)).toContain('kokoro-v1');
+    expect(ids(IMAGE_PROVIDERS['openai-image'].models)).toContain('gpt-image-2');
     expect(ids(IMAGE_PROVIDERS['grok-image'].models)).toEqual(
       expect.arrayContaining(['grok-imagine-image-quality', 'grok-imagine-image']),
     );
@@ -57,6 +60,8 @@ describe('model registry audit 2026-05-10', () => {
   it('keeps non-model provider registries present for settings UI smoke', () => {
     expect(PDF_PROVIDERS.unpdf).toBeDefined();
     expect(PDF_PROVIDERS.mineru).toBeDefined();
+    expect(PDF_PROVIDERS['mineru-cloud']).toBeDefined();
     expect(WEB_SEARCH_PROVIDERS.tavily.defaultBaseUrl).toBe('https://api.tavily.com');
+    expect(WEB_SEARCH_PROVIDERS.bocha.defaultBaseUrl).toBe('https://api.bocha.cn');
   });
 });

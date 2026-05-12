@@ -25,11 +25,13 @@ import type { StageStore } from '@/lib/api/stage-api';
 import { createStageAPI } from '@/lib/api/stage-api';
 import { generatePBLContent } from '@/lib/pbl/generate-pbl';
 import { buildPrompt, PROMPT_IDS } from './prompts';
+import { DEFAULT_LANGUAGE_DIRECTIVE } from './outline-generator';
 import { postProcessInteractiveHtml } from './interactive-post-processor';
 import { parseActionsFromStructuredOutput } from './action-parser';
 import { parseJsonResponse } from './json-repair';
 import {
   buildCourseContext,
+  buildLanguageText,
   formatAgentsForPrompt,
   formatTeacherPersonaForPrompt,
   formatImageDescription,
@@ -50,6 +52,25 @@ import { executeScenesWithPolicy } from './scene-executor';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
+export interface SceneContentOptions {
+  assignedImages?: PdfImage[];
+  imageMapping?: ImageMapping;
+  languageModel?: LanguageModel;
+  visionEnabled?: boolean;
+  generatedMediaMapping?: ImageMapping;
+  agents?: AgentInfo[];
+  adaptivePrompt?: string;
+  languageDirective?: string;
+}
+
+export interface SceneActionsOptions {
+  ctx?: SceneGenerationContext;
+  agents?: AgentInfo[];
+  userProfile?: string;
+  adaptivePrompt?: string;
+  languageDirective?: string;
+}
+
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
 
 export interface SceneGenerationExecutionContext {
@@ -64,6 +85,7 @@ export interface SceneGenerationExecutionContext {
   ctx?: SceneGenerationContext;
   userProfile?: string;
   adaptivePrompt?: string;
+  languageDirective?: string;
 }
 
 function sanitizeSceneFailureMessage(message: string): string {
@@ -139,6 +161,7 @@ export async function generateFullScenes(
   store: StageStore,
   aiCall: AICallFn,
   callbacks?: GenerationCallbacks,
+  languageDirective?: string,
 ): Promise<GenerationResult<SceneGenerationSummary>> {
   const api = createStageAPI(store);
   const totalScenes = sceneOutlines.length;
@@ -159,6 +182,7 @@ export async function generateFullScenes(
       context: {
         api,
         aiCall,
+        languageDirective,
       } satisfies SceneGenerationExecutionContext,
     })),
     executeScene: async (item, attempt) =>
@@ -217,13 +241,16 @@ export async function generateSingleSceneOutcome(
     content = await generateSceneContent(
       outline,
       context.aiCall,
-      context.assignedImages,
-      context.imageMapping,
-      context.languageModel,
-      context.visionEnabled,
-      context.generatedMediaMapping,
-      context.agents,
-      context.adaptivePrompt,
+      {
+        assignedImages: context.assignedImages,
+        imageMapping: context.imageMapping,
+        languageModel: context.languageModel,
+        visionEnabled: context.visionEnabled,
+        generatedMediaMapping: context.generatedMediaMapping,
+        agents: context.agents,
+        adaptivePrompt: context.adaptivePrompt,
+        languageDirective: context.languageDirective,
+      },
     );
   } catch (error) {
     const failure = classifySceneFailure(error);
@@ -260,10 +287,13 @@ export async function generateSingleSceneOutcome(
       outline,
       content,
       context.aiCall,
-      context.ctx,
-      context.agents,
-      context.userProfile,
-      context.adaptivePrompt,
+      {
+        ctx: context.ctx,
+        agents: context.agents,
+        userProfile: context.userProfile,
+        adaptivePrompt: context.adaptivePrompt,
+        languageDirective: context.languageDirective,
+      },
     );
   } catch (error) {
     const failure = classifySceneFailure(error);
@@ -328,7 +358,7 @@ export async function generateSingleSceneOutcome(
 export async function generateSceneContent(
   outline: SceneOutline,
   aiCall: AICallFn,
-  assignedImages?: PdfImage[],
+  optionsOrAssignedImages?: SceneContentOptions | PdfImage[],
   imageMapping?: ImageMapping,
   languageModel?: LanguageModel,
   visionEnabled?: boolean,
@@ -342,6 +372,22 @@ export async function generateSceneContent(
   | GeneratedPBLContent
   | null
 > {
+  const options: SceneContentOptions = Array.isArray(optionsOrAssignedImages)
+    ? {
+        assignedImages: optionsOrAssignedImages,
+        imageMapping,
+        languageModel,
+        visionEnabled,
+        generatedMediaMapping,
+        agents,
+        adaptivePrompt,
+      }
+    : (optionsOrAssignedImages ?? {});
+  const languageDirective = buildLanguageText(
+    options.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
+    outline.languageNote,
+  );
+
   // If outline is interactive but missing interactiveConfig, fall back to slide
   if (outline.type === 'interactive' && !outline.interactiveConfig) {
     log.warn(
@@ -351,12 +397,13 @@ export async function generateSceneContent(
     return generateSlideContent(
       fallbackOutline,
       aiCall,
-      assignedImages,
-      imageMapping,
-      visionEnabled,
-      generatedMediaMapping,
-      agents,
-      adaptivePrompt,
+      options.assignedImages,
+      options.imageMapping,
+      options.visionEnabled,
+      options.generatedMediaMapping,
+      options.agents,
+      options.adaptivePrompt,
+      languageDirective,
     );
   }
 
@@ -365,19 +412,31 @@ export async function generateSceneContent(
       return generateSlideContent(
         outline,
         aiCall,
-        assignedImages,
-        imageMapping,
-        visionEnabled,
-        generatedMediaMapping,
-        agents,
-        adaptivePrompt,
+        options.assignedImages,
+        options.imageMapping,
+        options.visionEnabled,
+        options.generatedMediaMapping,
+        options.agents,
+        options.adaptivePrompt,
+        languageDirective,
       );
     case 'quiz':
-      return generateQuizContent(outline, aiCall, adaptivePrompt);
+      return generateQuizContent(outline, aiCall, options.adaptivePrompt, languageDirective);
     case 'interactive':
-      return generateInteractiveContent(outline, aiCall, outline.language, adaptivePrompt);
+      return generateInteractiveContent(
+        outline,
+        aiCall,
+        outline.language,
+        options.adaptivePrompt,
+        languageDirective,
+      );
     case 'pbl':
-      return generatePBLSceneContent(outline, languageModel, adaptivePrompt);
+      return generatePBLSceneContent(
+        outline,
+        options.languageModel,
+        options.adaptivePrompt,
+        languageDirective,
+      );
     default:
       return null;
   }
@@ -461,7 +520,8 @@ function resolveImageIds(
       }
 
       if (el.type === 'video') {
-        if (!('src' in el)) {
+        const mediaRef = (el as Record<string, unknown>).mediaRef;
+        if (!('src' in el) && typeof mediaRef !== 'string') {
           log.warn(`Video element missing src, removing element`);
           return null;
         }
@@ -475,6 +535,59 @@ function resolveImageIds(
           log.debug(`Keeping generated video placeholder: ${src}`);
           return el;
         }
+      }
+
+      return el;
+    })
+    .filter((el): el is NonNullable<typeof el> => el !== null);
+}
+
+function normalizeGeneratedVideoRefs(
+  elements: GeneratedSlideData['elements'],
+  mediaGenerations: SceneOutline['mediaGenerations'] = [],
+): GeneratedSlideData['elements'] {
+  const validRefs = mediaGenerations
+    .filter((mg) => mg.type === 'video')
+    .map((mg) => mg.elementId);
+  const validRefSet = new Set(validRefs);
+  const onlyRef = validRefs.length === 1 ? validRefs[0] : undefined;
+
+  return elements
+    .map((el) => {
+      if (el.type !== 'video') return el;
+
+      const videoEl = { ...el } as Record<string, unknown>;
+      const mediaRef = typeof videoEl.mediaRef === 'string' ? videoEl.mediaRef : undefined;
+      const src = typeof videoEl.src === 'string' ? videoEl.src : undefined;
+      const hasGeneratedSrc = !!src && isGeneratedImageId(src);
+      const hasDirectSrc = !!src && !hasGeneratedSrc;
+
+      if (hasDirectSrc) {
+        if (mediaRef) delete videoEl.mediaRef;
+        return videoEl as typeof el;
+      }
+
+      if (mediaRef && validRefSet.has(mediaRef)) {
+        if (hasGeneratedSrc) delete videoEl.src;
+        return videoEl as typeof el;
+      }
+
+      if (src && validRefSet.has(src)) {
+        videoEl.mediaRef = src;
+        delete videoEl.src;
+        return videoEl as typeof el;
+      }
+
+      if ((mediaRef || hasGeneratedSrc) && onlyRef) {
+        log.warn(`Correcting generated video reference "${mediaRef || src}" to "${onlyRef}"`);
+        videoEl.mediaRef = onlyRef;
+        if (hasGeneratedSrc) delete videoEl.src;
+        return videoEl as typeof el;
+      }
+
+      if (mediaRef || hasGeneratedSrc) {
+        log.warn(`Invalid generated video reference "${mediaRef || src}", removing element`);
+        return null;
       }
 
       return el;
@@ -653,6 +766,7 @@ async function generateSlideContent(
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
   adaptivePrompt?: string,
+  languageDirective?: string,
 ): Promise<GeneratedSlideContent | null> {
   const lang = outline.language || 'zh-CN';
 
@@ -687,14 +801,20 @@ async function generateSlideContent(
     }
   }
 
+  const generatedImageEntries = outline.mediaGenerations?.filter((mg) => mg.type === 'image') ?? [];
+  const generatedVideoEntries = outline.mediaGenerations?.filter((mg) => mg.type === 'video') ?? [];
+  const hasAssignedImages = (assignedImages?.length ?? 0) > 0;
+  const generatedImageEnabled = generatedImageEntries.length > 0;
+  const generatedVideoEnabled = generatedVideoEntries.length > 0;
+  const imageElementEnabled = hasAssignedImages || generatedImageEnabled;
+  const mediaElementEnabled = imageElementEnabled || generatedVideoEnabled;
+
   // Add generated media placeholders info (images + videos)
   if (outline.mediaGenerations && outline.mediaGenerations.length > 0) {
-    const genImgDescs = outline.mediaGenerations
-      .filter((mg) => mg.type === 'image')
+    const genImgDescs = generatedImageEntries
       .map((mg) => `- ${mg.elementId}: "${mg.prompt}" (aspect ratio: ${mg.aspectRatio || '16:9'})`)
       .join('\n');
-    const genVidDescs = outline.mediaGenerations
-      .filter((mg) => mg.type === 'video')
+    const genVidDescs = generatedVideoEntries
       .map((mg) => `- ${mg.elementId}: "${mg.prompt}" (aspect ratio: ${mg.aspectRatio || '16:9'})`)
       .join('\n');
 
@@ -703,7 +823,9 @@ async function generateSlideContent(
       mediaParts.push(`AI-Generated Images (use these IDs as image element src):\n${genImgDescs}`);
     }
     if (genVidDescs) {
-      mediaParts.push(`AI-Generated Videos (use these IDs as video element src):\n${genVidDescs}`);
+      mediaParts.push(
+        `AI-Generated Videos (use these IDs as video element mediaRef):\n${genVidDescs}`,
+      );
     }
 
     if (mediaParts.length > 0) {
@@ -731,6 +853,11 @@ async function generateSlideContent(
     canvas_width: canvasWidth,
     canvas_height: canvasHeight,
     teacherContext,
+    languageDirective: languageDirective || '',
+    imageElementEnabled,
+    generatedImageEnabled,
+    generatedVideoEnabled,
+    mediaElementEnabled,
   });
 
   if (!prompts) {
@@ -790,8 +917,14 @@ async function generateSlideContent(
   );
   log.debug(`After image resolution: ${resolvedElements.length} elements`);
 
+  const videoNormalizedElements = normalizeGeneratedVideoRefs(
+    resolvedElements,
+    outline.mediaGenerations,
+  );
+  log.debug(`After video reference normalization: ${videoNormalizedElements.length} elements`);
+
   // Process elements, assign unique IDs
-  const processedElements: PPTElement[] = resolvedElements.map((el) => ({
+  const processedElements: PPTElement[] = videoNormalizedElements.map((el) => ({
     ...el,
     id: `${el.type}_${nanoid(8)}`,
     rotate: 0,
@@ -824,6 +957,7 @@ async function generateQuizContent(
   outline: SceneOutline,
   aiCall: AICallFn,
   adaptivePrompt?: string,
+  languageDirective?: string,
 ): Promise<GeneratedQuizContent | null> {
   const quizConfig = outline.quizConfig || {
     questionCount: 3,
@@ -838,6 +972,7 @@ async function generateQuizContent(
     questionCount: quizConfig.questionCount,
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
+    languageDirective: languageDirective || '',
   });
 
   if (!prompts) {
@@ -929,6 +1064,7 @@ async function generateInteractiveContent(
   aiCall: AICallFn,
   language: 'zh-CN' | 'en-US' = 'zh-CN',
   adaptivePrompt?: string,
+  languageDirective?: string,
 ): Promise<GeneratedInteractiveContent | null> {
   const config = outline.interactiveConfig!;
 
@@ -988,7 +1124,7 @@ async function generateInteractiveContent(
     keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
     scientificConstraints,
     designIdea: config.designIdea,
-    language,
+    language: languageDirective ? `${language}\n${languageDirective}` : language,
   });
 
   if (!htmlPrompts) {
@@ -1026,6 +1162,7 @@ async function generatePBLSceneContent(
   outline: SceneOutline,
   languageModel?: LanguageModel,
   adaptivePrompt?: string,
+  languageDirective?: string,
 ): Promise<GeneratedPBLContent | null> {
   if (!languageModel) {
     log.error('LanguageModel required for PBL generation');
@@ -1041,6 +1178,7 @@ async function generatePBLSceneContent(
   log.info(`Generating PBL content for: ${outline.title}`);
 
   try {
+    const systemPromptSuffix = [languageDirective, adaptivePrompt].filter(Boolean).join('\n\n');
     const projectConfig = await generatePBLContent(
       {
         projectTopic: pblConfig.projectTopic,
@@ -1053,7 +1191,7 @@ async function generatePBLSceneContent(
       {
         onProgress: (msg) => log.info(`${msg}`),
       },
-      adaptivePrompt,
+      systemPromptSuffix || undefined,
     );
     log.info(
       `PBL generated: ${projectConfig.agents.length} agents, ${projectConfig.issueboard.issues.length} issues`,
@@ -1114,12 +1252,31 @@ export async function generateSceneActions(
     | GeneratedInteractiveContent
     | GeneratedPBLContent,
   aiCall: AICallFn,
-  ctx?: SceneGenerationContext,
+  optionsOrCtx?: SceneActionsOptions | SceneGenerationContext,
   agents?: AgentInfo[],
   userProfile?: string,
   adaptivePrompt?: string,
 ): Promise<Action[]> {
-  const agentsText = formatAgentsForPrompt(agents);
+  const looksLikeSceneActionsOptions =
+    optionsOrCtx &&
+    ('ctx' in optionsOrCtx ||
+      'agents' in optionsOrCtx ||
+      'userProfile' in optionsOrCtx ||
+      'adaptivePrompt' in optionsOrCtx ||
+      'languageDirective' in optionsOrCtx);
+  const options: SceneActionsOptions = looksLikeSceneActionsOptions
+    ? (optionsOrCtx as SceneActionsOptions)
+    : {
+        ctx: optionsOrCtx as SceneGenerationContext | undefined,
+        agents,
+        userProfile,
+        adaptivePrompt,
+      };
+  const langText = buildLanguageText(
+    options.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
+    outline.languageNote,
+  );
+  const agentsText = formatAgentsForPrompt(options.agents);
 
   if (outline.type === 'slide' && 'elements' in content) {
     // Format element list for AI to select from
@@ -1130,21 +1287,25 @@ export async function generateSceneActions(
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       elements: elementsText,
-      courseContext: buildCourseContext(ctx),
+      courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
-      userProfile: userProfile || '',
+      userProfile: options.userProfile || '',
+      languageDirective: langText,
     });
 
     if (!prompts) {
       return generateDefaultSlideActions(outline, content.elements);
     }
 
-    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+    const response = await aiCall(
+      withAdaptivePrompt(prompts.system, options.adaptivePrompt),
+      prompts.user,
+    );
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
       // Validate and fill in Action IDs
-      return processActions(actions, content.elements, agents);
+      return processActions(actions, content.elements, options.agents);
     }
 
     return generateDefaultSlideActions(outline, content.elements);
@@ -1159,19 +1320,23 @@ export async function generateSceneActions(
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       questions: questionsText,
-      courseContext: buildCourseContext(ctx),
+      courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
+      languageDirective: langText,
     });
 
     if (!prompts) {
       return generateDefaultQuizActions(outline);
     }
 
-    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+    const response = await aiCall(
+      withAdaptivePrompt(prompts.system, options.adaptivePrompt),
+      prompts.user,
+    );
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
-      return processActions(actions, [], agents);
+      return processActions(actions, [], options.agents);
     }
 
     return generateDefaultQuizActions(outline);
@@ -1179,26 +1344,30 @@ export async function generateSceneActions(
 
   if (outline.type === 'interactive' && 'html' in content) {
     const config = outline.interactiveConfig;
-    const agentsText = formatAgentsForPrompt(agents);
+    const agentsText = formatAgentsForPrompt(options.agents);
     const prompts = buildPrompt(PROMPT_IDS.INTERACTIVE_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       conceptName: config?.conceptName || outline.title,
       designIdea: config?.designIdea || '',
-      courseContext: buildCourseContext(ctx),
+      courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
+      languageDirective: langText,
     });
 
     if (!prompts) {
       return generateDefaultInteractiveActions(outline);
     }
 
-    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+    const response = await aiCall(
+      withAdaptivePrompt(prompts.system, options.adaptivePrompt),
+      prompts.user,
+    );
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
-      return processActions(actions, [], agents);
+      return processActions(actions, [], options.agents);
     }
 
     return generateDefaultInteractiveActions(outline);
@@ -1206,26 +1375,30 @@ export async function generateSceneActions(
 
   if (outline.type === 'pbl' && 'projectConfig' in content) {
     const pblConfig = outline.pblConfig;
-    const agentsText = formatAgentsForPrompt(agents);
+    const agentsText = formatAgentsForPrompt(options.agents);
     const prompts = buildPrompt(PROMPT_IDS.PBL_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       projectTopic: pblConfig?.projectTopic || outline.title,
       projectDescription: pblConfig?.projectDescription || outline.description,
-      courseContext: buildCourseContext(ctx),
+      courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
+      languageDirective: langText,
     });
 
     if (!prompts) {
       return generateDefaultPBLActions(outline);
     }
 
-    const response = await aiCall(withAdaptivePrompt(prompts.system, adaptivePrompt), prompts.user);
+    const response = await aiCall(
+      withAdaptivePrompt(prompts.system, options.adaptivePrompt),
+      prompts.user,
+    );
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
-      return processActions(actions, [], agents);
+      return processActions(actions, [], options.agents);
     }
 
     return generateDefaultPBLActions(outline);

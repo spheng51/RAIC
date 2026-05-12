@@ -738,6 +738,7 @@ function GenerationPreviewContent() {
 
       // ── Generate outlines (with agent personas for teacher context) ──
       let outlines = currentSession.sceneOutlines;
+      let languageDirective = stage.languageDirective;
 
       const outlineStepIdx = activeSteps.findIndex((s) => s.id === 'outline');
       setCurrentStepIndex(outlineStepIdx >= 0 ? outlineStepIdx : 0);
@@ -796,6 +797,10 @@ function GenerationPreviewContent() {
                           setStreamingOutlines([]);
                           setStatusMessage(t('generation.outlineRetrying'));
                         } else if (evt.type === 'done') {
+                          if (typeof evt.languageDirective === 'string') {
+                            languageDirective = evt.languageDirective;
+                            stage.languageDirective = evt.languageDirective;
+                          }
                           resolve(evt.outlines || collected);
                           return;
                         } else if (evt.type === 'error') {
@@ -857,6 +862,7 @@ function GenerationPreviewContent() {
         name: stage.name,
         description: stage.description,
         language: stage.language,
+        languageDirective: stage.languageDirective,
         style: stage.style,
       };
 
@@ -882,6 +888,7 @@ function GenerationPreviewContent() {
           stageInfo,
           stageId: stage.id,
           agents,
+          languageDirective,
         }),
         signal,
       });
@@ -911,6 +918,7 @@ function GenerationPreviewContent() {
           agents,
           previousSpeeches: [],
           userProfile,
+          languageDirective,
         }),
         signal,
       });

@@ -101,6 +101,7 @@ export interface SceneOutline {
   estimatedDuration?: number; // seconds
   order: number;
   language?: 'zh-CN' | 'en-US'; // Generation language (inherited from requirements)
+  languageNote?: string; // Optional per-scene language nuance from outline generation
   // Suggested image IDs (from PDF-extracted images)
   suggestedImageIds?: string[]; // e.g., ["img_1", "img_3"]
   // AI-generated media requests (when PDF images are insufficient)

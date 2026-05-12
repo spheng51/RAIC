@@ -16,6 +16,8 @@ export {
   loadSnippet,
   buildPrompt,
   interpolateVariables,
+  processSnippets,
+  processConditionalBlocks,
   clearPromptCache,
 } from './loader';
 

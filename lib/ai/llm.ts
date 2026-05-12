@@ -9,6 +9,12 @@ import type { GenerateTextResult, StreamTextResult } from 'ai';
 import { createLogger } from '@/lib/logger';
 import { PROVIDERS } from './providers';
 import { thinkingContext } from './thinking-context';
+import {
+  getThinkingMode,
+  pickThinkingBudget,
+  pickThinkingEffort,
+  pickThinkingLevel,
+} from './thinking-config';
 import type {
   LibraryReviewRoute,
   ProviderCallMetrics,
@@ -130,7 +136,7 @@ const MODEL_THINKING_MAP: Map<string, ModelThinkingInfo> = (() => {
 /** Global thinking override from environment variable */
 function getGlobalThinkingConfig(): ThinkingConfig | undefined {
   if (process.env.LLM_THINKING_DISABLED === 'true') {
-    return { enabled: false };
+    return { mode: 'disabled', enabled: false };
   }
   return undefined;
 }
@@ -268,14 +274,54 @@ function buildThinkingProviderOptions(
   const info = MODEL_THINKING_MAP.get(modelId);
   if (!info?.thinking) return undefined; // model has no thinking capability
 
-  if (config.enabled === undefined) return undefined; // use model default
+  const mode = getThinkingMode(config);
+  const hasExplicitConfig =
+    mode !== undefined ||
+    config.effort !== undefined ||
+    config.level !== undefined ||
+    typeof config.budgetTokens === 'number' ||
+    typeof config.excludeReasoningOutput === 'boolean';
+  if (!hasExplicitConfig) return undefined; // use model default
 
-  if (config.enabled === false) {
-    return buildDisableThinking(modelId, info.providerType, info.thinking);
+  const thinking = info.thinking;
+
+  if (info.providerType === 'openai') {
+    const effort = pickThinkingEffort(thinking, config) ?? config.effort;
+    return effort ? { openai: { reasoningEffort: effort } } : undefined;
   }
 
-  // enabled === true
-  return buildEnableThinking(modelId, info.providerType, info.thinking, config.budgetTokens);
+  if (info.providerType === 'google') {
+    const level = pickThinkingLevel(thinking, config) ?? config.level;
+    if (level) return { google: { thinkingConfig: { thinkingLevel: level } } };
+    const budget = pickThinkingBudget(thinking, config);
+    return budget === undefined
+      ? undefined
+      : { google: { thinkingConfig: { thinkingBudget: budget } } };
+  }
+
+  if (info.providerType === 'anthropic') {
+    if (mode === 'disabled') {
+      return buildDisableThinking(modelId, info.providerType, thinking);
+    }
+    const budget = pickThinkingBudget(thinking, config) ?? config.budgetTokens;
+    if (budget !== undefined) {
+      return {
+        anthropic: {
+          thinking: { type: 'enabled', budgetTokens: Math.max(1024, budget) },
+        },
+      };
+    }
+    const effort = pickThinkingEffort(thinking, config);
+    if (effort && effort !== 'none' && effort !== 'minimal') {
+      return { anthropic: { thinking: { type: 'adaptive' }, effort } };
+    }
+  }
+
+  if (mode === 'disabled') {
+    return buildDisableThinking(modelId, info.providerType, thinking);
+  }
+
+  return buildEnableThinking(modelId, info.providerType, thinking, config.budgetTokens);
 }
 
 /**

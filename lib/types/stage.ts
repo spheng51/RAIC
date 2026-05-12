@@ -74,6 +74,7 @@ export interface Stage {
   learningGoal?: string;
   // Stage metadata
   language?: string;
+  languageDirective?: string;
   style?: string;
   sourceContext?: ClassroomSourceContext;
   // Whiteboard data

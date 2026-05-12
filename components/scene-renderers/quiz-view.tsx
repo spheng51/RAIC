@@ -24,18 +24,20 @@ import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
 import { toast } from 'sonner';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
+import {
+  gradeChoiceQuestions,
+  isShortAnswer,
+  type QuestionResult,
+} from '@/lib/quiz/grading';
+import {
+  clearSubmitted,
+  draftKey,
+  readSubmittedState,
+  writeSubmittedAnswers,
+  writeSubmittedResults,
+} from '@/lib/quiz/persistence';
 
 type Phase = 'not_started' | 'answering' | 'grading' | 'reviewing';
-
-interface QuestionResult {
-  questionId: string;
-  correct: boolean | null;
-  status: 'correct' | 'incorrect';
-  earned: number;
-  aiComment?: string;
-}
 
 interface QuizViewProps {
   readonly questions: QuizQuestion[];
@@ -43,43 +45,6 @@ interface QuizViewProps {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function arraysEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  return sa.every((v, i) => v === sb[i]);
-}
-
-function toArray(v: string | string[] | undefined): string[] {
-  if (!v) return [];
-  return Array.isArray(v) ? v : [v];
-}
-
-function isShortAnswer(q: QuizQuestion): boolean {
-  return q.type === 'short_answer' || (!q.hasAnswer && (!q.answer || q.answer.length === 0));
-}
-
-/** Grade choice questions locally. Returns results only for non-short-answer questions. */
-function gradeChoiceQuestions(
-  questions: QuizQuestion[],
-  answers: Record<string, string | string[]>,
-): QuestionResult[] {
-  return questions
-    .filter((q) => !isShortAnswer(q))
-    .map((q) => {
-      const pts = q.points ?? 1;
-      const userAnswer = toArray(answers[q.id]);
-      const correctAnswer = toArray(q.answer);
-      const correct = arraysEqual(userAnswer, correctAnswer);
-      return {
-        questionId: q.id,
-        correct,
-        status: correct ? ('correct' as const) : ('incorrect' as const),
-        earned: correct ? pts : 0,
-      };
-    });
-}
 
 /** Call /api/quiz-grade for a single short-answer question. */
 async function gradeShortAnswerQuestion(
@@ -688,9 +653,39 @@ function ScoreBanner({
 
 export function QuizView({ questions, sceneId }: QuizViewProps) {
   const { t, locale } = useI18n();
-  const [phase, setPhase] = useState<Phase>('not_started');
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
-  const [results, setResults] = useState<QuestionResult[]>([]);
+  const initialSubmitted = useMemo(() => readSubmittedState(sceneId), [sceneId]);
+  const [phase, setPhase] = useState<Phase>(() =>
+    initialSubmitted?.kind === 'reviewing'
+      ? 'reviewing'
+      : initialSubmitted?.kind === 'answering'
+        ? 'answering'
+        : 'not_started',
+  );
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>(
+    () => initialSubmitted?.answers ?? {},
+  );
+  const [results, setResults] = useState<QuestionResult[]>(() =>
+    initialSubmitted?.kind === 'reviewing' ? initialSubmitted.results : [],
+  );
+
+  useEffect(() => {
+    const submitted = readSubmittedState(sceneId);
+    if (submitted?.kind === 'reviewing') {
+      setAnswers(submitted.answers);
+      setResults(submitted.results);
+      setPhase('reviewing');
+      return;
+    }
+    if (submitted?.kind === 'answering') {
+      setAnswers(submitted.answers);
+      setResults([]);
+      setPhase('answering');
+      return;
+    }
+    setAnswers({});
+    setResults([]);
+    setPhase('not_started');
+  }, [sceneId]);
 
   // Draft cache for quiz answers, keyed by sceneId to isolate across classrooms
   const {
@@ -698,14 +693,19 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
     updateCache: updateAnswersCache,
     clearCache: clearAnswersCache,
   } = useDraftCache<Record<string, string | string[]>>({
-    key: `quizDraft:${sceneId}`,
+    key: draftKey(sceneId),
   });
 
   // Restore cached answers during render (derived state pattern)
   const [prevCachedAnswers, setPrevCachedAnswers] = useState(cachedAnswers);
   if (cachedAnswers !== prevCachedAnswers) {
     setPrevCachedAnswers(cachedAnswers);
-    if (cachedAnswers && Object.keys(cachedAnswers).length > 0 && phase === 'not_started') {
+    if (
+      cachedAnswers &&
+      Object.keys(cachedAnswers).length > 0 &&
+      phase === 'not_started' &&
+      !initialSubmitted
+    ) {
       setAnswers(cachedAnswers);
       setPhase('answering');
     }
@@ -750,8 +750,9 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
     }
 
     setPhase('grading');
+    writeSubmittedAnswers(sceneId, answers);
     clearAnswersCache();
-  }, [clearAnswersCache, questions]);
+  }, [answers, clearAnswersCache, questions, sceneId]);
 
   // When entering grading phase, grade choice questions locally + call API for short-answer
   useEffect(() => {
@@ -781,6 +782,7 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
       const ordered = questions.map((q) => allResultsMap.get(q.id)!).filter(Boolean);
 
       setResults(ordered);
+      writeSubmittedResults(sceneId, ordered);
 
       setPhase('reviewing');
     })();
@@ -788,14 +790,15 @@ export function QuizView({ questions, sceneId }: QuizViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [phase, questions, answers, locale]);
+  }, [phase, questions, answers, locale, sceneId]);
 
   const handleRetry = useCallback(() => {
     setPhase('not_started');
     setAnswers({});
     setResults([]);
+    clearSubmitted(sceneId);
     clearAnswersCache();
-  }, [clearAnswersCache]);
+  }, [clearAnswersCache, sceneId]);
 
   const earnedScore = useMemo(() => results.reduce((sum, r) => sum + r.earned, 0), [results]);
 

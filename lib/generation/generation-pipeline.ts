@@ -23,13 +23,18 @@ export {
   formatImageDescription,
   formatImagePlaceholder,
   buildVisionUserContent,
+  buildLanguageText,
 } from './prompt-formatters';
 
 // JSON repair
 export { parseJsonResponse, tryParseJson } from './json-repair';
 
 // Outline generator (Stage 1)
-export { generateSceneOutlinesFromRequirements, applyOutlineFallbacks } from './outline-generator';
+export {
+  generateSceneOutlinesFromRequirements,
+  applyOutlineFallbacks,
+  DEFAULT_LANGUAGE_DIRECTIVE,
+} from './outline-generator';
 
 // Scene generator (Stage 2)
 export {

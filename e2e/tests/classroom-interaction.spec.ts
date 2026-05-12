@@ -10,9 +10,20 @@ const SETTINGS_STORAGE = createSettingsStorage({ sidebarCollapsed: false });
 /** Seed IndexedDB with stage + 3 scenes using raw IndexedDB API */
 async function seedDatabase(page: import('@playwright/test').Page) {
   // Inject settings before navigating so it's available immediately on load
-  await page.addInitScript((settings) => {
-    localStorage.setItem('settings-storage', settings);
-  }, SETTINGS_STORAGE);
+  await page.addInitScript(
+    ({ settings, stageId }) => {
+      localStorage.setItem('settings-storage', settings);
+      sessionStorage.setItem(
+        'classroomLaunchContext',
+        JSON.stringify({
+          classroomId: stageId,
+          launchMode: 'public-demo',
+          homePath: '/',
+        }),
+      );
+    },
+    { settings: SETTINGS_STORAGE, stageId: TEST_STAGE_ID },
+  );
 
   // Navigate to home page first — this causes Dexie to open/create the DB at v8
   // with the correct schema. We wait for network idle to ensure Dexie is done.

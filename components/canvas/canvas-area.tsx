@@ -16,12 +16,14 @@ import type {
 } from '@/lib/types/classroom-collaboration';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { MiroFishPane, type MiroFishHostEvent } from '@/components/mirofish/mirofish-pane';
+import { ClassroomCompletePageConnected } from '@/components/scene-renderers/classroom-complete';
 
 interface CanvasAreaProps extends CanvasToolbarProps {
   readonly currentScene: Scene | null;
   readonly mode: StageMode;
   readonly hideToolbar?: boolean;
   readonly isPendingScene?: boolean;
+  readonly isCourseComplete?: boolean;
   readonly isGenerationFailed?: boolean;
   readonly onRetryGeneration?: () => void;
   readonly runUrl?: string | null;
@@ -61,6 +63,7 @@ export function CanvasArea({
   onStopDiscussion,
   hideToolbar,
   isPendingScene,
+  isCourseComplete,
   isGenerationFailed,
   onRetryGeneration,
   sharedSimulation,
@@ -207,9 +210,21 @@ export function CanvasArea({
             />
           )}
 
-          {/* Pending Scene Loading Overlay */}
+          {/* Pending Scene Loading / Completion Overlay */}
           <AnimatePresence>
-            {isPendingScene && !currentScene && (
+            {isPendingScene && !currentScene && isCourseComplete && (
+              <motion.div
+                key="course-complete"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="absolute inset-0"
+              >
+                <ClassroomCompletePageConnected />
+              </motion.div>
+            )}
+            {isPendingScene && !currentScene && !isCourseComplete && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

@@ -25,6 +25,14 @@ test.describe('Home → Generation', () => {
   });
 
   test('home page loads with core UI elements and submits requirement', async ({ page }) => {
+    await page.route('**/api/generate/scene-outlines-stream', (route) => {
+      route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Generation intentionally stopped by e2e navigation test' }),
+      });
+    });
+
     const home = new HomePage(page);
     await home.goto();
 
@@ -43,26 +51,37 @@ test.describe('Home → Generation', () => {
     expect(page.url()).toContain('/generation-preview');
   });
 
-  test('public demo schedule creates a class and keeps it after refresh', async ({ page }) => {
-    const home = new HomePage(page);
-    await home.goto();
+  test(
+    'public demo schedule creates a class and keeps it after refresh',
+    async ({ page, mockApi }) => {
+      await mockApi.setupGenerationMocks();
 
-    const schedule = page.getByTestId('schedule-classes-box');
-    await expect(schedule).toBeVisible();
-    await expect(schedule.getByText('No classes scheduled')).toBeVisible();
+      const home = new HomePage(page);
+      await home.goto();
 
-    const scheduleStart = getTomorrowScheduleParts();
-    await schedule.getByRole('button', { name: 'Add' }).click();
-    await page.getByLabel('Class title').fill('Design critique');
-    await page.getByLabel('Date').fill(scheduleStart.date);
-    await page.getByLabel('Time').fill(scheduleStart.time);
-    await page.getByLabel('Duration').fill('45');
-    await page.getByRole('button', { name: 'Create' }).click();
+      const schedule = page.getByTestId('schedule-classes-box');
+      await expect(schedule).toBeVisible();
+      await expect(schedule.getByText('No classes scheduled')).toBeVisible();
 
-    await expect(schedule.getByText('Design critique')).toBeVisible();
-    await page.reload();
-    await expect(
-      page.getByTestId('schedule-classes-box').getByText('Design critique'),
-    ).toBeVisible();
-  });
+      const scheduleStart = getTomorrowScheduleParts();
+      await schedule.getByRole('button', { name: 'Add' }).click();
+      await page.getByLabel('Class title').fill('Design critique');
+      await page.getByLabel('Date').fill(scheduleStart.date);
+      await page.getByLabel('Time').fill(scheduleStart.time);
+      await page.getByLabel('Duration').fill('45');
+      await Promise.all([
+        page.waitForURL(/\/classroom\//),
+        page.getByRole('button', { name: 'Create' }).click(),
+      ]);
+
+      await home.goto();
+      await expect(
+        page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
+      ).toBeVisible({ timeout: 10_000 });
+      await page.reload();
+      await expect(
+        page.getByTestId('schedule-classes-box').getByRole('button', { name: /Design critique/ }),
+      ).toBeVisible();
+    },
+  );
 });

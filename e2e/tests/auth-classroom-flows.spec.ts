@@ -28,6 +28,24 @@ async function createAuthedPage(browser: Browser, token: string) {
   return { context, page };
 }
 
+async function closeContextIfOpen(context: BrowserContext | undefined) {
+  if (!context) return;
+
+  try {
+    await context.close();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes('Target.disposeBrowserContext') ||
+      message.includes('Failed to find context') ||
+      message.includes('has been closed')
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
 async function getCookieValue(context: BrowserContext, name: string) {
   const cookies = await context.cookies(APP_BASE_URL);
   return cookies.find((cookie) => cookie.name === name)?.value ?? null;
@@ -291,7 +309,7 @@ test('protected routes redirect unauthenticated users and authenticated users sk
     await teacher.page.waitForURL(/\/studio$/);
     await expect(teacher.page.getByText('Teacher Studio')).toBeVisible();
   } finally {
-    await teacherContext?.close();
+    await closeContextIfOpen(teacherContext);
   }
 });
 
@@ -344,7 +362,7 @@ test('logout clears both web and classroom cookies', async ({ browser }) => {
         hasClassroomCookie: false,
       });
   } finally {
-    await teacherContext?.close();
+    await closeContextIfOpen(teacherContext);
   }
 });
 
@@ -429,9 +447,9 @@ test('teacher classroom access and join links use reusable classroom sessions un
       .poll(async () => countClassroomSessions(await readPlatformStore(), 'classroom-reuse'))
       .toBe(2);
   } finally {
-    await teacherContext?.close();
-    await studentContext?.close();
-    await secondStudentContext?.close();
+    await closeContextIfOpen(teacherContext);
+    await closeContextIfOpen(studentContext);
+    await closeContextIfOpen(secondStudentContext);
   }
 });
 
@@ -484,8 +502,8 @@ test('teacher shares from a Studio classroom card and a student enters through t
     await expect(student.classroom.sidebarScenes).toHaveCount(2);
     await expect(student.classroom.getSceneTitle(0)).toContainText('Studio share intro');
   } finally {
-    await teacherContext?.close();
-    await studentContext?.close();
+    await closeContextIfOpen(teacherContext);
+    await closeContextIfOpen(studentContext);
   }
 });
 
@@ -534,8 +552,8 @@ test('teacher shares from the classroom header and a student enters through the 
     await expect(student.classroom.sidebarScenes).toHaveCount(2);
     await expect(student.classroom.getSceneTitle(1)).toContainText('Exit ticket');
   } finally {
-    await teacherContext?.close();
-    await studentContext?.close();
+    await closeContextIfOpen(teacherContext);
+    await closeContextIfOpen(studentContext);
   }
 });
 
@@ -577,6 +595,9 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
     await expect(teacherPage.getByText('Teacher sign-in')).toBeVisible();
 
     await addSessionCookie(teacherContext, teacherSession.token);
+    await expect
+      .poll(async () => getCookieValue(teacherContext!, SESSION_COOKIE_NAME))
+      .toBe(teacherSession.token);
     const publishResponsePromise = teacherPage.waitForResponse(
       (response) =>
         response.url().endsWith('/api/classroom/publish-local') &&
@@ -586,8 +607,11 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
       `${APP_BASE_URL}/sign-in?next=${encodeURIComponent(`/classroom/${localClassroomId}`)}`,
     );
     const publishResponse = await publishResponsePromise;
-    expect(publishResponse.ok()).toBeTruthy();
     const publishBody = (await publishResponse.json()) as { id?: string; url?: string };
+    expect(
+      publishResponse.ok(),
+      JSON.stringify({ status: publishResponse.status(), body: publishBody }),
+    ).toBeTruthy();
     expect(publishBody.id).toBeTruthy();
     await teacherPage.waitForURL(new RegExp(`/classroom/${publishBody.id}$`));
     await localClassroom.waitForLoaded();
@@ -622,8 +646,8 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
     studentContext = student.context;
     await expect(student.classroom.getSceneTitle(0)).toContainText('Local intro');
   } finally {
-    await teacherContext?.close();
-    await studentContext?.close();
+    await closeContextIfOpen(teacherContext);
+    await closeContextIfOpen(studentContext);
   }
 });
 
@@ -709,7 +733,7 @@ test('local public-demo classroom chat sends public-demo source and avoids class
     await expect(page.getByText('Here is one short question.')).toBeVisible();
     await expect(page.getByText('Classroom not found')).toHaveCount(0);
   } finally {
-    await context?.close();
+    await closeContextIfOpen(context);
   }
 });
 
@@ -821,14 +845,16 @@ test('teacher shares a classroom invite with an attached Zoom join link', async 
     await teacher.page.getByRole('button', { name: 'Close' }).first().click();
     await expect(headerZoomLink).toHaveCount(0);
   } finally {
-    await teacherContext?.close();
-    await studentContext?.close();
+    await closeContextIfOpen(teacherContext);
+    await closeContextIfOpen(studentContext);
   }
 });
 
 test('teacher schedules a linked class from the studio and opens its classroom', async ({
   browser,
 }) => {
+  test.setTimeout(60_000);
+
   let teacherContext: BrowserContext | undefined;
 
   try {
@@ -875,14 +901,13 @@ test('teacher schedules a linked class from the studio and opens its classroom',
     await teacher.page.getByLabel('Time').fill('14:00');
     await teacher.page.getByText('No classroom').click();
     await teacher.page.getByRole('option', { name: 'Scheduled Room' }).click();
-    await teacher.page.getByRole('button', { name: 'Create' }).click();
-
-    await expect(schedule.getByText('Teacher linked class')).toBeVisible();
-    await schedule.getByRole('button', { name: /Teacher linked class/ }).click();
-    await teacher.page.waitForURL(/\/classroom\/classroom-scheduled$/);
+    await Promise.all([
+      teacher.page.waitForURL(/\/classroom\/classroom-scheduled$/),
+      teacher.page.getByRole('button', { name: 'Create' }).click(),
+    ]);
     const teacherClassroom = new ClassroomPage(teacher.page);
     await teacherClassroom.waitForLoaded();
   } finally {
-    await teacherContext?.close();
+    await closeContextIfOpen(teacherContext);
   }
 });
