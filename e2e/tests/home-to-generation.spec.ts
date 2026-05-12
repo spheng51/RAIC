@@ -17,6 +17,10 @@ function getTomorrowScheduleParts() {
   };
 }
 
+async function readGenerationSession(page: import('@playwright/test').Page) {
+  return page.evaluate(() => JSON.parse(sessionStorage.getItem('generationSession') || 'null'));
+}
+
 test.describe('Home → Generation', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript((settings) => {
@@ -49,6 +53,50 @@ test.describe('Home → Generation', () => {
     await home.submit();
     await page.waitForURL(/\/generation-preview/);
     expect(page.url()).toContain('/generation-preview');
+  });
+
+  test('Deep Interactive switch toggles, persists, and controls generation payload', async ({
+    page,
+  }) => {
+    await page.route('**/api/generate/scene-outlines-stream', (route) => {
+      route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Generation intentionally stopped by e2e toggle test' }),
+      });
+    });
+
+    const home = new HomePage(page);
+    await home.goto();
+
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(home.deepInteractiveState).toHaveText('Off');
+
+    await home.deepInteractiveSwitch.click();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(home.deepInteractiveState).toHaveText('On');
+
+    await page.reload();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(home.deepInteractiveState).toHaveText('On');
+
+    await home.fillRequirement('Build an orbital mechanics lab');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const enabledSession = await readGenerationSession(page);
+    expect(enabledSession.requirements.interactiveMode).toBe(true);
+
+    await home.goto();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
+    await home.deepInteractiveSwitch.click();
+    await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(home.deepInteractiveState).toHaveText('Off');
+
+    await home.fillRequirement('Build a standard lecture');
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+    const disabledSession = await readGenerationSession(page);
+    expect(disabledSession.requirements.interactiveMode).toBeUndefined();
   });
 
   test('public demo schedule creates a class and keeps it after refresh', async ({

@@ -46,6 +46,8 @@
     "webSearchOff": "クリックして有効化",
     "webSearchDesc": "生成前にウェブ検索で最新情報を取得します",
     "interactiveModeLabel": "Deep Interactive",
+    "interactiveModeOn": "オン",
+    "interactiveModeOff": "オフ",
     "interactiveModeHint": "操作できるウィジェット中心の教室を生成します",
     "webSearchProvider": "検索エンジン",
     "webSearchNoProvider": "設定画面で検索APIキーを設定してください",

@@ -46,6 +46,8 @@
     "webSearchOff": "Нажмите для включения",
     "webSearchDesc": "Поиск актуальной информации в интернете перед генерацией",
     "interactiveModeLabel": "Deep Interactive",
+    "interactiveModeOn": "Вкл",
+    "interactiveModeOff": "Выкл",
     "interactiveModeHint": "Создавать интерактивные занятия с виджетами",
     "webSearchProvider": "Поисковый движок",
     "webSearchNoProvider": "Настройте API-ключ поиска в Настройках",

@@ -5,6 +5,8 @@ export class HomePage {
   readonly logo: Locator;
   readonly textarea: Locator;
   readonly enterButton: Locator;
+  readonly deepInteractiveSwitch: Locator;
+  readonly deepInteractiveState: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -13,6 +15,8 @@ export class HomePage {
     this.enterButton = page
       .getByRole('button', { name: /enter/i })
       .or(page.locator('button:has-text("进入课堂")'));
+    this.deepInteractiveSwitch = page.getByRole('switch', { name: /deep interactive/i });
+    this.deepInteractiveState = page.getByTestId('deep-interactive-state');
   }
 
   async goto() {

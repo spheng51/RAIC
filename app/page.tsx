@@ -29,6 +29,7 @@ import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Textarea as UITextarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 import { SettingsDialog } from '@/components/settings';
 import { GenerationToolbar } from '@/components/generation/generation-toolbar';
 import { AgentBar } from '@/components/agent/agent-bar';
@@ -626,6 +627,9 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const primaryActionLabel = needsModelSetup
     ? t('toolbar.configureProvider')
     : t('toolbar.enterClassroom');
+  const interactiveModeStateLabel = form.interactiveMode
+    ? t('toolbar.interactiveModeOn')
+    : t('toolbar.interactiveModeOff');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -860,13 +864,11 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-pressed={form.interactiveMode}
-                    aria-label={t('toolbar.interactiveModeLabel')}
+                  <div
+                    data-testid="deep-interactive-toggle"
                     onClick={() => updateForm('interactiveMode', !form.interactiveMode)}
                     className={cn(
-                      'relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold shadow-sm transition-colors',
+                      'relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-2.5 text-[11px] font-semibold shadow-sm transition-colors',
                       form.interactiveMode
                         ? 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/45 dark:text-violet-200'
                         : 'border-border/60 bg-background/80 text-muted-foreground hover:text-foreground',
@@ -879,10 +881,33 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                     <span className="relative hidden sm:inline">
                       {t('toolbar.interactiveModeLabel')}
                     </span>
-                  </button>
+                    <span
+                      data-testid="deep-interactive-state"
+                      className={cn(
+                        'relative rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none',
+                        form.interactiveMode
+                          ? 'bg-violet-600 text-white dark:bg-violet-500 dark:text-violet-950'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {interactiveModeStateLabel}
+                    </span>
+                    <Switch
+                      checked={form.interactiveMode}
+                      onCheckedChange={(checked) => updateForm('interactiveMode', checked)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`${t('toolbar.interactiveModeLabel')}: ${interactiveModeStateLabel}`}
+                      className="relative origin-right scale-[0.78] data-[state=checked]:bg-violet-600"
+                    />
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={8}>
-                  {t('toolbar.interactiveModeHint')}
+                  <div className="flex flex-col gap-1">
+                    <span>{t('toolbar.interactiveModeHint')}</span>
+                    <span className="font-medium">
+                      {t('toolbar.interactiveModeLabel')}: {interactiveModeStateLabel}
+                    </span>
+                  </div>
                 </TooltipContent>
               </Tooltip>
 

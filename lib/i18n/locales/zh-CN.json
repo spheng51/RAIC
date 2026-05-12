@@ -46,6 +46,8 @@
     "webSearchOff": "点击开启",
     "webSearchDesc": "生成前搜索网络获取最新资料，让内容更丰富准确",
     "interactiveModeLabel": "深度互动",
+    "interactiveModeOn": "开启",
+    "interactiveModeOff": "关闭",
     "interactiveModeHint": "生成更多可操作的互动组件课堂",
     "webSearchProvider": "搜索引擎",
     "webSearchNoProvider": "请在设置中配置搜索引擎 API Key",
