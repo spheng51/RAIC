@@ -402,6 +402,7 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     }, mockMiroFish!.baseUrl);
 
     await expect(teacher.page.getByText('Mock MiroFish forced an embed failure.')).toBeVisible();
+    await expect(teacher.classroom.miroFishFrame).toHaveCount(0, { timeout: 30_000 });
     await teacher.page.reload();
     await teacher.classroom.waitForLoaded();
     await studentOne.page.reload();
