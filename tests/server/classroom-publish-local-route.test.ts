@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import type { HandleUploadOptions } from '@vercel/blob/client';
 
 const requireRequestRoleMock = vi.fn();
 const requireClassroomAccessMock = vi.fn();
@@ -308,7 +309,7 @@ describe('POST /api/classroom/publish-local', () => {
 
   it('generates direct upload tokens and attaches completed Blob uploads', async () => {
     vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_test');
-    handleUploadMock.mockImplementation(async (options: any) => {
+    handleUploadMock.mockImplementation(async (options: HandleUploadOptions) => {
       if (options.body.type === 'blob.generate-client-token') {
         const payload = options.body.payload;
         await options.onBeforeGenerateToken(
