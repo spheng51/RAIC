@@ -94,9 +94,12 @@ describe('/api/classroom/[id]/game-session', () => {
     );
 
     const { GET } = await import('@/app/api/classroom/[id]/game-session/route');
-    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/game-session'), {
-      params: Promise.resolve({ id: 'room-1' }),
-    });
+    const response = await GET(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session'),
+      {
+        params: Promise.resolve({ id: 'room-1' }),
+      },
+    );
 
     expect(response.status).toBe(401);
     expect(getClassroomGameSessionPayloadMock).not.toHaveBeenCalled();
@@ -115,7 +118,10 @@ describe('/api/classroom/[id]/game-session', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith('room-1', expect.any(Function));
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
     expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
       expect.objectContaining({ classroomId: 'room-1', kind: 'game_session.updated' }),
     );
@@ -134,7 +140,10 @@ describe('/api/classroom/[id]/game-session', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith('room-1', expect.any(Function));
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
     expect(recordClassroomRoomEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({ event: 'score', score: 42, progress: 80 }),

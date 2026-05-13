@@ -92,9 +92,8 @@ async function mountHook(
   initialClassroomId = 'room-1',
   initialEnabled = true,
 ): Promise<MountedHook> {
-  const { useClassroomGameSessionState } = await import(
-    '@/lib/hooks/use-classroom-game-session-state'
-  );
+  const { useClassroomGameSessionState } =
+    await import('@/lib/hooks/use-classroom-game-session-state');
 
   const container = document.createElement('div');
   document.body.appendChild(container);

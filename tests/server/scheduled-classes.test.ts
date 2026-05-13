@@ -101,9 +101,8 @@ describe('scheduled class server storage', () => {
   });
 
   it('creates multiplayer invites and refreshes expiry when scheduled classes change', async () => {
-    const { createScheduledClassForAccess, updateScheduledClassForAccess } = await import(
-      '@/lib/server/scheduled-classes'
-    );
+    const { createScheduledClassForAccess, updateScheduledClassForAccess } =
+      await import('@/lib/server/scheduled-classes');
 
     const teacherScope = {
       role: 'teacher' as const,

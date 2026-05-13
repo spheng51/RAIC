@@ -73,13 +73,14 @@ async function enterClassroomFromJoinUrl(browser: Browser, joinUrl: string, clas
 
   await page.goto(joinUrl);
   const displayNameInput = page.getByRole('textbox', { name: 'Your display name' });
-  if ((await displayNameInput.count()) > 0) {
+  const enterLink = page.getByRole('link', { name: 'Enter classroom' });
+  await expect(displayNameInput.or(enterLink).first()).toBeVisible();
+  if (await displayNameInput.isVisible()) {
     await expect(displayNameInput).toBeVisible();
     await displayNameInput.fill('Student Share');
     await page.getByRole('button', { name: 'Enter classroom' }).click();
   } else {
-    await expect(page.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
-    await page.getByRole('link', { name: 'Enter classroom' }).click();
+    await enterLink.click();
   }
   await page.waitForURL(new RegExp(`/classroom/${classroomId}$`));
   await classroom.waitForLoaded();

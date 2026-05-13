@@ -163,11 +163,7 @@ export async function getClassroomGameSessionPayload(
   const sessions = await listRecentClassroomSessions(classroomId);
   const users = await Promise.all(sessions.map((entry) => findUserById(entry.userId)));
   const activePlayers = sessions.map((entry, index) =>
-    buildPlayerFromSession(
-      entry,
-      users[index]?.displayName || 'Student',
-      state.players[entry.id],
-    ),
+    buildPlayerFromSession(entry, users[index]?.displayName || 'Student', state.players[entry.id]),
   );
   const activeSessionIds = new Set(activePlayers.map((player) => player.sessionId));
   const allPlayers = {
