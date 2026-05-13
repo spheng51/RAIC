@@ -72,8 +72,15 @@ async function enterClassroomFromJoinUrl(browser: Browser, joinUrl: string, clas
   const classroom = new ClassroomPage(page);
 
   await page.goto(joinUrl);
-  await expect(page.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
-  await page.getByRole('link', { name: 'Enter classroom' }).click();
+  const displayNameInput = page.getByRole('textbox', { name: 'Your display name' });
+  if ((await displayNameInput.count()) > 0) {
+    await expect(displayNameInput).toBeVisible();
+    await displayNameInput.fill('Student Share');
+    await page.getByRole('button', { name: 'Enter classroom' }).click();
+  } else {
+    await expect(page.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
+    await page.getByRole('link', { name: 'Enter classroom' }).click();
+  }
   await page.waitForURL(new RegExp(`/classroom/${classroomId}$`));
   await classroom.waitForLoaded();
 
@@ -613,7 +620,7 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
       JSON.stringify({ status: publishResponse.status(), body: publishBody }),
     ).toBeTruthy();
     expect(publishBody.id).toBeTruthy();
-    await teacherPage.waitForURL(new RegExp(`/classroom/${publishBody.id}$`));
+    await teacherPage.waitForURL(new RegExp(`/classroom/${publishBody.id}(?:\\?share=1)?$`));
     await localClassroom.waitForLoaded();
     await expect(teacherPage.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
 

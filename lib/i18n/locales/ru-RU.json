@@ -353,6 +353,7 @@
       "expiresAt": "Истекает {{value}}",
       "makeShareable": "Сделать общедоступным",
       "publishing": "Публикация...",
+      "uploadingAssets": "Публикация ресурсов {{completed}}/{{total}}",
       "publishMissing": "Нет локального содержимого класса для публикации.",
       "publishFailed": "Не удалось опубликовать класс",
       "published": "Общий класс создан",

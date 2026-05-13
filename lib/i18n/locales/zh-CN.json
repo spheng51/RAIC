@@ -353,6 +353,7 @@
       "expiresAt": "过期时间 {{value}}",
       "makeShareable": "设为可分享",
       "publishing": "正在发布...",
+      "uploadingAssets": "正在发布资源 {{completed}}/{{total}}",
       "publishMissing": "没有可发布的本地课堂内容。",
       "publishFailed": "发布课堂失败",
       "published": "可分享课堂已创建",
