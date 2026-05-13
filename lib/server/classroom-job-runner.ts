@@ -59,7 +59,10 @@ export function runClassroomGenerationJob(
               ...input.scheduledClass,
               classroomId: result.id,
             },
-            { requireFutureStart: false },
+            {
+              requireFutureStart: false,
+              multiplayerInviteBaseUrl: baseUrl,
+            },
           );
         } catch (scheduleError) {
           scheduledClassError =

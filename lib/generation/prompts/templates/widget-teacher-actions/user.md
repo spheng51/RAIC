@@ -20,6 +20,8 @@ Generate teacher actions for this widget.
 
 {{languageDirective}}
 
+All teacher action labels, speech text, annotations, reveal text, and state explanation content must follow the Course Language directive above.
+
 ---
 
 Generate 3-7 teacher actions that guide the student through this widget.

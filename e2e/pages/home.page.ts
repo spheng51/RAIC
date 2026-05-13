@@ -10,6 +10,7 @@ export class HomePage {
   readonly courseModeButton: Locator;
   readonly gameModeButton: Locator;
   readonly gameTemplateSelector: Locator;
+  readonly generationLanguageToggle: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -23,6 +24,7 @@ export class HomePage {
     this.courseModeButton = page.getByTestId('creation-mode-course');
     this.gameModeButton = page.getByTestId('creation-mode-game');
     this.gameTemplateSelector = page.getByTestId('game-template-selector');
+    this.generationLanguageToggle = page.getByTestId('generation-language-toggle');
   }
 
   async goto() {
@@ -39,5 +41,13 @@ export class HomePage {
 
   gameTemplateButton(templateId: string) {
     return this.page.getByTestId(`game-template-${templateId}`);
+  }
+
+  async setGenerationLanguage(language: 'en-US' | 'zh-CN') {
+    const expectedLabel = language === 'en-US' ? 'EN' : '中文';
+    const currentLabel = (await this.generationLanguageToggle.textContent())?.trim();
+    if (currentLabel !== expectedLabel) {
+      await this.generationLanguageToggle.click();
+    }
   }
 }

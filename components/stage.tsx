@@ -6,6 +6,7 @@ import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useWidgetIframeStore } from '@/lib/store/widget-iframe';
+import { useClassroomGameSessionState } from '@/lib/hooks/use-classroom-game-session-state';
 import { useClassroomCollaborationState } from '@/lib/hooks/use-classroom-collaboration-state';
 import { useClassroomPresentationState } from '@/lib/hooks/use-classroom-presentation-state';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -13,6 +14,7 @@ import { SceneSidebar } from './stage/scene-sidebar';
 import { LiveClassroomCockpit } from './stage/live-classroom-cockpit';
 import { BoardNotesPanel } from './stage/board-notes-panel';
 import { LessonFlowPanel } from './stage/lesson-flow-panel';
+import { GameMultiplayerPanel } from './stage/game-multiplayer-panel';
 import { Header } from './header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
 import { MiroFishManagerDialog } from '@/components/mirofish/mirofish-manager-dialog';
@@ -25,6 +27,12 @@ import { createAudioPlayer } from '@/lib/utils/audio-player';
 import { useDiscussionTTS } from '@/lib/hooks/use-discussion-tts';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
+import type {
+  ClassroomGameSessionPayload,
+  ClassroomGameStudentEventType,
+  ClassroomGameTeacherAction,
+  ClassroomGameSessionMode,
+} from '@/lib/types/classroom-game-session';
 import type {
   ClassroomCollaborationAction,
   ClassroomCollaborationStatePayload,
@@ -152,6 +160,7 @@ export function Stage({
   onOpenClassroomShare,
   onMakeShareable,
   makeShareablePending,
+  makeShareableStatus,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
   classroomSource?: 'public-demo' | 'teacher-server' | null;
@@ -166,6 +175,7 @@ export function Stage({
   onOpenClassroomShare?: () => void;
   onMakeShareable?: () => void;
   makeShareablePending?: boolean;
+  makeShareableStatus?: string | null;
 }) {
   const { t } = useI18n();
   const stage = useStageStore.use.stage();
@@ -240,6 +250,9 @@ export function Stage({
     useState<ClassroomCollaborationStatePayload | null>(() =>
       getInitialCollaborationState(stage?.sharedSimulation),
     );
+  const [gameSessionState, setGameSessionState] = useState<ClassroomGameSessionPayload | null>(
+    null,
+  );
   const [miroFishSessionEmbed, setMiroFishSessionEmbed] = useState<{
     simulationId: string;
     mirofishSessionId: string;
@@ -495,6 +508,11 @@ export function Stage({
     },
     [],
   );
+  const syncGameSessionState = useCallback((nextState: ClassroomGameSessionPayload | null) => {
+    setGameSessionState(nextState);
+  }, []);
+  const isCurrentGameScene =
+    currentScene?.content.type === 'interactive' && currentScene.content.widgetType === 'game';
 
   const showPresentationFallback = useCallback((message: string) => {
     setPresentationFallbackMessage(message);
@@ -517,6 +535,17 @@ export function Stage({
     enabled: Boolean(stage?.id && (presentationState?.sharedSimulation ?? stage?.sharedSimulation)),
     onStateChange: syncCollaborationState,
   });
+  const { refreshGameSessionState } = useClassroomGameSessionState({
+    classroomId: stage?.id,
+    enabled: Boolean(stage?.id && classroomSource === 'teacher-server' && isCurrentGameScene),
+    onStateChange: syncGameSessionState,
+  });
+
+  useEffect(() => {
+    if (!isCurrentGameScene) {
+      setGameSessionState(null);
+    }
+  }, [isCurrentGameScene]);
 
   useEffect(() => {
     if (!stage?.id || classroomSource !== 'teacher-server') {
@@ -870,6 +899,71 @@ export function Stage({
       toast.success('Collaboration settings updated.');
     },
     [refreshCollaborationState, refreshPresentationState, stage?.id],
+  );
+
+  const handleGameTeacherAction = useCallback(
+    async (
+      action: ClassroomGameTeacherAction,
+      body: { mode?: ClassroomGameSessionMode; targetSessionId?: string } = {},
+    ) => {
+      if (!stage?.id) return;
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/game-session`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...body }),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        gameSession?: ClassroomGameSessionPayload;
+      } | null;
+
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || 'Failed to update multiplayer game session.');
+      }
+
+      if (json.gameSession) {
+        setGameSessionState(json.gameSession);
+      }
+      await refreshGameSessionState(true);
+    },
+    [refreshGameSessionState, stage?.id],
+  );
+
+  const handleGameEvent = useCallback(
+    async (input: {
+      event: ClassroomGameStudentEventType;
+      score?: number;
+      progress?: number;
+      state?: Record<string, unknown>;
+      input?: Record<string, unknown>;
+    }) => {
+      if (!stage?.id) return;
+
+      const response = await fetch(`/api/classroom/${encodeURIComponent(stage.id)}/game-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+        gameSession?: ClassroomGameSessionPayload;
+      } | null;
+
+      if (!response.ok || !json?.success) {
+        if (input.event !== 'progress') {
+          toast.error(json?.error || 'Failed to sync multiplayer game event.');
+        }
+        return;
+      }
+
+      if (json.gameSession) {
+        setGameSessionState(json.gameSession);
+      }
+    },
+    [stage?.id],
   );
 
   const requestMiroFishSessionEmbed = useCallback(
@@ -1994,7 +2088,7 @@ export function Stage({
                     disabled={makeShareablePending}
                   >
                     {makeShareablePending
-                      ? t('classroom.share.publishing')
+                      ? makeShareableStatus || t('classroom.share.publishing')
                       : t('classroom.share.makeShareable')}
                   </Button>
                 ) : null}
@@ -2086,6 +2180,23 @@ export function Stage({
               />
             </div>
           ) : null}
+          {isCurrentGameScene && gameSessionState ? (
+            <GameMultiplayerPanel
+              state={gameSessionState}
+              onTeacherAction={(action, body) => {
+                void handleGameTeacherAction(action, body).catch((error) => {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to update multiplayer game session.',
+                  );
+                });
+              }}
+              onStudentReady={() => {
+                void handleGameEvent({ event: 'ready' });
+              }}
+            />
+          ) : null}
           <CanvasArea
             currentScene={currentScene}
             currentSceneIndex={currentSceneIndex}
@@ -2128,6 +2239,10 @@ export function Stage({
             controllerDisplayName={controllerDisplayName}
             controlLeaseExpiresAt={sharedSimulation?.controlLeaseExpiresAt ?? null}
             presentationFallbackMessage={presentationFallbackMessage}
+            gameSession={isCurrentGameScene ? gameSessionState : null}
+            onGameEvent={(event) => {
+              void handleGameEvent(event);
+            }}
             onMiroFishEvent={handleMiroFishEvent}
             onReclaimMiroFishControl={() => {
               void handleRevokeMiroFishControl().catch((error) => {

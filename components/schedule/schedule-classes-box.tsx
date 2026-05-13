@@ -1,7 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarClock, Clock3, Edit3, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Clock3,
+  Copy,
+  Edit3,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -30,6 +41,7 @@ const NO_CLASSROOM_VALUE = '__none__';
 export interface ScheduleClassroomOption {
   id: string;
   name: string;
+  creationMode?: 'course' | 'game-arcade';
 }
 
 interface ScheduleClassesBoxProps {
@@ -39,6 +51,7 @@ interface ScheduleClassesBoxProps {
   readonly onUpdate: (id: string, input: ScheduledClassEventInput) => Promise<void>;
   readonly onDelete: (id: string) => Promise<void>;
   readonly onOpenClassroom: (classroomId: string) => void;
+  readonly gameModeActive?: boolean;
 }
 
 interface ScheduleFormState {
@@ -47,6 +60,7 @@ interface ScheduleFormState {
   time: string;
   durationMinutes: string;
   classroomId: string;
+  multiplayerGameEnabled: boolean;
 }
 
 function pad(value: number) {
@@ -76,6 +90,7 @@ function buildInitialForm(event?: ScheduledClassEvent | null): ScheduleFormState
     time: toLocalTimeInput(date),
     durationMinutes: event?.durationMinutes ? String(event.durationMinutes) : '',
     classroomId: event?.classroomId ?? '',
+    multiplayerGameEnabled: event?.multiplayerGame?.enabled ?? false,
   };
 }
 
@@ -86,6 +101,13 @@ function buildInputFromForm(form: ScheduleFormState): ScheduledClassEventInput {
     startsAt: start.toISOString(),
     durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : undefined,
     classroomId: form.classroomId || undefined,
+    multiplayerGame: form.multiplayerGameEnabled
+      ? {
+          enabled: true,
+          mode: 'both',
+          linkPolicy: 'always_open',
+        }
+      : undefined,
   };
 }
 
@@ -111,6 +133,7 @@ export function ScheduleClassesBox({
   onUpdate,
   onDelete,
   onOpenClassroom,
+  gameModeActive = false,
 }: ScheduleClassesBoxProps) {
   const { t } = useI18n();
   const upcomingEvents = useMemo(() => getUpcomingScheduledClassEvents(events), [events]);
@@ -123,6 +146,7 @@ export function ScheduleClassesBox({
   const [form, setForm] = useState<ScheduleFormState>(() => buildInitialForm());
   const [busyAction, setBusyAction] = useState<'save' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   const openCreateDialog = () => {
     setEditingEvent(null);
@@ -173,6 +197,23 @@ export function ScheduleClassesBox({
       setBusyAction(null);
     }
   };
+
+  const copyInvite = async (event: ScheduledClassEvent) => {
+    const inviteUrl = event.multiplayerGame?.inviteUrl;
+    if (!inviteUrl || !navigator.clipboard?.writeText) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopiedInviteId(event.id);
+    window.setTimeout(
+      () => setCopiedInviteId((current) => (current === event.id ? null : current)),
+      1600,
+    );
+  };
+
+  const selectedClassroom = form.classroomId ? classroomById.get(form.classroomId) : undefined;
+  const canUseMultiplayerGame =
+    gameModeActive ||
+    selectedClassroom?.creationMode === 'game-arcade' ||
+    Boolean(editingEvent?.multiplayerGame?.enabled);
 
   return (
     <>
@@ -257,6 +298,7 @@ export function ScheduleClassesBox({
                                 : event.classroomId
                                   ? ` · ${t('home.schedule.unlinkedClassroom')}`
                                   : ''}
+                              {event.multiplayerGame?.enabled ? ' · Multiplayer' : ''}
                             </p>
                           </div>
                         </div>
@@ -271,6 +313,22 @@ export function ScheduleClassesBox({
                       >
                         <Edit3 className="size-3.5" />
                       </Button>
+                      {event.multiplayerGame?.inviteUrl ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Copy multiplayer invite"
+                          className="opacity-80 hover:bg-white/80 dark:hover:bg-white/5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                          onClick={() => void copyInvite(event)}
+                        >
+                          {copiedInviteId === event.id ? (
+                            <Sparkles className="size-3.5" />
+                          ) : (
+                            <Copy className="size-3.5" />
+                          )}
+                        </Button>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -343,6 +401,11 @@ export function ScheduleClassesBox({
                     setForm((prev) => ({
                       ...prev,
                       classroomId: value === NO_CLASSROOM_VALUE ? '' : value,
+                      multiplayerGameEnabled:
+                        prev.multiplayerGameEnabled &&
+                        (gameModeActive ||
+                          classrooms.find((classroom) => classroom.id === value)?.creationMode ===
+                            'game-arcade'),
                     }))
                   }
                 >
@@ -362,6 +425,28 @@ export function ScheduleClassesBox({
                 </Select>
               </div>
             </div>
+
+            {canUseMultiplayerGame ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/25 px-3 py-3">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="scheduled-class-multiplayer-game"
+                    className="inline-flex items-center gap-2"
+                  >
+                    <Users className="size-3.5 text-violet-500" />
+                    Multiplayer game class
+                  </Label>
+                </div>
+                <Switch
+                  id="scheduled-class-multiplayer-game"
+                  checked={form.multiplayerGameEnabled}
+                  onCheckedChange={(checked) =>
+                    setForm((prev) => ({ ...prev, multiplayerGameEnabled: checked }))
+                  }
+                  aria-label="Multiplayer game class"
+                />
+              </div>
+            ) : null}
 
             {error ? (
               <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

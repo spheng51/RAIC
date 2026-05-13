@@ -34,6 +34,7 @@ export {
   generateSceneOutlinesFromRequirements,
   applyOutlineFallbacks,
   DEFAULT_LANGUAGE_DIRECTIVE,
+  buildCourseLanguageDirective,
 } from './outline-generator';
 
 // Scene generator (Stage 2)

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { ArrowRight, Clock3, Presentation } from 'lucide-react';
 import {
   Card,
@@ -36,7 +35,6 @@ export default async function JoinClassroomPage({
     );
   }
 
-  const classroomHref = `/join/${encodeURIComponent(joinCode)}/enter`;
   const classroom = await readClassroom(joinToken.classroomId).catch(() => null);
   const liveMeeting = classroom?.stage.liveMeeting ?? null;
 
@@ -58,20 +56,33 @@ export default async function JoinClassroomPage({
             <Clock3 className="size-4 text-primary" />
             <span>Valid until {new Date(joinToken.expiresAt).toLocaleString()}</span>
           </div>
-          <p>
-            You&apos;ll enter as a classroom-scoped student session, so teacher controls stay hidden
-            while the shared presentation and MiroFish sidecar stay aligned with the rest of the
-            room.
-          </p>
-          {liveMeeting ? <StudentJoinLiveMeetingCard liveMeeting={liveMeeting} /> : null}
-        </CardContent>
-        <CardFooter className="border-t">
-          <Button asChild className="w-full">
-            <Link href={classroomHref}>
+          <form action={`/join/${encodeURIComponent(joinCode)}/enter`} method="post" className="space-y-3">
+            <label htmlFor="student-display-name" className="block text-sm font-medium text-foreground">
+              Your display name
+            </label>
+            <input
+              id="student-display-name"
+              name="displayName"
+              maxLength={80}
+              autoComplete="name"
+              required
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Enter your name"
+            />
+            <p>
+              You&apos;ll enter as a classroom-scoped student session, so teacher controls stay hidden
+              while the shared presentation, multiplayer games, and classroom sidecars stay aligned
+              with the rest of the room.
+            </p>
+            {liveMeeting ? <StudentJoinLiveMeetingCard liveMeeting={liveMeeting} /> : null}
+            <Button type="submit" className="w-full">
               Enter classroom
               <ArrowRight className="size-4" />
-            </Link>
-          </Button>
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="border-t text-xs text-muted-foreground">
+          Direct classroom links still work for returning students.
         </CardFooter>
       </Card>
     </main>

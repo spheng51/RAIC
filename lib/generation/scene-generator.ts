@@ -26,7 +26,7 @@ import type { StageStore } from '@/lib/api/stage-api';
 import { createStageAPI } from '@/lib/api/stage-api';
 import { generatePBLContent } from '@/lib/pbl/generate-pbl';
 import { buildPrompt, PROMPT_IDS, type PromptId } from './prompts';
-import { DEFAULT_LANGUAGE_DIRECTIVE } from './outline-generator';
+import { buildCourseLanguageDirective } from './language-directive';
 import { postProcessInteractiveHtml } from './interactive-post-processor';
 import { parseActionsFromStructuredOutput } from './action-parser';
 import { parseJsonResponse } from './json-repair';
@@ -59,6 +59,7 @@ import type {
 } from './pipeline-types';
 import { executeScenesWithPolicy } from './scene-executor';
 import { promptGameWidgetAdapter } from '@/lib/game-arcade/adapter';
+import { buildFallbackGameWidget } from '@/lib/game-arcade/fallback';
 import { validateGameWidgetHtml } from '@/lib/game-arcade/qa';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
@@ -386,7 +387,7 @@ export async function generateSceneContent(
       }
     : (optionsOrAssignedImages ?? {});
   const languageDirective = buildLanguageText(
-    options.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
+    options.languageDirective || buildCourseLanguageDirective(outline.language),
     outline.languageNote,
   );
 
@@ -758,6 +759,146 @@ function processLatexElements(
     .filter((el): el is NonNullable<typeof el> => el !== null);
 }
 
+function escapeSlideHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isGeneratedSlideData(value: GeneratedSlideData | null): value is GeneratedSlideData {
+  return Boolean(value && Array.isArray(value.elements));
+}
+
+function truncateForRetryPrompt(response: string): string {
+  return response.replace(/\s+/g, ' ').trim().slice(0, 1200);
+}
+
+function buildSlideJsonRetryPrompt(userPrompt: string, previousResponse: string): string {
+  const excerpt = truncateForRetryPrompt(previousResponse) || '(empty response)';
+  return `${userPrompt}
+
+The previous response could not be parsed as the required slide JSON.
+Previous response excerpt: ${excerpt}
+
+Return a single valid JSON object only. It must include an "elements" array and match the slide output structure. Do not include markdown, prose, or code fences.`;
+}
+
+function buildFallbackSlideData(outline: SceneOutline): GeneratedSlideData {
+  const title = outline.title || 'Overview';
+  const rawPoints = outline.keyPoints?.filter((point) => point.trim().length > 0).slice(0, 5) ?? [];
+  const points = rawPoints.length > 0 ? rawPoints : [outline.description || 'Overview'];
+  const contentHeightByLineCount = [49, 76, 103, 130, 157];
+  const contentHeight = contentHeightByLineCount[Math.min(points.length, 5) - 1] ?? 49;
+  const bulletHtml = points
+    .map((point) => `<p style="font-size:18px;">&bull; ${escapeSlideHtml(point)}</p>`)
+    .join('');
+
+  return {
+    background: { type: 'solid', color: '#ffffff' },
+    elements: [
+      {
+        id: 'fallback_title',
+        type: 'text',
+        left: 60,
+        top: 60,
+        width: 880,
+        height: 70,
+        content: `<p style="font-size:32px;"><strong>${escapeSlideHtml(title)}</strong></p>`,
+        defaultFontName: '',
+        defaultColor: '#1f2937',
+      },
+      {
+        id: 'fallback_content',
+        type: 'text',
+        left: 80,
+        top: 160,
+        width: 840,
+        height: contentHeight,
+        content: bulletHtml,
+        defaultFontName: '',
+        defaultColor: '#374151',
+      },
+    ],
+    remark: outline.description,
+  };
+}
+
+function buildSlideContentFromGeneratedData(
+  outline: SceneOutline,
+  generatedData: GeneratedSlideData,
+  assignedImages?: PdfImage[],
+  imageMapping?: ImageMapping,
+  generatedMediaMapping?: ImageMapping,
+): GeneratedSlideContent {
+  log.debug(`Got ${generatedData.elements.length} elements for: ${outline.title}`);
+
+  // Debug: Log image elements before resolution
+  const imageElements = generatedData.elements.filter((el) => el.type === 'image');
+  if (imageElements.length > 0) {
+    log.debug(
+      `Image elements before resolution:`,
+      imageElements.map((el) => ({
+        type: el.type,
+        src:
+          (el as Record<string, unknown>).src &&
+          String((el as Record<string, unknown>).src).substring(0, 50),
+      })),
+    );
+    log.debug(`imageMapping keys:`, imageMapping ? Object.keys(imageMapping).length : '0 keys');
+  }
+
+  // Fix elements with missing required fields + aspect ratio correction (while src is still img_id)
+  const fixedElements = fixElementDefaults(generatedData.elements, assignedImages);
+  log.debug(`After element fixing: ${fixedElements.length} elements`);
+
+  // Process LaTeX elements: render latex string → HTML via KaTeX
+  const latexProcessedElements = processLatexElements(fixedElements);
+  log.debug(`After LaTeX processing: ${latexProcessedElements.length} elements`);
+
+  // Resolve image_id references to actual URLs
+  const resolvedElements = resolveImageIds(
+    latexProcessedElements,
+    imageMapping,
+    generatedMediaMapping,
+  );
+  log.debug(`After image resolution: ${resolvedElements.length} elements`);
+
+  const videoNormalizedElements = normalizeGeneratedVideoRefs(
+    resolvedElements,
+    outline.mediaGenerations,
+  );
+  log.debug(`After video reference normalization: ${videoNormalizedElements.length} elements`);
+
+  // Process elements, assign unique IDs
+  const processedElements: PPTElement[] = videoNormalizedElements.map((el) => ({
+    ...el,
+    id: `${el.type}_${nanoid(8)}`,
+    rotate: 0,
+  })) as PPTElement[];
+
+  // Process background
+  let background: SlideBackground | undefined;
+  if (generatedData.background) {
+    if (generatedData.background.type === 'solid' && generatedData.background.color) {
+      background = { type: 'solid', color: generatedData.background.color };
+    } else if (generatedData.background.type === 'gradient' && generatedData.background.gradient) {
+      background = {
+        type: 'gradient',
+        gradient: generatedData.background.gradient,
+      };
+    }
+  }
+
+  return {
+    elements: processedElements,
+    background,
+    remark: generatedData.remark || outline.description,
+  };
+}
+
 /**
  * Generate slide content
  */
@@ -881,77 +1022,33 @@ async function generateSlideContent(
     prompts.user,
     visionImages,
   );
-  const generatedData = parseJsonResponse<GeneratedSlideData>(response);
+  let generatedData = parseJsonResponse<GeneratedSlideData>(response);
 
-  if (!generatedData || !generatedData.elements || !Array.isArray(generatedData.elements)) {
+  if (!isGeneratedSlideData(generatedData)) {
     log.error(`Failed to parse AI response for: ${outline.title}`);
-    return null;
-  }
+    log.warn(`Retrying slide content generation with strict JSON repair prompt: ${outline.title}`);
 
-  log.debug(`Got ${generatedData.elements.length} elements for: ${outline.title}`);
-
-  // Debug: Log image elements before resolution
-  const imageElements = generatedData.elements.filter((el) => el.type === 'image');
-  if (imageElements.length > 0) {
-    log.debug(
-      `Image elements before resolution:`,
-      imageElements.map((el) => ({
-        type: el.type,
-        src:
-          (el as Record<string, unknown>).src &&
-          String((el as Record<string, unknown>).src).substring(0, 50),
-      })),
+    const retryResponse = await aiCall(
+      withAdaptivePrompt(prompts.system, adaptivePrompt),
+      buildSlideJsonRetryPrompt(prompts.user, response),
+      visionImages,
     );
-    log.debug(`imageMapping keys:`, imageMapping ? Object.keys(imageMapping).length : '0 keys');
-  }
+    generatedData = parseJsonResponse<GeneratedSlideData>(retryResponse);
 
-  // Fix elements with missing required fields + aspect ratio correction (while src is still img_id)
-  const fixedElements = fixElementDefaults(generatedData.elements, assignedImages);
-  log.debug(`After element fixing: ${fixedElements.length} elements`);
-
-  // Process LaTeX elements: render latex string → HTML via KaTeX
-  const latexProcessedElements = processLatexElements(fixedElements);
-  log.debug(`After LaTeX processing: ${latexProcessedElements.length} elements`);
-
-  // Resolve image_id references to actual URLs
-  const resolvedElements = resolveImageIds(
-    latexProcessedElements,
-    imageMapping,
-    generatedMediaMapping,
-  );
-  log.debug(`After image resolution: ${resolvedElements.length} elements`);
-
-  const videoNormalizedElements = normalizeGeneratedVideoRefs(
-    resolvedElements,
-    outline.mediaGenerations,
-  );
-  log.debug(`After video reference normalization: ${videoNormalizedElements.length} elements`);
-
-  // Process elements, assign unique IDs
-  const processedElements: PPTElement[] = videoNormalizedElements.map((el) => ({
-    ...el,
-    id: `${el.type}_${nanoid(8)}`,
-    rotate: 0,
-  })) as PPTElement[];
-
-  // Process background
-  let background: SlideBackground | undefined;
-  if (generatedData.background) {
-    if (generatedData.background.type === 'solid' && generatedData.background.color) {
-      background = { type: 'solid', color: generatedData.background.color };
-    } else if (generatedData.background.type === 'gradient' && generatedData.background.gradient) {
-      background = {
-        type: 'gradient',
-        gradient: generatedData.background.gradient,
-      };
+    if (!isGeneratedSlideData(generatedData)) {
+      log.error(`Failed to parse retry AI response for: ${outline.title}`);
+      log.warn(`Using deterministic fallback slide for: ${outline.title}`);
+      generatedData = buildFallbackSlideData(outline);
     }
   }
 
-  return {
-    elements: processedElements,
-    background,
-    remark: generatedData.remark || outline.description,
-  };
+  return buildSlideContentFromGeneratedData(
+    outline,
+    generatedData,
+    assignedImages,
+    imageMapping,
+    generatedMediaMapping,
+  );
 }
 
 /**
@@ -1170,6 +1267,9 @@ async function generateWidgetContent(
   const rawHtml = extractHtml(response);
   if (!rawHtml) {
     log.error(`Failed to extract HTML from ${widgetType} response for: ${outline.title}`);
+    if (widgetType === 'game') {
+      return generateFallbackGameContent(outline, widgetOutline, 'missing HTML document');
+    }
     return null;
   }
 
@@ -1190,7 +1290,7 @@ async function generateWidgetContent(
     }
     if (!validation.valid) {
       log.error(`Game widget QA failed for "${outline.title}": ${validation.errors.join('; ')}`);
-      return null;
+      return generateFallbackGameContent(outline, widgetOutline, validation.errors.join('; '));
     }
   }
 
@@ -1199,6 +1299,22 @@ async function generateWidgetContent(
     widgetType,
     widgetConfig,
     teacherActions,
+  };
+}
+
+function generateFallbackGameContent(
+  outline: SceneOutline,
+  widgetOutline: WidgetOutline,
+  reason: string,
+): GeneratedInteractiveContent {
+  log.warn(`Using fallback game widget for "${outline.title}" after generation issue: ${reason}`);
+  const fallback = buildFallbackGameWidget(outline, widgetOutline);
+
+  return {
+    html: postProcessInteractiveHtml(fallback.html),
+    widgetType: 'game',
+    widgetConfig: fallback.widgetConfig,
+    teacherActions: fallback.teacherActions,
   };
 }
 
@@ -1467,7 +1583,7 @@ export async function generateSceneActions(
         adaptivePrompt,
       };
   const langText = buildLanguageText(
-    options.languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
+    options.languageDirective || buildCourseLanguageDirective(outline.language),
     outline.languageNote,
   );
   const agentsText = formatAgentsForPrompt(options.agents);

@@ -32,9 +32,8 @@ import type {
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
-import { parseJsonResponse } from '@/lib/generation/json-repair';
 import {
-  DEFAULT_LANGUAGE_DIRECTIVE,
+  buildCourseLanguageDirective,
   enrichGeneratedOutline,
 } from '@/lib/generation/outline-generator';
 import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
@@ -168,6 +167,7 @@ export async function POST(req: NextRequest) {
     const videoGenerationEnabled = req.headers.get('x-video-generation-enabled') === 'true';
     const mediaEnabled = imageGenerationEnabled || videoGenerationEnabled;
     const hasSourceImages = (pdfImages?.length ?? 0) > 0;
+    const languageDirective = buildCourseLanguageDirective(requirements.language);
 
     // Build teacher context from agents (if available)
     const teacherContext = formatTeacherPersonaForPrompt(agents);
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
       mediaEnabled,
       teacherContext,
       userProfile: '',
-      languageDirective: DEFAULT_LANGUAGE_DIRECTIVE,
+      languageDirective,
       gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
       gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,
     });
@@ -257,8 +257,6 @@ export async function POST(req: NextRequest) {
 
           let parsedOutlines: SceneOutline[] = [];
           let lastError: string | undefined;
-          let languageDirective = DEFAULT_LANGUAGE_DIRECTIVE;
-
           for (let attempt = 1; attempt <= MAX_STREAM_RETRIES + 1; attempt++) {
             try {
               const result = streamLLM(streamParams, 'scene-outlines-stream');
@@ -288,13 +286,6 @@ export async function POST(req: NextRequest) {
                   controller.enqueue(encoder.encode(`data: ${event}\n\n`));
                 }
               }
-              const parsed = parseJsonResponse<
-                { languageDirective?: string; outlines?: SceneOutline[] } | SceneOutline[]
-              >(fullText);
-              if (parsed && !Array.isArray(parsed) && parsed.languageDirective) {
-                languageDirective = parsed.languageDirective;
-              }
-
               // Validate: got outlines?
               if (parsedOutlines.length > 0) break;
 

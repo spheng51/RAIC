@@ -4,10 +4,46 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
 const requireRequestRoleMock = vi.fn();
+const requireClassroomAccessMock = vi.fn();
 
 vi.mock('@/lib/auth/authorize', () => ({
   requireRequestRole: requireRequestRoleMock,
 }));
+
+vi.mock('@/lib/auth/classroom-access', () => ({
+  requireClassroomAccess: requireClassroomAccessMock,
+}));
+
+function buildStage() {
+  return {
+    id: 'local-room',
+    name: 'Local demo',
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function buildScenes() {
+  return [
+    {
+      id: 'scene-1',
+      stageId: 'local-room',
+      type: 'slide',
+      title: 'Intro',
+      order: 0,
+      content: {
+        type: 'slide',
+        canvas: {
+          id: 'slide-1',
+          elements: [{ id: 'image-1', type: 'image', src: 'gen_img_1' }],
+        },
+      },
+      actions: [{ id: 'speech-1', type: 'speech', text: 'Hello', audioId: 'tts_speech-1' }],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ];
+}
 
 describe('POST /api/classroom/publish-local', () => {
   const originalCwd = process.cwd();
@@ -17,6 +53,7 @@ describe('POST /api/classroom/publish-local', () => {
     vi.resetModules();
     vi.unstubAllEnvs();
     requireRequestRoleMock.mockReset();
+    requireClassroomAccessMock.mockReset();
     testRoot = path.join(
       originalCwd,
       '.vitest-tmp',
@@ -44,37 +81,8 @@ describe('POST /api/classroom/publish-local', () => {
     });
 
     const formData = new FormData();
-    formData.set(
-      'stage',
-      JSON.stringify({
-        id: 'local-room',
-        name: 'Local demo',
-        createdAt: 1,
-        updatedAt: 1,
-      }),
-    );
-    formData.set(
-      'scenes',
-      JSON.stringify([
-        {
-          id: 'scene-1',
-          stageId: 'local-room',
-          type: 'slide',
-          title: 'Intro',
-          order: 0,
-          content: {
-            type: 'slide',
-            canvas: {
-              id: 'slide-1',
-              elements: [{ id: 'image-1', type: 'image', src: 'gen_img_1' }],
-            },
-          },
-          actions: [{ id: 'speech-1', type: 'speech', text: 'Hello', audioId: 'tts_speech-1' }],
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ]),
-    );
+    formData.set('stage', JSON.stringify(buildStage()));
+    formData.set('scenes', JSON.stringify(buildScenes()));
     formData.append(
       'media:gen_img_1',
       new File([new Uint8Array([1, 2, 3])], 'gen_img_1.png', { type: 'image/png' }),
@@ -112,6 +120,172 @@ describe('POST /api/classroom/publish-local', () => {
     expect(speechAction.audioUrl).toContain(
       `/api/classroom-media/${json.id}/audio/tts_speech-1.mp3`,
     );
+  });
+
+  it('publishes metadata-only JSON without uploading binary assets', async () => {
+    requireRequestRoleMock.mockResolvedValue({
+      session: {
+        role: 'teacher',
+        organizationId: 'org-1',
+      },
+      user: { id: 'teacher-1' },
+    });
+
+    const { POST } = await import('@/app/api/classroom/publish-local/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/publish-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: buildStage(),
+          scenes: buildScenes(),
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json.id).toBeTruthy();
+    expect(json.warnings).toEqual([]);
+
+    const { readClassroom } = await import('@/lib/server/classroom-storage');
+    const classroom = await readClassroom(json.id);
+    const scene = classroom?.scenes[0];
+    const imageElement = (
+      scene?.content as never as { canvas: { elements: Array<{ src: string }> } }
+    ).canvas.elements[0];
+    const speechAction = scene?.actions?.[0] as { audioUrl?: string };
+
+    expect(imageElement.src).toBe('gen_img_1');
+    expect(speechAction.audioUrl).toBeUndefined();
+  });
+
+  it('uploads a single publish asset and rewrites the persisted classroom', async () => {
+    requireRequestRoleMock.mockResolvedValue({
+      session: {
+        role: 'teacher',
+        organizationId: 'org-1',
+      },
+      user: { id: 'teacher-1' },
+    });
+
+    const { POST: publish } = await import('@/app/api/classroom/publish-local/route');
+    const publishResponse = await publish(
+      new NextRequest('http://localhost/api/classroom/publish-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: buildStage(),
+          scenes: buildScenes(),
+        }),
+      }),
+    );
+    const publishBody = await publishResponse.json();
+
+    const { readClassroom } = await import('@/lib/server/classroom-storage');
+    const classroom = await readClassroom(publishBody.id);
+    requireClassroomAccessMock.mockResolvedValue({
+      source: 'web',
+      auth: {
+        session: { kind: 'web', role: 'teacher', organizationId: 'org-1' },
+        user: { id: 'teacher-1' },
+      },
+      classroom,
+    });
+
+    const { POST: upload } = await import('@/app/api/classroom/[id]/publish-local-asset/route');
+    const mediaFormData = new FormData();
+    mediaFormData.set('kind', 'media');
+    mediaFormData.set('assetId', 'gen_img_1');
+    mediaFormData.set(
+      'file',
+      new File([new Uint8Array([1, 2, 3])], 'gen_img_1.png', { type: 'image/png' }),
+    );
+    const mediaResponse = await upload(
+      new NextRequest(`http://localhost/api/classroom/${publishBody.id}/publish-local-asset`, {
+        method: 'POST',
+        body: mediaFormData,
+      }),
+      { params: Promise.resolve({ id: publishBody.id }) },
+    );
+
+    const audioFormData = new FormData();
+    audioFormData.set('kind', 'audio');
+    audioFormData.set('assetId', 'tts_speech-1');
+    audioFormData.set(
+      'file',
+      new File([new Uint8Array([4, 5, 6])], 'tts_speech-1.mp3', { type: 'audio/mpeg' }),
+    );
+    const audioResponse = await upload(
+      new NextRequest(`http://localhost/api/classroom/${publishBody.id}/publish-local-asset`, {
+        method: 'POST',
+        body: audioFormData,
+      }),
+      { params: Promise.resolve({ id: publishBody.id }) },
+    );
+
+    expect(mediaResponse.status).toBe(200);
+    expect(audioResponse.status).toBe(200);
+
+    const updated = await readClassroom(publishBody.id);
+    const scene = updated?.scenes[0];
+    const imageElement = (
+      scene?.content as never as { canvas: { elements: Array<{ src: string }> } }
+    ).canvas.elements[0];
+    const speechAction = scene?.actions?.[0] as { audioUrl?: string };
+
+    expect(imageElement.src).toContain(
+      `/api/classroom-media/${publishBody.id}/media/gen_img_1.png`,
+    );
+    expect(speechAction.audioUrl).toContain(
+      `/api/classroom-media/${publishBody.id}/audio/tts_speech-1.mp3`,
+    );
+  });
+
+  it('rejects unauthorized single-asset uploads', async () => {
+    requireClassroomAccessMock.mockResolvedValue(
+      NextResponse.json(
+        {
+          success: false,
+          errorCode: 'FORBIDDEN',
+          error: 'Denied',
+        },
+        { status: 403 },
+      ),
+    );
+
+    const { POST } = await import('@/app/api/classroom/[id]/publish-local-asset/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/publish-local-asset', {
+        method: 'POST',
+        body: new FormData(),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects invalid single-asset upload requests', async () => {
+    requireClassroomAccessMock.mockResolvedValue({
+      source: 'web',
+      auth: {
+        session: { kind: 'web', role: 'teacher', organizationId: 'org-1' },
+        user: { id: 'teacher-1' },
+      },
+      classroom: {},
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/publish-local-asset/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/publish-local-asset', {
+        method: 'POST',
+        body: new FormData(),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it('requires teacher auth', async () => {

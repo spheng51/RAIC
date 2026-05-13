@@ -353,6 +353,7 @@
       "expiresAt": "{{value}} に期限切れ",
       "makeShareable": "共有可能にする",
       "publishing": "公開中...",
+      "uploadingAssets": "アセットを公開中 {{completed}}/{{total}}",
       "publishMissing": "公開できるローカル教室コンテンツがありません。",
       "publishFailed": "教室の公開に失敗しました",
       "published": "共有可能な教室を作成しました",

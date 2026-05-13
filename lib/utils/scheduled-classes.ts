@@ -1,14 +1,22 @@
-import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
+import type {
+  ScheduledClassEvent,
+  ScheduledClassEventInput,
+  ScheduledClassMultiplayerGame,
+  ScheduledClassMultiplayerGameInput,
+} from '@/lib/types/scheduled-classes';
 
 export const MAX_VISIBLE_SCHEDULED_CLASSES = 5;
 export const MAX_SCHEDULED_CLASS_TITLE_LENGTH = 120;
 export const MAX_SCHEDULED_CLASS_DURATION_MINUTES = 24 * 60;
+export const DEFAULT_SCHEDULED_CLASS_DURATION_MINUTES = 60;
+export const SCHEDULED_MULTIPLAYER_INVITE_GRACE_MINUTES = 60;
 
 export interface NormalizedScheduledClassEventInput {
   title: string;
   startsAt: string;
   durationMinutes?: number;
   classroomId?: string;
+  multiplayerGame?: ScheduledClassMultiplayerGame;
 }
 
 export type ScheduledClassValidationResult =
@@ -24,6 +32,48 @@ export type ScheduledClassValidationResult =
 function parseDate(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+}
+
+function normalizeMultiplayerGameInput(
+  input: ScheduledClassMultiplayerGameInput | null | undefined,
+): ScheduledClassMultiplayerGame | undefined {
+  if (!input?.enabled) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    mode:
+      input.mode === 'leaderboard' || input.mode === 'shared-control' || input.mode === 'both'
+        ? input.mode
+        : 'both',
+    linkPolicy: 'always_open',
+    ...(typeof input.inviteExpiresAt === 'string' && input.inviteExpiresAt.trim()
+      ? { inviteExpiresAt: input.inviteExpiresAt.trim() }
+      : {}),
+    ...(typeof input.joinTokenId === 'string' && input.joinTokenId.trim()
+      ? { joinTokenId: input.joinTokenId.trim() }
+      : {}),
+    ...(typeof input.inviteUrl === 'string' && input.inviteUrl.trim()
+      ? { inviteUrl: input.inviteUrl.trim() }
+      : {}),
+  };
+}
+
+export function getScheduledClassInviteExpiresAt(input: {
+  startsAt: string;
+  durationMinutes?: number | null;
+}): string {
+  const start = parseDate(input.startsAt);
+  const durationMinutes =
+    input.durationMinutes && input.durationMinutes > 0
+      ? input.durationMinutes
+      : DEFAULT_SCHEDULED_CLASS_DURATION_MINUTES;
+  const startMs = start?.getTime();
+  const baseMs = Number.isFinite(startMs) ? startMs! : Date.now();
+  return new Date(
+    baseMs + (durationMinutes + SCHEDULED_MULTIPLAYER_INVITE_GRACE_MINUTES) * 60_000,
+  ).toISOString();
 }
 
 export function normalizeScheduledClassInput(
@@ -66,6 +116,7 @@ export function normalizeScheduledClassInput(
     typeof input.classroomId === 'string' && input.classroomId.trim()
       ? input.classroomId.trim()
       : undefined;
+  const multiplayerGame = normalizeMultiplayerGameInput(input.multiplayerGame);
 
   return {
     ok: true,
@@ -74,6 +125,7 @@ export function normalizeScheduledClassInput(
       startsAt: startsAtDate.toISOString(),
       ...(durationMinutes ? { durationMinutes } : {}),
       ...(classroomId ? { classroomId } : {}),
+      ...(multiplayerGame ? { multiplayerGame } : {}),
     },
   };
 }

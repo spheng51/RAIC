@@ -6,6 +6,7 @@ import type {
   PPTLineElement,
   PPTImageElement,
   PPTShapeElement,
+  PPTTextElement,
 } from '@/lib/types/slides';
 import {
   OperateResizeHandlers,
@@ -17,6 +18,7 @@ import { SHAPE_PATH_FORMULAS } from '@/configs/shapes';
 import { type AlignLine, uniqAlignLines } from '@/lib/utils/element';
 import { useHistorySnapshot } from '@/lib/hooks/use-history-snapshot';
 import { useCanvasOperations } from '@/lib/hooks/use-canvas-operations';
+import { scaleSlideTextHtmlFontSizes } from '@/lib/utils/slide-text-scaling';
 
 interface RotateElementData {
   left: number;
@@ -114,6 +116,41 @@ const getOppositePoint = (
   return oppositeMap[direction];
 };
 
+function isCornerResizeCommand(command: OperateResizeHandlers) {
+  return (
+    command === OperateResizeHandlers.LEFT_TOP ||
+    command === OperateResizeHandlers.RIGHT_TOP ||
+    command === OperateResizeHandlers.LEFT_BOTTOM ||
+    command === OperateResizeHandlers.RIGHT_BOTTOM
+  );
+}
+
+function safeDimensionScale(nextSize: number, originSize: number) {
+  if (!Number.isFinite(nextSize) || !Number.isFinite(originSize) || originSize <= 0) return 1;
+  return nextSize / originSize;
+}
+
+function getTextFontScaleFactor(input: {
+  command: OperateResizeHandlers;
+  widthScale: number;
+  heightScale: number;
+  vertical?: boolean;
+  groupScale?: boolean;
+}) {
+  const widthScale = input.widthScale > 0 ? input.widthScale : 1;
+  const heightScale = input.heightScale > 0 ? input.heightScale : 1;
+
+  if (input.groupScale || isCornerResizeCommand(input.command)) {
+    return Math.sqrt(widthScale * heightScale);
+  }
+
+  if (input.vertical) {
+    return heightScale;
+  }
+
+  return widthScale;
+}
+
 /**
  * Scale element Hook
  *
@@ -158,6 +195,7 @@ export function useScaleElement(
       const elOriginTop = element.top;
       const elOriginWidth = element.width;
       const elOriginHeight = element.height;
+      const originTextContent = element.type === 'text' ? element.content : null;
 
       const originTableCellMinHeight = element.type === 'table' ? element.cellMinHeight : 0;
 
@@ -517,6 +555,25 @@ export function useScaleElement(
               cellMinHeight: cellMinHeight < 36 ? 36 : cellMinHeight,
             };
           }
+          if (el.type === 'text' && originTextContent !== null) {
+            const widthScale = safeDimensionScale(width, elOriginWidth);
+            const heightScale = safeDimensionScale(height, elOriginHeight);
+            const fontScale = getTextFontScaleFactor({
+              command,
+              widthScale,
+              heightScale,
+              vertical: el.vertical,
+            });
+
+            return {
+              ...el,
+              left,
+              top,
+              width,
+              height,
+              content: scaleSlideTextHtmlFontSizes(originTextContent, fontScale),
+            };
+          }
           return { ...el, left, top, width, height };
         });
 
@@ -538,9 +595,9 @@ export function useScaleElement(
         const currentPageX = e instanceof MouseEvent ? e.pageX : e.changedTouches[0].pageX;
         const currentPageY = e instanceof MouseEvent ? e.pageY : e.changedTouches[0].pageY;
 
-        if (startPageX === currentPageX && startPageY === currentPageY) return;
-
         setScalingState(false);
+
+        if (startPageX === currentPageX && startPageY === currentPageY) return;
 
         updateSlide({ elements: elementListRef.current });
         addHistorySnapshot();
@@ -574,6 +631,7 @@ export function useScaleElement(
   const scaleMultiElement = useCallback(
     (e: React.MouseEvent, range: MultiSelectRange, command: OperateResizeHandlers) => {
       let isMouseDown = true;
+      setScalingState(true);
 
       const { minX, maxX, minY, maxY } = range;
       const operateWidth = maxX - minX;
@@ -649,17 +707,39 @@ export function useScaleElement(
 
         // Calculate and update the position and size of all selected elements based on the computed ratio
         const newElements = elementListRef.current.map((el) => {
-          if ((el.type === 'image' || el.type === 'shape') && activeElementIdList.includes(el.id)) {
+          if (
+            (el.type === 'image' || el.type === 'shape' || el.type === 'text') &&
+            activeElementIdList.includes(el.id)
+          ) {
             const originElement = originElementList.find((originEl) => originEl.id === el.id) as
               | PPTImageElement
-              | PPTShapeElement;
-            return {
+              | PPTShapeElement
+              | PPTTextElement;
+            const nextElement = {
               ...el,
               width: originElement.width * widthScale,
               height: originElement.height * heightScale,
               left: currentMinX + (originElement.left - minX) * widthScale,
               top: currentMinY + (originElement.top - minY) * heightScale,
             };
+
+            if (el.type === 'text' && originElement.type === 'text') {
+              return {
+                ...nextElement,
+                content: scaleSlideTextHtmlFontSizes(
+                  originElement.content,
+                  getTextFontScaleFactor({
+                    command,
+                    widthScale,
+                    heightScale,
+                    vertical: originElement.vertical,
+                    groupScale: true,
+                  }),
+                ),
+              };
+            }
+
+            return nextElement;
           }
           return el;
         });
@@ -672,6 +752,7 @@ export function useScaleElement(
         isMouseDown = false;
         document.onmousemove = null;
         document.onmouseup = null;
+        setScalingState(false);
 
         if (startPageX === e.pageX && startPageY === e.pageY) return;
 
@@ -688,6 +769,7 @@ export function useScaleElement(
       canvasScale,
       activeElementIdList,
       ctrlOrShiftKeyActive,
+      setScalingState,
       updateSlide,
       addHistorySnapshot,
     ],

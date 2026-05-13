@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildLanguageText } from '@/lib/generation/prompt-formatters';
 import {
-  DEFAULT_LANGUAGE_DIRECTIVE,
+  buildCourseLanguageDirective,
   generateSceneOutlinesFromRequirements,
 } from '@/lib/generation/outline-generator';
 
@@ -11,6 +11,17 @@ describe('scene generator language directive', () => {
     expect(buildLanguageText('Teach in Spanish.', 'Use local examples.')).toBe(
       'Teach in Spanish.\n\nAdditional language note for this scene: Use local examples.',
     );
+  });
+
+  it('builds deterministic language directives from the selected creation language', () => {
+    expect(buildCourseLanguageDirective('en-US')).toContain(
+      'All generated classroom content must be written in English.',
+    );
+    expect(buildCourseLanguageDirective('en-US')).toContain('widget iframe HTML');
+    expect(buildCourseLanguageDirective('zh-CN')).toContain(
+      'All generated classroom content must be written in Simplified Chinese.',
+    );
+    expect(buildCourseLanguageDirective('zh-CN')).toContain('lang="zh-CN"');
   });
 
   it('accepts the new outline response envelope with languageDirective', async () => {
@@ -33,9 +44,7 @@ describe('scene generator language directive', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.data?.languageDirective).toBe(
-      'Teach in English with concise classroom language.',
-    );
+    expect(result.data?.languageDirective).toBe(buildCourseLanguageDirective('en-US'));
     expect(result.data?.outlines).toHaveLength(1);
   });
 
@@ -56,7 +65,7 @@ describe('scene generator language directive', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.data?.languageDirective).toBe(DEFAULT_LANGUAGE_DIRECTIVE);
+    expect(result.data?.languageDirective).toBe(buildCourseLanguageDirective('en-US'));
     expect(result.data?.outlines).toHaveLength(1);
   });
 });

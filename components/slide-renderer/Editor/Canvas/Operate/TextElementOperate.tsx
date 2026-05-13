@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useCanvasStore } from '@/lib/store';
 import type { PPTTextElement } from '@/lib/types/slides';
-import type { OperateResizeHandlers } from '@/lib/types/edit';
+import { OperateResizeHandlers } from '@/lib/types/edit';
 import { useCommonOperate } from '../hooks/useCommonOperate';
 import { RotateHandler } from './RotateHandler';
 import { ResizeHandler } from './ResizeHandler';
@@ -35,11 +35,28 @@ export function TextElementOperate({
     [elementInfo.height, canvasScale],
   );
 
-  const { textElementResizeHandlers, verticalTextElementResizeHandlers, borderLines } =
-    useCommonOperate(scaleWidth, scaleHeight);
+  const { resizeHandlers: baseResizeHandlers, borderLines } = useCommonOperate(
+    scaleWidth,
+    scaleHeight,
+  );
   const resizeHandlers = useMemo(
-    () => (elementInfo.vertical ? verticalTextElementResizeHandlers : textElementResizeHandlers),
-    [elementInfo.vertical, textElementResizeHandlers, verticalTextElementResizeHandlers],
+    () =>
+      baseResizeHandlers.filter((point) => {
+        const isCorner =
+          point.direction === OperateResizeHandlers.LEFT_TOP ||
+          point.direction === OperateResizeHandlers.RIGHT_TOP ||
+          point.direction === OperateResizeHandlers.LEFT_BOTTOM ||
+          point.direction === OperateResizeHandlers.RIGHT_BOTTOM;
+
+        if (isCorner) return true;
+
+        return elementInfo.vertical
+          ? point.direction === OperateResizeHandlers.TOP ||
+              point.direction === OperateResizeHandlers.BOTTOM
+          : point.direction === OperateResizeHandlers.LEFT ||
+              point.direction === OperateResizeHandlers.RIGHT;
+      }),
+    [baseResizeHandlers, elementInfo.vertical],
   );
 
   return (

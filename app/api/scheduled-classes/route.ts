@@ -12,7 +12,12 @@ import {
   updateScheduledClassForAccess,
   type ScheduledClassAccessScope,
 } from '@/lib/server/scheduled-classes';
-import { isValidClassroomId, readClassroom } from '@/lib/server/classroom-storage';
+import {
+  buildRequestOrigin,
+  isValidClassroomId,
+  readClassroom,
+  type PersistedClassroomData,
+} from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
 import type { ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
 
@@ -24,6 +29,7 @@ interface ScheduledClassRequestBody {
   startsAt?: unknown;
   durationMinutes?: unknown;
   classroomId?: unknown;
+  multiplayerGame?: unknown;
 }
 
 function getScope(auth: Awaited<ReturnType<typeof requireRequestRole>>): ScheduledClassAccessScope {
@@ -50,7 +56,21 @@ function readInput(body: ScheduledClassRequestBody | null): ScheduledClassEventI
       typeof body?.classroomId === 'string' && body.classroomId.trim()
         ? body.classroomId.trim()
         : undefined,
+    multiplayerGame:
+      body?.multiplayerGame && typeof body.multiplayerGame === 'object'
+        ? (body.multiplayerGame as ScheduledClassEventInput['multiplayerGame'])
+        : undefined,
   };
+}
+
+function isGameCapableClassroom(classroom: PersistedClassroomData) {
+  if (classroom.stage.sourceContext?.creationMode === 'game-arcade') {
+    return true;
+  }
+
+  return classroom.scenes.some(
+    (scene) => scene.content.type === 'interactive' && scene.content.widgetType === 'game',
+  );
 }
 
 async function canScopeLinkClassroom(scope: ScheduledClassAccessScope, classroomId: string) {
@@ -91,6 +111,55 @@ async function validateClassroomLink(
   );
 }
 
+async function validateMultiplayerGameLink(
+  request: NextRequest,
+  scope: ScheduledClassAccessScope,
+  input: ScheduledClassEventInput,
+) {
+  if (!input.multiplayerGame?.enabled) {
+    return null;
+  }
+
+  if (!input.classroomId) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Choose a game-mode classroom before enabling multiplayer.',
+    );
+  }
+
+  if (!isValidClassroomId(input.classroomId)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Choose an accessible classroom for this scheduled class.',
+    );
+  }
+
+  const classroom = await readClassroom(input.classroomId);
+  if (!classroom || !(await canScopeLinkClassroom(scope, input.classroomId))) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Choose an accessible classroom for this scheduled class.',
+    );
+  }
+
+  if (!isGameCapableClassroom(classroom)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      400,
+      'Multiplayer scheduling is available for game-mode classrooms only.',
+    );
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
@@ -124,8 +193,12 @@ export async function POST(request: NextRequest) {
     const input = readInput(body);
     const linkError = await validateClassroomLink(request, scope, input);
     if (linkError) return linkError;
+    const multiplayerLinkError = await validateMultiplayerGameLink(request, scope, input);
+    if (multiplayerLinkError) return multiplayerLinkError;
 
-    const event = await createScheduledClassForAccess(scope, input);
+    const event = await createScheduledClassForAccess(scope, input, {
+      multiplayerInviteBaseUrl: buildRequestOrigin(request),
+    });
     return apiSuccessWithRequestSession(request, { event }, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create scheduled class';
@@ -162,8 +235,12 @@ export async function PATCH(request: NextRequest) {
     const input = readInput(body);
     const linkError = await validateClassroomLink(request, scope, input);
     if (linkError) return linkError;
+    const multiplayerLinkError = await validateMultiplayerGameLink(request, scope, input);
+    if (multiplayerLinkError) return multiplayerLinkError;
 
-    const event = await updateScheduledClassForAccess(scope, id, input);
+    const event = await updateScheduledClassForAccess(scope, id, input, {
+      multiplayerInviteBaseUrl: buildRequestOrigin(request),
+    });
     if (!event) {
       return apiErrorWithRequestSession(
         request,

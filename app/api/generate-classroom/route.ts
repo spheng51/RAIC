@@ -41,6 +41,7 @@ function readScheduledClassGenerationInput(value: unknown): ScheduledClassGenera
     title?: unknown;
     startsAt?: unknown;
     durationMinutes?: unknown;
+    multiplayerGame?: unknown;
   };
   return {
     title: typeof candidate.title === 'string' ? candidate.title : '',
@@ -49,6 +50,10 @@ function readScheduledClassGenerationInput(value: unknown): ScheduledClassGenera
       candidate.durationMinutes === undefined || candidate.durationMinutes === null
         ? undefined
         : Number(candidate.durationMinutes),
+    multiplayerGame:
+      candidate.multiplayerGame && typeof candidate.multiplayerGame === 'object'
+        ? (candidate.multiplayerGame as ScheduledClassGenerationInput['multiplayerGame'])
+        : undefined,
   };
 }
 

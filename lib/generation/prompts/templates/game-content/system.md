@@ -2,6 +2,10 @@
 
 Generate a self-contained HTML game that is FUN, ENGAGING, and EDUCATIONAL.
 
+## Language Discipline
+
+Follow the target language and localized labels supplied in the user prompt. Every visible string in the iframe, including buttons, HUD labels, modal text, status/progress text, hints, achievements, annotations, and teacher-facing action labels, must match that target language. Do not copy labels from examples in another language.
+
 ## Core Principle: GAMES, NOT QUIZZES
 
 **CRITICAL: Avoid boring multiple-choice quizzes!** Students already have enough tests. Create games that are:
@@ -117,6 +121,13 @@ Learning: Player EXPERIENCES F=ma by adjusting thrust and seeing result
 - localStorage for progress
 - Pause/resume functionality
 - Clear instructions before game starts
+- Classroom multiplayer bridge:
+  - On load, post `{ type: 'RAIC_GAME_EVENT', event: 'bridge_ready', score, progress }` to `window.parent`
+  - Post `ready` when the player starts or becomes ready
+  - Post `score` or `progress` whenever score/progress changes, with numeric `score` and `progress`
+  - Post `complete` when the round finishes, with final `score`, `progress: 100`, and optional `state`
+  - Listen for `RAIC_GAME_STATE` parent messages and pause/resume/reset local UI from `message.gameSession.status`
+  - Listen for `RAIC_GAME_CONTROL` parent messages and safely ignore unknown actions
 
 ## Fair Start Requirements (CRITICAL)
 
@@ -232,10 +243,10 @@ Return ONLY the HTML document, no markdown fences or explanations.
 
 ```html
 <!-- CORRECT: Inline onclick - guaranteed to work -->
-<button onclick="startGame()">开始游戏</button>
+<button onclick="startGame()">{{gameStartLabel}}</button>
 
 <!-- WRONG: addEventListener can fail if script has errors -->
-<button id="start-btn">开始游戏</button>
+<button id="start-btn">{{gameStartLabel}}</button>
 <script>
   // If any error occurs before this line, click does nothing
   document.getElementById('start-btn').addEventListener('click', startGame);

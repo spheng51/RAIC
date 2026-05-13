@@ -110,6 +110,27 @@ vi.mock('@/components/ui/select', async () => {
   };
 });
 
+vi.mock('@/components/ui/switch', async () => {
+  const React = await import('react');
+  return {
+    Switch: ({
+      checked,
+      onCheckedChange,
+      ...props
+    }: {
+      checked?: boolean;
+      onCheckedChange?: (checked: boolean) => void;
+    }) =>
+      React.createElement('button', {
+        ...props,
+        type: 'button',
+        role: 'switch',
+        'aria-checked': checked ? 'true' : 'false',
+        onClick: () => onCheckedChange?.(!checked),
+      }),
+  };
+});
+
 vi.mock('@/lib/hooks/use-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => {
@@ -146,11 +167,12 @@ const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 
 interface ScheduleClassesBoxTestProps {
   events: ScheduledClassEvent[];
-  classrooms: Array<{ id: string; name: string }>;
+  classrooms: Array<{ id: string; name: string; creationMode?: 'course' | 'game-arcade' }>;
   onCreate: (input: unknown) => Promise<void>;
   onUpdate: (id: string, input: unknown) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onOpenClassroom: (classroomId: string) => void;
+  gameModeActive?: boolean;
 }
 
 function makeEvent(id: string, startsAt: string, classroomId?: string): ScheduledClassEvent {
@@ -295,6 +317,44 @@ describe('ScheduleClassesBox', () => {
       }),
     );
     expect(onOpenClassroom).toHaveBeenCalledWith('room-1');
+  });
+
+  it('adds multiplayer metadata for game-mode scheduled classes', async () => {
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+    const { container } = await mountBox({
+      gameModeActive: true,
+      classrooms: [{ id: 'room-1', name: 'Physics game', creationMode: 'game-arcade' }],
+      onCreate,
+    });
+
+    await act(async () => {
+      findButton(container, 'Add')?.click();
+    });
+    const titleInput = container.querySelector<HTMLInputElement>('#scheduled-class-title');
+    const dateInput = container.querySelector<HTMLInputElement>('#scheduled-class-date');
+    const timeInput = container.querySelector<HTMLInputElement>('#scheduled-class-time');
+
+    await act(async () => {
+      setInputValue(titleInput!, 'Physics game');
+      setInputValue(dateInput!, '2099-05-12');
+      setInputValue(timeInput!, '17:00');
+      findButton(container, 'Physics game')?.click();
+      container.querySelector<HTMLButtonElement>('[role="switch"]')?.click();
+    });
+    await act(async () => {
+      findButton(container, 'Create & join')?.click();
+    });
+
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        multiplayerGame: {
+          enabled: true,
+          mode: 'both',
+          linkPolicy: 'always_open',
+        },
+      }),
+    );
   });
 
   it('shows at most five upcoming events and opens linked classrooms', async () => {

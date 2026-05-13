@@ -92,6 +92,8 @@ export interface ClassroomSummary {
   createdAt: string;
   updatedAt: string;
   interactiveMode?: boolean;
+  creationMode?: NonNullable<Stage['sourceContext']>['creationMode'];
+  gameTemplateId?: NonNullable<Stage['sourceContext']>['gameTemplateId'];
 }
 
 type PersistedClassroomLike =
@@ -235,6 +237,8 @@ function summarizeClassroom(classroom: PersistedClassroomData): ClassroomSummary
     description: classroom.stage.description,
     sceneCount: classroom.scenes.length,
     interactiveMode: classroom.stage.interactiveMode,
+    creationMode: classroom.stage.sourceContext?.creationMode,
+    gameTemplateId: classroom.stage.sourceContext?.gameTemplateId,
     createdAt:
       classroom.createdAt || stageTimestampToIso(classroom.stage.createdAt, classroom.updatedAt),
     updatedAt:

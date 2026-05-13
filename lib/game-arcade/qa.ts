@@ -53,6 +53,14 @@ export function validateGameWidgetHtml(
     errors.push('Game HTML must expose score, status, progress, or level feedback.');
   }
 
+  if (!/RAIC_GAME_EVENT/.test(html)) {
+    errors.push('Game HTML must post RAIC_GAME_EVENT messages for classroom multiplayer.');
+  }
+
+  if (!/RAIC_GAME_STATE/.test(html) || !/addEventListener\(["']message["']/.test(html)) {
+    errors.push('Game HTML must listen for RAIC_GAME_STATE classroom messages.');
+  }
+
   if (
     /(?:let|const|var)\s+(?:gameOver|failed|isFailed)\s*=\s*true\b/i.test(html) ||
     /data-initial-state=["'](?:failed|game-over)["']/i.test(html)

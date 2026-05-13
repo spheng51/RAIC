@@ -2,6 +2,7 @@ import 'server-only';
 
 import { runPostgresQuery } from '@/lib/db/client';
 import type { PlatformRole, ScheduledClassEventRecord } from '@/lib/db/schema';
+import type { ScheduledClassMultiplayerGame } from '@/lib/types/scheduled-classes';
 
 interface ScheduledClassEventRow {
   id: string;
@@ -11,6 +12,7 @@ interface ScheduledClassEventRow {
   starts_at: string | Date;
   duration_minutes: number | null;
   classroom_id: string | null;
+  multiplayer_game: ScheduledClassMultiplayerGame | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -23,6 +25,7 @@ const SCHEDULED_CLASS_COLUMNS = `
   starts_at,
   duration_minutes,
   classroom_id,
+  multiplayer_game,
   created_at,
   updated_at
 `;
@@ -40,6 +43,7 @@ function mapScheduledClassEventRow(row: ScheduledClassEventRow): ScheduledClassE
     startsAt: toIso(row.starts_at),
     ...(row.duration_minutes ? { durationMinutes: row.duration_minutes } : {}),
     ...(row.classroom_id ? { classroomId: row.classroom_id } : {}),
+    ...(row.multiplayer_game ? { multiplayerGame: row.multiplayer_game } : {}),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -104,15 +108,17 @@ export async function upsertScheduledClassEventRecord(
         starts_at,
         duration_minutes,
         classroom_id,
+        multiplayer_game,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
         starts_at = EXCLUDED.starts_at,
         duration_minutes = EXCLUDED.duration_minutes,
         classroom_id = EXCLUDED.classroom_id,
+        multiplayer_game = EXCLUDED.multiplayer_game,
         updated_at = EXCLUDED.updated_at
       RETURNING ${SCHEDULED_CLASS_COLUMNS}`,
     [
@@ -123,6 +129,7 @@ export async function upsertScheduledClassEventRecord(
       event.startsAt,
       event.durationMinutes ?? null,
       event.classroomId ?? null,
+      event.multiplayerGame ?? null,
       event.createdAt,
       event.updatedAt,
     ],

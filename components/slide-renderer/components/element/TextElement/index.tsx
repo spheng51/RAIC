@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { debounce } from 'lodash';
 import { useCanvasStore } from '@/lib/store';
 import { useHistorySnapshot } from '@/lib/hooks/use-history-snapshot';
@@ -32,8 +32,7 @@ export function TextElement({ elementInfo, selectElement }: TextElementProps) {
   const { shadowStyle } = useElementShadow(elementInfo.shadow);
 
   const elementRef = useRef<HTMLDivElement>(null);
-  const [realHeightCache, setRealHeightCache] = useState(-1);
-  const [realWidthCache, setRealWidthCache] = useState(-1);
+  const wasScalingRef = useRef(false);
 
   const handleSelectElement = (e: React.MouseEvent | React.TouchEvent, canMove = true) => {
     if (elementInfo.lock) return;
@@ -44,77 +43,68 @@ export function TextElement({ elementInfo, selectElement }: TextElementProps) {
   // Check if element is being handled
   const isHandleElement = handleElementId === elementInfo.id;
 
-  // Update element height/width when scaling ends
-  useEffect(() => {
-    if (handleElementId !== elementInfo.id) return;
+  const applyMeasuredTextSize = useCallback(
+    (size: { width: number; height: number }) => {
+      if (!elementRef.current || isScaling) return;
 
-    if (!isScaling) {
-      if (!elementInfo.vertical && realHeightCache !== -1) {
+      const realHeight = size.height + 20;
+      const realWidth = size.width + 20;
+
+      if (!elementInfo.vertical && elementInfo.height !== realHeight) {
         updateElement({
           id: elementInfo.id,
-          props: { height: realHeightCache },
+          props: { height: realHeight },
         });
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement requires effect
-        setRealHeightCache(-1);
       }
-      if (elementInfo.vertical && realWidthCache !== -1) {
+      if (elementInfo.vertical && elementInfo.width !== realWidth) {
         updateElement({
           id: elementInfo.id,
-          props: { width: realWidthCache },
+          props: { width: realWidth },
         });
-
-        setRealWidthCache(-1);
       }
-    }
-  }, [
-    isScaling,
-    handleElementId,
-    elementInfo.id,
-    elementInfo.vertical,
-    realHeightCache,
-    realWidthCache,
-    updateElement,
-  ]);
+    },
+    [
+      elementInfo.height,
+      elementInfo.id,
+      elementInfo.vertical,
+      elementInfo.width,
+      isScaling,
+      updateElement,
+    ],
+  );
 
   // Monitor text element size changes
   const updateTextElementHeight = useCallback(
     (entries: ResizeObserverEntry[]) => {
       const contentRect = entries[0].contentRect;
-      if (!elementRef.current) return;
-
-      const realHeight = contentRect.height + 20;
-      const realWidth = contentRect.width + 20;
-
-      if (!elementInfo.vertical && elementInfo.height !== realHeight) {
-        if (!isScaling) {
-          updateElement({
-            id: elementInfo.id,
-            props: { height: realHeight },
-          });
-        } else {
-          setRealHeightCache(realHeight);
-        }
-      }
-      if (elementInfo.vertical && elementInfo.width !== realWidth) {
-        if (!isScaling) {
-          updateElement({
-            id: elementInfo.id,
-            props: { width: realWidth },
-          });
-        } else {
-          setRealWidthCache(realWidth);
-        }
-      }
+      applyMeasuredTextSize(contentRect);
     },
-    [
-      elementInfo.vertical,
-      elementInfo.height,
-      elementInfo.width,
-      elementInfo.id,
-      isScaling,
-      updateElement,
-    ],
+    [applyMeasuredTextSize],
   );
+
+  useEffect(() => {
+    if (isScaling) {
+      wasScalingRef.current = true;
+      return;
+    }
+
+    if (!wasScalingRef.current) return;
+    wasScalingRef.current = false;
+
+    const frame = window.requestAnimationFrame(() => {
+      const rect = elementRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      applyMeasuredTextSize({
+        width: Math.max(0, rect.width - 20),
+        height: Math.max(0, rect.height - 20),
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [applyMeasuredTextSize, isScaling]);
 
   // ResizeObserver setup
   useEffect(() => {

@@ -29,6 +29,7 @@ export interface StageListItem {
   createdAt: number;
   updatedAt: number;
   interactiveMode?: boolean;
+  creationMode?: NonNullable<Stage['sourceContext']>['creationMode'];
 }
 
 /**
@@ -155,6 +156,7 @@ export async function listStages(): Promise<StageListItem[]> {
           createdAt: stage.createdAt,
           updatedAt: stage.updatedAt,
           interactiveMode: stage.interactiveMode,
+          creationMode: stage.sourceContext?.creationMode,
         };
       }),
     );

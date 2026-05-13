@@ -113,6 +113,7 @@ interface ServerClassroomSummary {
   createdAt: string;
   updatedAt: string;
   interactiveMode?: boolean;
+  creationMode?: 'course' | 'game-arcade';
 }
 
 interface ScheduledClassesApiBody {
@@ -125,7 +126,7 @@ interface ScheduledClassesApiBody {
 const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
-  language: 'zh-CN',
+  language: 'en-US',
   webSearch: false,
   interactiveMode: false,
   creationMode: 'course',
@@ -260,6 +261,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           createdAt: parseServerTimestamp(classroom.createdAt),
           updatedAt: parseServerTimestamp(classroom.updatedAt),
           interactiveMode: classroom.interactiveMode,
+          creationMode: classroom.creationMode,
         }));
         setClassrooms(serverClassrooms);
         setThumbnails({});
@@ -344,6 +346,9 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       startsAt: normalized.value.startsAt,
       ...(normalized.value.durationMinutes
         ? { durationMinutes: normalized.value.durationMinutes }
+        : {}),
+      ...(normalized.value.multiplayerGame
+        ? { multiplayerGame: normalized.value.multiplayerGame }
         : {}),
     };
 
@@ -836,7 +841,9 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           classrooms={classrooms.map((classroom) => ({
             id: classroom.id,
             name: classroom.name,
+            creationMode: classroom.creationMode,
           }))}
+          gameModeActive={form.creationMode === 'game-arcade'}
           onCreate={handleCreateScheduledClass}
           onUpdate={handleUpdateScheduledClass}
           onDelete={handleDeleteScheduledClass}

@@ -11,6 +11,10 @@ import { CanvasToolbar } from '@/components/canvas/canvas-toolbar';
 import type { CanvasToolbarProps } from '@/components/canvas/canvas-toolbar';
 import type { Scene, StageMode } from '@/lib/types/stage';
 import type {
+  ClassroomGameSessionPayload,
+  ClassroomGameStudentEventType,
+} from '@/lib/types/classroom-game-session';
+import type {
   ClassroomCollaborationInteractionReason,
   ClassroomCollaborationStatePayload,
 } from '@/lib/types/classroom-collaboration';
@@ -36,6 +40,14 @@ interface CanvasAreaProps extends CanvasToolbarProps {
   readonly controllerDisplayName?: string;
   readonly controlLeaseExpiresAt?: string | null;
   readonly presentationFallbackMessage?: string | null;
+  readonly gameSession?: ClassroomGameSessionPayload | null;
+  readonly onGameEvent?: (event: {
+    event: ClassroomGameStudentEventType;
+    score?: number;
+    progress?: number;
+    state?: Record<string, unknown>;
+    input?: Record<string, unknown>;
+  }) => void;
   readonly onMiroFishEvent?: (event: MiroFishHostEvent) => void;
   readonly onReclaimMiroFishControl?: () => void;
   readonly onRecoverToLesson?: (message: string) => void;
@@ -83,6 +95,8 @@ export function CanvasArea({
   controllerDisplayName,
   controlLeaseExpiresAt,
   presentationFallbackMessage,
+  gameSession,
+  onGameEvent,
   onMiroFishEvent,
   onReclaimMiroFishControl,
   onRecoverToLesson,
@@ -180,7 +194,12 @@ export function CanvasArea({
           {isLessonSurface && currentScene && !whiteboardOpen && (
             <div className="absolute inset-0">
               <SceneProvider>
-                <SceneRenderer scene={currentScene} mode={mode} />
+                <SceneRenderer
+                  scene={currentScene}
+                  mode={mode}
+                  gameSession={gameSession}
+                  onGameEvent={onGameEvent}
+                />
               </SceneProvider>
             </div>
           )}

@@ -20,6 +20,8 @@ Create a simulation widget for: {{conceptName}}
 
 {{languageDirective}}
 
+All visible simulation text, controls, HUD/status labels, presets, messages, annotations, and teacher-facing action labels must follow the Language directive above.
+
 ---
 
 Generate a complete, interactive HTML simulation with these MANDATORY features:
@@ -39,9 +41,9 @@ Generate a complete, interactive HTML simulation with these MANDATORY features:
 
 ### Button Logic (CRITICAL)
 1. **Main button MUST handle all states correctly:**
-   - "启动" → Starts simulation
-   - "暂停" → Pauses running simulation
-   - "重新开始" → Resets to initial state, then starts fresh
+   - localized "Start" label → Starts simulation
+   - localized "Pause" label → Pauses running simulation
+   - localized "Restart" label → Resets to initial state, then starts fresh
 2. **Reset function MUST reset ALL state variables** (position, velocity, time, etc.)
 3. Use clear state tracking: `{ running: boolean, ended: boolean, paused: boolean }`
 

@@ -353,6 +353,7 @@
       "expiresAt": "Expires {{value}}",
       "makeShareable": "Make shareable",
       "publishing": "Publishing...",
+      "uploadingAssets": "Publishing assets {{completed}}/{{total}}",
       "publishMissing": "No local classroom content is available to publish.",
       "publishFailed": "Failed to publish classroom",
       "published": "Shareable classroom created",
