@@ -6,7 +6,9 @@ import {
 } from '@/lib/server/api-response';
 import { buildRequestOrigin, isValidClassroomId } from '@/lib/server/classroom-storage';
 import {
+  parseRemotePublishAssetPayload,
   writeSinglePublishAsset,
+  writeRemotePublishAssetReference,
   type PublishAssetKind,
 } from '@/lib/server/classroom-publish-assets';
 import { createLogger } from '@/lib/logger';
@@ -42,6 +44,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
+    const contentType = request.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload = parseRemotePublishAssetPayload(await request.json().catch(() => null));
+      if (!payload) {
+        return apiErrorWithRequestSession(
+          request,
+          'INVALID_REQUEST',
+          400,
+          'Missing required fields: kind, assetId, url',
+        );
+      }
+
+      const result = await writeRemotePublishAssetReference({
+        classroomId: id,
+        kind: payload.kind,
+        assetId: payload.assetId,
+        url: payload.url,
+      });
+
+      if (result.status === 'classroom_not_found') {
+        return apiErrorWithRequestSession(request, 'INVALID_REQUEST', 404, 'Classroom not found');
+      }
+
+      if (result.status === 'unreferenced') {
+        return apiErrorWithRequestSession(
+          request,
+          'INVALID_REQUEST',
+          400,
+          'Asset is not referenced by this classroom',
+        );
+      }
+
+      if (result.status === 'invalid_asset') {
+        return apiErrorWithRequestSession(
+          request,
+          'INVALID_REQUEST',
+          result.httpStatus,
+          result.warning.message,
+        );
+      }
+
+      return apiSuccessWithRequestSession(request, {
+        kind: payload.kind,
+        assetId: payload.assetId,
+        url: result.url,
+        warnings: [],
+      });
+    }
+
     const formData = await request.formData();
     const kind = parseAssetKind(formData.get('kind'));
     const assetId = parseRequiredString(formData.get('assetId'));

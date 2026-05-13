@@ -358,6 +358,8 @@
       "publishFailed": "发布课堂失败",
       "published": "可分享课堂已创建",
       "publishWarnings": "可分享课堂已创建，但有 {{count}} 个资源警告。",
+      "publishWarningDetails": "可分享课堂已创建，但有 {{count}} 个资源警告。",
+      "viewPublishWarnings": "查看受影响资源",
       "signInToPublish": "请以教师身份登录以分享此课堂。",
       "openRaicLink": "Open-RAIC 课堂",
       "zoomTitle": "Zoom 实时会议",

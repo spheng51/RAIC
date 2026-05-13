@@ -110,6 +110,7 @@ describe('buildLocalClassroomPublishManifest', () => {
     });
 
     expect(manifest.assets).toHaveLength(2);
+    expect(manifest.directAssets).toHaveLength(0);
     expect(containsBlob(manifest.stage)).toBe(false);
     expect(containsBlob(manifest.scenes)).toBe(false);
     expect(manifest.warnings).toEqual([]);
@@ -137,6 +138,59 @@ describe('buildLocalClassroomPublishManifest', () => {
     expect(manifest.assets).toHaveLength(0);
     expect(manifest.warnings.map((warning) => warning.code)).toContain('asset_too_large');
     expect(manifest.warnings.map((warning) => warning.code)).toContain('audio_asset_missing');
+  });
+
+  it('queues assets above the function payload cap for direct upload when enabled', async () => {
+    dbMocks.mediaToArray.mockResolvedValue([
+      {
+        id: 'local-room:gen_img_1',
+        stageId: 'local-room',
+        type: 'image',
+        blob: new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/png' }),
+        mimeType: 'image/png',
+      },
+    ]);
+    dbMocks.audioGet.mockResolvedValue(null);
+
+    const { buildLocalClassroomPublishManifest } = await import('@/lib/utils/classroom-publish');
+    const manifest = await buildLocalClassroomPublishManifest({
+      stage: buildStage(),
+      scenes: buildScenes(),
+      maxAssetBytes: 3,
+      directUploadAssets: true,
+      directMaxAssetBytes: 10,
+    });
+
+    expect(manifest.assets).toHaveLength(0);
+    expect(manifest.directAssets).toMatchObject([{ kind: 'media', assetId: 'gen_img_1' }]);
+    expect(manifest.warnings.map((warning) => warning.code)).not.toContain('asset_too_large');
+    expect(manifest.warnings.map((warning) => warning.code)).toContain('audio_asset_missing');
+  });
+
+  it('skips assets above the direct upload safety limit', async () => {
+    dbMocks.mediaToArray.mockResolvedValue([
+      {
+        id: 'local-room:gen_img_1',
+        stageId: 'local-room',
+        type: 'image',
+        blob: new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/png' }),
+        mimeType: 'image/png',
+      },
+    ]);
+    dbMocks.audioGet.mockResolvedValue(null);
+
+    const { buildLocalClassroomPublishManifest } = await import('@/lib/utils/classroom-publish');
+    const manifest = await buildLocalClassroomPublishManifest({
+      stage: buildStage(),
+      scenes: buildScenes(),
+      maxAssetBytes: 3,
+      directUploadAssets: true,
+      directMaxAssetBytes: 3,
+    });
+
+    expect(manifest.assets).toHaveLength(0);
+    expect(manifest.directAssets).toHaveLength(0);
+    expect(manifest.warnings.map((warning) => warning.code)).toContain('asset_too_large');
   });
 
   it('preserves existing remote asset URLs without queueing uploads', async () => {
@@ -170,6 +224,7 @@ describe('buildLocalClassroomPublishManifest', () => {
     const speechAction = scene.actions?.[0] as { audioUrl?: string };
 
     expect(manifest.assets).toEqual([]);
+    expect(manifest.directAssets).toEqual([]);
     expect(imageElement.src).toBe('https://cdn.example/media/gen_img_1.png');
     expect(speechAction.audioUrl).toBe('https://cdn.example/audio/tts_speech-1.mp3');
   });
