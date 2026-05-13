@@ -119,13 +119,73 @@ describe('/api/scheduled-classes', () => {
     const json = await response.json();
 
     expect(response.status).toBe(201);
-    expect(createScheduledClassForAccessMock).toHaveBeenCalledWith(scope, {
-      title: 'Physics lab',
-      startsAt: '2026-05-12T17:00:00.000Z',
-      durationMinutes: 45,
-      classroomId: 'room-1',
-    });
+    expect(createScheduledClassForAccessMock).toHaveBeenCalledWith(
+      scope,
+      {
+        title: 'Physics lab',
+        startsAt: '2026-05-12T17:00:00.000Z',
+        durationMinutes: 45,
+        classroomId: 'room-1',
+        multiplayerGame: undefined,
+      },
+      expect.objectContaining({ multiplayerInviteBaseUrl: 'http://localhost' }),
+    );
     expect(json.event.id).toBe('event-1');
+  });
+
+  it('creates multiplayer scheduled classes for game-mode classrooms', async () => {
+    readClassroomMock.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      stage: {
+        id: 'room-1',
+        name: 'Physics',
+        sourceContext: { creationMode: 'game-arcade' },
+      },
+      scenes: [],
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+    createScheduledClassForAccessMock.mockResolvedValue({
+      id: 'event-1',
+      title: 'Physics game',
+      startsAt: '2026-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      multiplayerGame: {
+        enabled: true,
+        mode: 'both',
+        linkPolicy: 'always_open',
+        inviteUrl: 'http://localhost/join/code',
+      },
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+
+    const { POST } = await import('@/app/api/scheduled-classes/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Physics game',
+          startsAt: '2026-05-12T17:00:00.000Z',
+          classroomId: 'room-1',
+          multiplayerGame: { enabled: true, mode: 'both', linkPolicy: 'always_open' },
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(createScheduledClassForAccessMock).toHaveBeenCalledWith(
+      scope,
+      expect.objectContaining({
+        classroomId: 'room-1',
+        multiplayerGame: { enabled: true, mode: 'both', linkPolicy: 'always_open' },
+      }),
+      expect.objectContaining({ multiplayerInviteBaseUrl: 'http://localhost' }),
+    );
+    expect(json.event.multiplayerGame.inviteUrl).toBe('http://localhost/join/code');
   });
 
   it('rejects inaccessible classroom links before persistence', async () => {
@@ -186,12 +246,18 @@ describe('/api/scheduled-classes', () => {
     );
 
     expect(patchResponse.status).toBe(200);
-    expect(updateScheduledClassForAccessMock).toHaveBeenCalledWith(scope, 'event-1', {
-      title: 'Updated lab',
-      startsAt: '2026-05-12T18:00:00.000Z',
-      durationMinutes: undefined,
-      classroomId: undefined,
-    });
+    expect(updateScheduledClassForAccessMock).toHaveBeenCalledWith(
+      scope,
+      'event-1',
+      {
+        title: 'Updated lab',
+        startsAt: '2026-05-12T18:00:00.000Z',
+        durationMinutes: undefined,
+        classroomId: undefined,
+        multiplayerGame: undefined,
+      },
+      expect.objectContaining({ multiplayerInviteBaseUrl: 'http://localhost' }),
+    );
     expect(deleteResponse.status).toBe(200);
     expect(deleteScheduledClassForAccessMock).toHaveBeenCalledWith(scope, 'event-1');
   });

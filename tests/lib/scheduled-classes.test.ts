@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getScheduledClassInviteExpiresAt,
   getUpcomingScheduledClassEvents,
   normalizeScheduledClassInput,
   sortScheduledClassEvents,
@@ -37,6 +38,36 @@ describe('scheduled class utilities', () => {
         classroomId: 'room-1',
       },
     });
+  });
+
+  it('normalizes multiplayer game scheduling metadata', () => {
+    const result = normalizeScheduledClassInput(
+      {
+        title: 'Physics game',
+        startsAt: '2026-05-12T17:00:00.000Z',
+        durationMinutes: 45,
+        classroomId: 'room-1',
+        multiplayerGame: { enabled: true },
+      },
+      { requireFutureStart: true, now: new Date('2026-05-11T17:00:00.000Z') },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        multiplayerGame: {
+          enabled: true,
+          mode: 'both',
+          linkPolicy: 'always_open',
+        },
+      }),
+    });
+    expect(
+      getScheduledClassInviteExpiresAt({
+        startsAt: '2026-05-12T17:00:00.000Z',
+        durationMinutes: 45,
+      }),
+    ).toBe('2026-05-12T18:45:00.000Z');
   });
 
   it('rejects missing title, past starts, and invalid durations', () => {

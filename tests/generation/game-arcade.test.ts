@@ -38,10 +38,23 @@ const validGameHtml = `<!DOCTYPE html>
   </script>
   <script>
     let gameOver = false;
+    let score = 0;
+    let progress = 0;
+    function postGameEvent(event, payload) {
+      window.parent.postMessage({ type: 'RAIC_GAME_EVENT', event, ...payload }, '*');
+    }
     function startGame() {
       document.getElementById('status-panel').textContent = 'Playing';
+      progress = 10;
+      postGameEvent('ready', { score, progress });
       requestAnimationFrame(function tick() {});
     }
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'RAIC_GAME_STATE') {
+        document.getElementById('status-panel').textContent = event.data.gameSession.status;
+      }
+    });
+    postGameEvent('bridge_ready', { score, progress });
   </script>
 </body>
 </html>`;
@@ -295,6 +308,6 @@ describe('Classroom Game Studio generation', () => {
         '<!DOCTYPE html><html><body><button onclick="startGame()">Start</button><div id="score-display">Score</div><script type="application/json" id="widget-config">{"type":"game"}</script><script>let gameOver = true;</script></body></html>',
         { type: 'game', gameType: 'puzzle', description: 'Puzzle', scoring: {} },
       ).errors,
-    ).toContain('Game HTML must not start in an immediate failure state.');
+    ).toContain('Game HTML must post RAIC_GAME_EVENT messages for classroom multiplayer.');
   });
 });

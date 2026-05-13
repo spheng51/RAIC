@@ -90,6 +90,7 @@ export function buildFallbackGameWidget(
     checkpointReached: isChinese ? '到达检查点' : 'Checkpoint reached',
     hintRevealed: isChinese ? '已显示提示' : 'Hint revealed',
     challengeModeStatus: isChinese ? '挑战模式' : 'Challenge mode',
+    paused: isChinese ? '暂停' : 'Paused',
     gameStatusAria: isChinese ? '游戏状态' : 'Game status',
     playableChallengeAria: isChinese ? '可玩挑战' : 'Playable challenge',
     gameControlsAria: isChinese ? '游戏控制' : 'Game controls',
@@ -149,6 +150,7 @@ export function buildFallbackGameWidget(
       controls,
       keyPoints,
       htmlLang: labels.htmlLang,
+      multiplayerBridge: true,
     },
     scoring: {
       completionPoints: 50,
@@ -411,6 +413,18 @@ export function buildFallbackGameWidget(
       let progress = 0;
       let started = false;
       let animationFrame = null;
+      let classroomGameSession = null;
+
+      function postGameEvent(eventName, payload) {
+        try {
+          window.parent.postMessage(Object.assign({
+            type: 'RAIC_GAME_EVENT',
+            event: eventName
+          }, payload || {}), '*');
+        } catch (error) {
+          console.warn('Unable to post classroom game event', error);
+        }
+      }
 
       function setText(id, value) {
         const element = document.getElementById(id);
@@ -451,6 +465,7 @@ export function buildFallbackGameWidget(
         progress = Math.max(progress, 10);
         updateHud(fallbackCopy.playing);
         pulseTarget();
+        postGameEvent('ready', { score: score, progress: progress });
         if (!animationFrame) {
           gameLoop();
         }
@@ -462,12 +477,18 @@ export function buildFallbackGameWidget(
         progress = Math.min(100, progress + 25);
         updateHud(progress >= 100 ? fallbackCopy.complete : fallbackCopy.checkpointReached);
         pulseTarget();
+        postGameEvent(progress >= 100 ? 'complete' : 'score', {
+          score: score,
+          progress: progress,
+          state: { score: score, progress: progress }
+        });
       }
 
       function revealHint() {
         const panel = document.getElementById('checkpoint-panel');
         if (panel) panel.classList.add('is-visible');
         updateHud(fallbackCopy.hintRevealed);
+        postGameEvent('progress', { score: score, progress: progress });
       }
 
       window.startGame = startGame;
@@ -506,9 +527,30 @@ export function buildFallbackGameWidget(
         if (type === 'REVEAL_ELEMENT') {
           revealHint();
         }
+
+        if (type === 'RAIC_GAME_STATE') {
+          classroomGameSession = message.gameSession || null;
+          if (classroomGameSession && classroomGameSession.status === 'paused') {
+            started = false;
+            updateHud(fallbackCopy.paused);
+          }
+          if (classroomGameSession && classroomGameSession.status === 'live' && !started) {
+            startGame();
+          }
+        }
+
+        if (type === 'RAIC_GAME_CONTROL') {
+          if (payload.action === 'reset') {
+            score = 0;
+            progress = 0;
+            started = false;
+            updateHud(fallbackCopy.ready);
+          }
+        }
       });
 
       updateHud(fallbackCopy.ready);
+      postGameEvent('bridge_ready', { score: score, progress: progress });
       console.info(fallbackCopy.consoleReady, gameData.title);
     </script>
   </main>

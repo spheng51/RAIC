@@ -121,6 +121,13 @@ Learning: Player EXPERIENCES F=ma by adjusting thrust and seeing result
 - localStorage for progress
 - Pause/resume functionality
 - Clear instructions before game starts
+- Classroom multiplayer bridge:
+  - On load, post `{ type: 'RAIC_GAME_EVENT', event: 'bridge_ready', score, progress }` to `window.parent`
+  - Post `ready` when the player starts or becomes ready
+  - Post `score` or `progress` whenever score/progress changes, with numeric `score` and `progress`
+  - Post `complete` when the round finishes, with final `score`, `progress: 100`, and optional `state`
+  - Listen for `RAIC_GAME_STATE` parent messages and pause/resume/reset local UI from `message.gameSession.status`
+  - Listen for `RAIC_GAME_CONTROL` parent messages and safely ignore unknown actions
 
 ## Fair Start Requirements (CRITICAL)
 

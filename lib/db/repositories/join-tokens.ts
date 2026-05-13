@@ -104,3 +104,31 @@ export async function findJoinTokenByHash(tokenHash: string): Promise<JoinTokenR
   const store = await readPlatformStore();
   return store.joinTokens.find((joinToken) => joinToken.tokenHash === tokenHash) ?? null;
 }
+
+export async function updateJoinTokenExpiration(
+  id: string,
+  expiresAt: string,
+): Promise<JoinTokenRecord | null> {
+  const rows = await runPostgresQuery<JoinTokenRow>(
+    `UPDATE join_tokens
+     SET expires_at = $2
+     WHERE id = $1
+     RETURNING id, classroom_id, created_by_user_id, organization_id, display_name,
+               token_hash, created_at, expires_at, consumed_at`,
+    [id, expiresAt],
+  );
+
+  if (rows) {
+    return rows[0] ? mapJoinTokenRow(rows[0]) : null;
+  }
+
+  return updatePlatformStore((store) => {
+    const joinToken = store.joinTokens.find((entry) => entry.id === id);
+    if (!joinToken) {
+      return null;
+    }
+
+    joinToken.expiresAt = expiresAt;
+    return joinToken;
+  });
+}

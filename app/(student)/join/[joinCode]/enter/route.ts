@@ -23,11 +23,12 @@ function redirectToJoin(request: NextRequest, joinCode: string) {
   return response;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ joinCode: string }> },
-) {
-  const { joinCode } = await params;
+function normalizeDisplayName(value: FormDataEntryValue | string | null | undefined) {
+  const displayName = typeof value === 'string' ? value.trim().slice(0, 80) : '';
+  return displayName || 'Student';
+}
+
+async function enterClassroom(request: NextRequest, joinCode: string, displayName: string) {
   const joinToken = await findValidJoinToken(joinCode);
 
   if (!joinToken) {
@@ -67,8 +68,8 @@ export async function GET(
   }
 
   const guestUser = await createClassroomGuestUser({
-    displayName: joinToken.displayName,
-    emailHint: joinToken.displayName,
+    displayName,
+    emailHint: displayName,
   });
 
   if (joinToken.organizationId) {
@@ -104,7 +105,7 @@ export async function GET(
     resourceId: joinToken.classroomId,
     metadata: {
       joinTokenId: joinToken.id,
-      displayName: joinToken.displayName,
+      displayName,
       sessionId: session.id,
     },
   });
@@ -114,4 +115,21 @@ export async function GET(
   );
   attachClassroomAccessCookie(response, classroomSessionToken, session.absoluteExpiresAt);
   return response;
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ joinCode: string }> },
+) {
+  const { joinCode } = await params;
+  return enterClassroom(request, joinCode, 'Student');
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ joinCode: string }> },
+) {
+  const { joinCode } = await params;
+  const formData = await request.formData().catch(() => null);
+  return enterClassroom(request, joinCode, normalizeDisplayName(formData?.get('displayName')));
 }

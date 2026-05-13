@@ -184,7 +184,10 @@ describe('classroom job runner scope forwarding', () => {
         durationMinutes: 45,
         classroomId: 'classroom-1',
       },
-      { requireFutureStart: false },
+      {
+        requireFutureStart: false,
+        multiplayerInviteBaseUrl: 'http://localhost:3000',
+      },
     );
     expect(markClassroomGenerationJobSucceededMock).toHaveBeenCalledWith(
       'job-123',

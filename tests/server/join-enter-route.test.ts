@@ -42,7 +42,7 @@ vi.mock('@/lib/server/audit-log', () => ({
   recordAuditEvent: recordAuditEventMock,
 }));
 
-describe('GET /join/[joinCode]/enter', () => {
+describe('/join/[joinCode]/enter', () => {
   beforeEach(() => {
     vi.resetModules();
     findJoinTokenByHashMock.mockReset();
@@ -75,7 +75,7 @@ describe('GET /join/[joinCode]/enter', () => {
     resolveAuthContextFromTokenMock.mockResolvedValue(null);
   });
 
-  it('creates a classroom session and redirects to the classroom for a valid token', async () => {
+  it('creates a classroom session with the legacy Student fallback on GET', async () => {
     findJoinTokenByHashMock.mockResolvedValue({
       id: 'join-1',
       classroomId: 'room-1',
@@ -96,8 +96,8 @@ describe('GET /join/[joinCode]/enter', () => {
       'classroom-session-token',
     );
     expect(createClassroomGuestUserMock).toHaveBeenCalledWith({
-      displayName: 'Physics',
-      emailHint: 'Physics',
+      displayName: 'Student',
+      emailHint: 'Student',
     });
     expect(ensureMembershipMock).toHaveBeenCalledWith({
       organizationId: 'org-1',
@@ -115,6 +115,45 @@ describe('GET /join/[joinCode]/enter', () => {
       expect.objectContaining({
         action: 'classroom.join_token.redeemed',
         resourceId: 'room-1',
+        metadata: expect.objectContaining({
+          displayName: 'Student',
+        }),
+      }),
+    );
+  });
+
+  it('creates a classroom session with the submitted display name on POST', async () => {
+    findJoinTokenByHashMock.mockResolvedValue({
+      id: 'join-1',
+      classroomId: 'room-1',
+      organizationId: 'org-1',
+      displayName: 'Physics',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    const { POST } = await import('@/app/(student)/join/[joinCode]/enter/route');
+    const response = await POST(
+      new NextRequest('http://localhost/join/raw-token/enter', {
+        method: 'POST',
+        body: new URLSearchParams({ displayName: 'Ada Lovelace' }),
+      }),
+      {
+        params: Promise.resolve({ joinCode: 'raw-token' }),
+      },
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/classroom/room-1');
+    expect(createClassroomGuestUserMock).toHaveBeenCalledWith({
+      displayName: 'Ada Lovelace',
+      emailHint: 'Ada Lovelace',
+    });
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'classroom.join_token.redeemed',
+        metadata: expect.objectContaining({
+          displayName: 'Ada Lovelace',
+        }),
       }),
     );
   });

@@ -106,6 +106,10 @@ Generate a FUN, INTERACTIVE HTML game with these MANDATORY features:
 8. Touch-friendly controls (min 44px touch targets)
 9. localStorage for progress/high scores
 10. Pause functionality
+11. Classroom multiplayer bridge:
+   - post `RAIC_GAME_EVENT` messages for `bridge_ready`, `ready`, `score`, `progress`, and `complete`
+   - include numeric `score` and `progress` when those values change
+   - listen for `RAIC_GAME_STATE` and `RAIC_GAME_CONTROL` parent messages without crashing
 
 ### Output
 Return ONLY the HTML document. Make the game FUN enough that students want to play again!

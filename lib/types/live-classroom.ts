@@ -6,7 +6,8 @@ export type ClassroomRoomEventKind =
   | 'control.updated'
   | 'live_meeting.updated'
   | 'mirofish.attached'
-  | 'mirofish.session.updated';
+  | 'mirofish.session.updated'
+  | 'game_session.updated';
 
 export interface ClassroomRoomEventActor {
   sessionId: string | null;

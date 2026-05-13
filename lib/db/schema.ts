@@ -389,9 +389,11 @@ export const PLATFORM_SCHEMA_SQL = [
     starts_at TIMESTAMPTZ NOT NULL,
     duration_minutes INTEGER,
     classroom_id TEXT,
+    multiplayer_game JSONB,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
   )`,
+  `ALTER TABLE scheduled_class_events ADD COLUMN IF NOT EXISTS multiplayer_game JSONB`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_classroom_id ON sessions (classroom_id)`,
