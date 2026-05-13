@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Page, Response } from '@playwright/test';
 import { expect, test } from '../fixtures/base';
 import { ClassroomPage } from '../pages/classroom.page';
 import { createSettingsStorage } from '../fixtures/test-data/settings';
@@ -64,6 +64,25 @@ async function createJoinLinkFromOpenShareDialog(page: Page) {
   expect(joinTokenBody.joinUrl).toContain('/join/');
   await expect(page.getByText(joinTokenBody.joinUrl!)).toBeVisible();
   return joinTokenBody.joinUrl!;
+}
+
+function waitForJsonResponse<T>(
+  page: Page,
+  predicate: (response: Response) => boolean,
+): Promise<{ response: Response; body: T | null }> {
+  return new Promise((resolve) => {
+    const handleResponse = async (response: Response) => {
+      if (!predicate(response)) return;
+
+      page.off('response', handleResponse);
+      resolve({
+        response,
+        body: (await response.json().catch(() => null)) as T | null,
+      });
+    };
+
+    page.on('response', handleResponse);
+  });
 }
 
 async function enterClassroomFromJoinUrl(browser: Browser, joinUrl: string, classroomId: string) {
@@ -606,7 +625,8 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
     await expect
       .poll(async () => getCookieValue(teacherContext!, SESSION_COOKIE_NAME))
       .toBe(teacherSession.token);
-    const publishResponsePromise = teacherPage.waitForResponse(
+    const publishResponsePromise = waitForJsonResponse<{ id?: string; url?: string }>(
+      teacherPage,
       (response) =>
         response.url().endsWith('/api/classroom/publish-local') &&
         response.request().method() === 'POST',
@@ -614,19 +634,19 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
     await teacherPage.goto(
       `${APP_BASE_URL}/sign-in?next=${encodeURIComponent(`/classroom/${localClassroomId}`)}`,
     );
-    const publishResponse = await publishResponsePromise;
-    const publishBody = (await publishResponse.json()) as { id?: string; url?: string };
+    const { response: publishResponse, body: publishBody } = await publishResponsePromise;
     expect(
       publishResponse.ok(),
       JSON.stringify({ status: publishResponse.status(), body: publishBody }),
     ).toBeTruthy();
-    expect(publishBody.id).toBeTruthy();
-    await teacherPage.waitForURL(new RegExp(`/classroom/${publishBody.id}(?:\\?share=1)?$`));
+    expect(publishBody?.id).toBeTruthy();
+    const publishedClassroomId = publishBody!.id!;
+    await teacherPage.waitForURL(new RegExp(`/classroom/${publishedClassroomId}(?:\\?share=1)?$`));
     await localClassroom.waitForLoaded();
     await expect(teacherPage.getByRole('heading', { name: 'Share classroom' })).toBeVisible();
 
     const publishedClassroomResponse = await teacherPage.request.get(
-      `${APP_BASE_URL}/api/classroom?id=${encodeURIComponent(publishBody.id!)}`,
+      `${APP_BASE_URL}/api/classroom?id=${encodeURIComponent(publishedClassroomId)}`,
     );
     expect(publishedClassroomResponse.ok()).toBeTruthy();
     const publishedClassroomBody = (await publishedClassroomResponse.json()) as {
@@ -640,17 +660,21 @@ test('local demo Make shareable resumes after sign-in and opens the share dialog
     const publishedScene = publishedClassroomBody.classroom?.scenes?.[0];
     expect(
       publishedScene?.content?.canvas?.elements?.some((element) =>
-        element.src?.includes(`/api/classroom-media/${publishBody.id}/media/gen_img_local.png`),
+        element.src?.includes(
+          `/api/classroom-media/${publishedClassroomId}/media/gen_img_local.png`,
+        ),
       ),
     ).toBe(true);
     expect(
       publishedScene?.actions?.some((action) =>
-        action.audioUrl?.includes(`/api/classroom-media/${publishBody.id}/audio/tts-local-1.mp3`),
+        action.audioUrl?.includes(
+          `/api/classroom-media/${publishedClassroomId}/audio/tts-local-1.mp3`,
+        ),
       ),
     ).toBe(true);
 
     const joinUrl = await createJoinLinkFromOpenShareDialog(teacherPage);
-    const student = await enterClassroomFromJoinUrl(browser, joinUrl, publishBody.id!);
+    const student = await enterClassroomFromJoinUrl(browser, joinUrl, publishedClassroomId);
     studentContext = student.context;
     await expect(student.classroom.getSceneTitle(0)).toContainText('Local intro');
   } finally {
@@ -846,7 +870,8 @@ test('teacher shares a classroom invite with an attached Zoom join link', async 
       'href',
       zoomJoinUrl,
     );
-    await expect(studentPage.getByRole('link', { name: 'Enter classroom' })).toBeVisible();
+    await expect(studentPage.getByRole('textbox', { name: 'Your display name' })).toBeVisible();
+    await expect(studentPage.getByRole('button', { name: 'Enter classroom' })).toBeVisible();
 
     await teacher.page.getByRole('button', { name: 'Share classroom' }).click();
     const removeZoomResponsePromise = teacher.page.waitForResponse(
