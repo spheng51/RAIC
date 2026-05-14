@@ -109,7 +109,9 @@ Generate a FUN, INTERACTIVE HTML game with these MANDATORY features:
 11. Classroom multiplayer bridge:
    - post `RAIC_GAME_EVENT` messages for `bridge_ready`, `ready`, `score`, `progress`, and `complete`
    - include numeric `score` and `progress` when those values change
-   - listen for `RAIC_GAME_STATE` and `RAIC_GAME_CONTROL` parent messages without crashing
+   - in classroom mode, post `score`, `progress`, and `complete` only while `RAIC_GAME_STATE.gameSession.status` is `live`
+   - listen for `RAIC_GAME_STATE` statuses `arming`, `live`, `paused`, `completed`, and `idle`
+   - listen for `RAIC_GAME_CONTROL`, reset local score/progress on `{ action: "reset" }`, and ignore unknown actions without crashing
 
 ### Output
 Return ONLY the HTML document. Make the game FUN enough that students want to play again!

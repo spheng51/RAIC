@@ -31,6 +31,7 @@ export function InteractiveRenderer({
   onGameEvent,
 }: InteractiveRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previousGameSessionRef = useRef<ClassroomGameSessionPayload | null>(null);
   const registerIframe = useWidgetIframeStore((state) => state.registerIframe);
   const setActiveScene = useWidgetIframeStore((state) => state.setActiveScene);
   const patchedHtml = useMemo(
@@ -59,7 +60,25 @@ export function InteractiveRenderer({
 
   useEffect(() => {
     sendGameSessionToIframe();
-  }, [sendGameSessionToIframe]);
+    if (!gameSession || content.widgetType !== 'game') {
+      previousGameSessionRef.current = gameSession ?? null;
+      return;
+    }
+
+    const previous = previousGameSessionRef.current;
+    if (previous?.roundId && !gameSession.roundId && gameSession.status === 'idle') {
+      sendMessageToIframe('RAIC_GAME_CONTROL', { payload: { action: 'reset' } });
+    }
+    if (previous && previous.controllerSessionId !== gameSession.controllerSessionId) {
+      sendMessageToIframe('RAIC_GAME_CONTROL', {
+        payload: {
+          action: gameSession.controllerSessionId ? 'assign_controller' : 'clear_controller',
+          controllerSessionId: gameSession.controllerSessionId,
+        },
+      });
+    }
+    previousGameSessionRef.current = gameSession;
+  }, [content.widgetType, gameSession, sendGameSessionToIframe, sendMessageToIframe]);
 
   useEffect(() => {
     if (content.widgetType !== 'game' || !onGameEvent) {

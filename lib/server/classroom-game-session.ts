@@ -16,6 +16,9 @@ import type {
 
 const CLASSROOM_GAME_SESSIONS_DIR = getDataPath('classroom-game-sessions');
 const gameSessionWriteLocks = new Map<string, Promise<void>>();
+export const GAME_ROUND_READY_COUNTDOWN_MS = 45_000;
+export const GAME_ROUND_DURATION_MS = 5 * 60_000;
+export const GAME_ROUND_THRESHOLD_RATIO = 0.8;
 
 function resolveGameSessionPath(classroomId: string) {
   return `${CLASSROOM_GAME_SESSIONS_DIR}/${classroomId}.json`;
@@ -23,6 +26,77 @@ function resolveGameSessionPath(classroomId: string) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function toDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addMs(date: Date, ms: number) {
+  return new Date(date.getTime() + ms).toISOString();
+}
+
+function thresholdForCount(count: number) {
+  return count > 0 ? Math.max(1, Math.ceil(count * GAME_ROUND_THRESHOLD_RATIO)) : 0;
+}
+
+function getEligiblePlayerIds(state: ClassroomGameSessionState) {
+  return new Set(state.eligibleSessionIds ?? []);
+}
+
+function countEligiblePlayers(
+  state: ClassroomGameSessionState,
+  predicate: (player: ClassroomGameSessionPlayer) => boolean,
+) {
+  const eligibleIds = getEligiblePlayerIds(state);
+  if (eligibleIds.size === 0) return 0;
+
+  return Object.values(state.players).filter(
+    (player) => eligibleIds.has(player.sessionId) && predicate(player),
+  ).length;
+}
+
+function normalizePlayer(
+  state: ClassroomGameSessionState,
+  player: ClassroomGameSessionPlayer,
+): ClassroomGameSessionPlayer {
+  const eligible = getEligiblePlayerIds(state).has(player.sessionId);
+  const late =
+    player.late ??
+    Boolean(state.roundId && state.status !== 'idle' && state.status !== 'completed' && !eligible);
+
+  return {
+    ...player,
+    eligible,
+    late: eligible ? false : late,
+  };
+}
+
+function normalizeGameSessionState(
+  classroomId: string,
+  raw?: Partial<ClassroomGameSessionState>,
+): ClassroomGameSessionState {
+  const state = {
+    ...createDefaultGameSessionState(classroomId),
+    ...raw,
+    classroomId,
+  };
+
+  state.eligibleSessionIds = Array.isArray(state.eligibleSessionIds)
+    ? state.eligibleSessionIds.filter(
+        (sessionId): sessionId is string => typeof sessionId === 'string',
+      )
+    : [];
+  state.players = Object.fromEntries(
+    Object.values(state.players ?? {}).map((player) => [
+      player.sessionId,
+      normalizePlayer(state, player),
+    ]),
+  );
+
+  return state;
 }
 
 function createDefaultGameSessionState(classroomId: string): ClassroomGameSessionState {
@@ -33,8 +107,15 @@ function createDefaultGameSessionState(classroomId: string): ClassroomGameSessio
     roundNumber: 0,
     mode: 'both',
     status: 'idle',
+    pausedStatus: null,
     controllerSessionId: null,
     latestSharedState: null,
+    eligibleSessionIds: [],
+    armedAt: null,
+    autoStartAt: null,
+    liveStartedAt: null,
+    autoEndAt: null,
+    pausedAt: null,
     players: {},
     createdAt: now,
     updatedAt: now,
@@ -76,11 +157,7 @@ export async function readClassroomGameSessionState(
   await ensureDirPath(CLASSROOM_GAME_SESSIONS_DIR);
   try {
     const content = await fs.readFile(resolveGameSessionPath(classroomId), 'utf-8');
-    return {
-      ...createDefaultGameSessionState(classroomId),
-      ...(JSON.parse(content) as ClassroomGameSessionState),
-      classroomId,
-    };
+    return normalizeGameSessionState(classroomId, JSON.parse(content) as ClassroomGameSessionState);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return createDefaultGameSessionState(classroomId);
@@ -108,9 +185,14 @@ export async function updateClassroomGameSessionState(
 function buildPlayerFromSession(
   session: SessionRecord,
   displayName: string,
+  state: ClassroomGameSessionState,
   existing?: ClassroomGameSessionPlayer,
 ): ClassroomGameSessionPlayer {
   const timestamp = nowIso();
+  const eligible = getEligiblePlayerIds(state).has(session.id);
+  const late =
+    existing?.late ??
+    Boolean(state.roundId && state.status !== 'idle' && state.status !== 'completed' && !eligible);
   return {
     sessionId: session.id,
     userId: session.userId,
@@ -121,6 +203,8 @@ function buildPlayerFromSession(
     progress: existing?.progress ?? 0,
     completed: existing?.completed ?? false,
     bridgeReady: existing?.bridgeReady ?? false,
+    eligible,
+    late: eligible ? false : late,
     lastEventAt: existing?.lastEventAt ?? timestamp,
     lastSeenAt: session.lastSeenAt,
   };
@@ -143,11 +227,27 @@ export function canSessionSubmitGameEvent(
     return false;
   }
 
-  if (eventType === 'shared_state' || eventType === 'control_input') {
-    return state.mode !== 'leaderboard' && state.controllerSessionId === session.id;
+  if (eventType === 'bridge_ready') {
+    return true;
   }
 
-  return true;
+  if (eventType === 'ready') {
+    return state.status === 'arming' || state.status === 'live';
+  }
+
+  if (eventType === 'score' || eventType === 'progress' || eventType === 'complete') {
+    return state.status === 'live';
+  }
+
+  if (eventType === 'shared_state' || eventType === 'control_input') {
+    return (
+      state.status === 'live' &&
+      state.mode !== 'leaderboard' &&
+      state.controllerSessionId === session.id
+    );
+  }
+
+  return false;
 }
 
 export async function getClassroomGameSessionPayload(
@@ -159,11 +259,21 @@ export async function getClassroomGameSessionPayload(
     return null;
   }
 
-  const state = await readClassroomGameSessionState(classroomId);
+  let state = await readClassroomGameSessionState(classroomId);
+  const advancedState = advanceGameSessionState(state);
+  if (advancedState !== state) {
+    state = await updateClassroomGameSessionState(classroomId, advanceGameSessionState);
+  }
+
   const sessions = await listRecentClassroomSessions(classroomId);
   const users = await Promise.all(sessions.map((entry) => findUserById(entry.userId)));
   const activePlayers = sessions.map((entry, index) =>
-    buildPlayerFromSession(entry, users[index]?.displayName || 'Student', state.players[entry.id]),
+    buildPlayerFromSession(
+      entry,
+      users[index]?.displayName || 'Student',
+      state,
+      state.players[entry.id],
+    ),
   );
   const activeSessionIds = new Set(activePlayers.map((player) => player.sessionId));
   const allPlayers = {
@@ -175,8 +285,8 @@ export async function getClassroomGameSessionPayload(
       Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt) ||
       left.displayName.localeCompare(right.displayName),
   );
-  const studentParticipants = participants.filter((player) => player.role === 'student');
-  const leaderboard = [...studentParticipants].sort(
+  const activeStudentParticipants = activePlayers.filter((player) => player.role === 'student');
+  const leaderboard = [...participants.filter((player) => player.role === 'student')].sort(
     (left, right) =>
       right.score - left.score ||
       right.progress - left.progress ||
@@ -187,14 +297,35 @@ export async function getClassroomGameSessionPayload(
       ? state.controllerSessionId
       : null;
   const viewerCanManage = canSessionManageGameSession(session);
+  const eligibleCount = state.eligibleSessionIds.length;
+  const readyCount = countEligiblePlayers(state, (player) => player.ready);
+  const completedCount = countEligiblePlayers(state, (player) => player.completed);
+  const readyThreshold = thresholdForCount(eligibleCount);
+  const completionThreshold = thresholdForCount(eligibleCount);
+  const now = new Date();
+  const serverNow = now.toISOString();
+  const pausedAt = toDate(state.pausedAt);
+  const phaseReferenceDate = state.status === 'paused' && pausedAt ? pausedAt : now;
+  const phaseEndsAt =
+    state.status === 'arming'
+      ? state.autoStartAt
+      : state.status === 'live'
+        ? state.autoEndAt
+        : state.status === 'paused' && state.pausedStatus === 'arming'
+          ? state.autoStartAt
+          : state.status === 'paused' && state.pausedStatus === 'live'
+            ? state.autoEndAt
+            : null;
+  const phaseEndDate = toDate(phaseEndsAt);
+  const viewerPlayer = allPlayers[session.id];
 
   return {
     ...state,
     roomVersion: classroom.roomVersion,
     controllerSessionId,
     players: allPlayers,
-    participants: studentParticipants,
-    participantCount: studentParticipants.length,
+    participants: activeStudentParticipants,
+    participantCount: activeStudentParticipants.length,
     leaderboard,
     viewerSessionId: session.id,
     viewerRole: session.role,
@@ -203,6 +334,17 @@ export async function getClassroomGameSessionPayload(
     viewerCanSubmit: canSessionSubmitGameEvent(state, session),
     viewerIsController: controllerSessionId === session.id,
     multiplayerSupported: participants.some((player) => player.bridgeReady),
+    eligibleCount,
+    readyCount,
+    readyThreshold,
+    completedCount,
+    completionThreshold,
+    viewerIsLate: viewerPlayer?.late ?? false,
+    phaseEndsAt,
+    phaseRemainingMs: phaseEndDate
+      ? Math.max(0, phaseEndDate.getTime() - phaseReferenceDate.getTime())
+      : null,
+    serverNow,
   };
 }
 
@@ -212,9 +354,19 @@ export function getClassroomGameSessionFingerprint(payload: ClassroomGameSession
     roundNumber: payload.roundNumber,
     mode: payload.mode,
     status: payload.status,
+    pausedStatus: payload.pausedStatus,
     controllerSessionId: payload.controllerSessionId,
     latestSharedState: payload.latestSharedState,
+    eligibleSessionIds: payload.eligibleSessionIds,
+    armedAt: payload.armedAt,
+    autoStartAt: payload.autoStartAt,
+    liveStartedAt: payload.liveStartedAt,
+    autoEndAt: payload.autoEndAt,
+    pausedAt: payload.pausedAt,
     participantCount: payload.participantCount,
+    readyCount: payload.readyCount,
+    completedCount: payload.completedCount,
+    phaseRemainingMs: payload.phaseRemainingMs,
     viewerSessionId: payload.viewerSessionId,
     viewerCanManage: payload.viewerCanManage,
     viewerCanSubmit: payload.viewerCanSubmit,
@@ -228,15 +380,27 @@ export function getClassroomGameSessionFingerprint(payload: ClassroomGameSession
       progress: player.progress,
       completed: player.completed,
       bridgeReady: player.bridgeReady,
+      eligible: player.eligible,
+      late: player.late,
       lastEventAt: player.lastEventAt,
     })),
   });
 }
 
-export function startNewGameRound(state: ClassroomGameSessionState): ClassroomGameSessionState {
+export function startNewGameRound(
+  state: ClassroomGameSessionState,
+  eligiblePlayers: ClassroomGameSessionPlayer[] = [],
+  now: Date = new Date(),
+): ClassroomGameSessionState {
   const roundNumber = state.roundNumber + 1;
+  const eligibleSessionIds = eligiblePlayers.map((player) => player.sessionId);
+  const nextPlayers = {
+    ...state.players,
+    ...Object.fromEntries(eligiblePlayers.map((player) => [player.sessionId, player])),
+  };
+  const eligibleIds = new Set(eligibleSessionIds);
   const resetPlayers = Object.fromEntries(
-    Object.values(state.players).map((player) => [
+    Object.values(nextPlayers).map((player) => [
       player.sessionId,
       {
         ...player,
@@ -244,7 +408,9 @@ export function startNewGameRound(state: ClassroomGameSessionState): ClassroomGa
         score: 0,
         progress: 0,
         completed: false,
-        lastEventAt: nowIso(),
+        eligible: eligibleIds.has(player.sessionId),
+        late: eligibleIds.has(player.sessionId) ? false : Boolean(state.roundId),
+        lastEventAt: now.toISOString(),
       },
     ]),
   );
@@ -253,7 +419,140 @@ export function startNewGameRound(state: ClassroomGameSessionState): ClassroomGa
     ...state,
     roundId: randomUUID(),
     roundNumber,
-    status: 'live',
+    status: 'arming',
+    pausedStatus: null,
+    controllerSessionId: null,
+    latestSharedState: null,
+    eligibleSessionIds,
+    armedAt: now.toISOString(),
+    autoStartAt: addMs(now, GAME_ROUND_READY_COUNTDOWN_MS),
+    liveStartedAt: null,
+    autoEndAt: null,
+    pausedAt: null,
     players: resetPlayers,
   };
+}
+
+export function startLiveGameRound(
+  state: ClassroomGameSessionState,
+  now: Date = new Date(),
+): ClassroomGameSessionState {
+  if (!state.roundId || state.status === 'live' || state.status === 'completed') {
+    return state;
+  }
+
+  return {
+    ...state,
+    status: 'live',
+    pausedStatus: null,
+    liveStartedAt: state.liveStartedAt ?? now.toISOString(),
+    autoEndAt: state.autoEndAt ?? addMs(now, GAME_ROUND_DURATION_MS),
+    pausedAt: null,
+  };
+}
+
+export function completeGameRound(state: ClassroomGameSessionState): ClassroomGameSessionState {
+  if (!state.roundId || state.status === 'idle' || state.status === 'completed') {
+    return state;
+  }
+
+  return {
+    ...state,
+    status: 'completed',
+    pausedStatus: null,
+    pausedAt: null,
+  };
+}
+
+export function pauseGameRound(
+  state: ClassroomGameSessionState,
+  now: Date = new Date(),
+): ClassroomGameSessionState {
+  if (state.status !== 'arming' && state.status !== 'live') {
+    return state;
+  }
+
+  return {
+    ...state,
+    status: 'paused',
+    pausedStatus: state.status,
+    pausedAt: now.toISOString(),
+  };
+}
+
+export function resumeGameRound(
+  state: ClassroomGameSessionState,
+  now: Date = new Date(),
+): ClassroomGameSessionState {
+  if (state.status !== 'paused') {
+    return state;
+  }
+
+  const pausedAt = toDate(state.pausedAt);
+  const pausedMs = pausedAt ? Math.max(0, now.getTime() - pausedAt.getTime()) : 0;
+  const shiftDeadline = (value: string | null) => {
+    const date = toDate(value);
+    return date ? addMs(date, pausedMs) : value;
+  };
+
+  return {
+    ...state,
+    status: state.pausedStatus ?? 'live',
+    pausedStatus: null,
+    autoStartAt:
+      state.pausedStatus === 'arming' ? shiftDeadline(state.autoStartAt) : state.autoStartAt,
+    autoEndAt: state.pausedStatus === 'live' ? shiftDeadline(state.autoEndAt) : state.autoEndAt,
+    pausedAt: null,
+  };
+}
+
+export function resetGameRound(state: ClassroomGameSessionState): ClassroomGameSessionState {
+  return {
+    ...state,
+    roundId: null,
+    status: 'idle',
+    pausedStatus: null,
+    controllerSessionId: null,
+    latestSharedState: null,
+    eligibleSessionIds: [],
+    armedAt: null,
+    autoStartAt: null,
+    liveStartedAt: null,
+    autoEndAt: null,
+    pausedAt: null,
+    players: {},
+  };
+}
+
+export function advanceGameSessionState(
+  state: ClassroomGameSessionState,
+  now: Date = new Date(),
+): ClassroomGameSessionState {
+  if (state.status === 'arming') {
+    const eligibleCount = state.eligibleSessionIds.length;
+    const readyThreshold = thresholdForCount(eligibleCount);
+    const readyCount = countEligiblePlayers(state, (player) => player.ready);
+    const deadline = toDate(state.autoStartAt);
+    const readyThresholdMet = eligibleCount > 0 && readyCount >= readyThreshold;
+    const countdownExpired = Boolean(deadline && deadline.getTime() <= now.getTime());
+
+    if (readyThresholdMet || countdownExpired) {
+      return startLiveGameRound(state, now);
+    }
+  }
+
+  if (state.status === 'live') {
+    const eligibleCount = state.eligibleSessionIds.length;
+    const completionThreshold = thresholdForCount(eligibleCount);
+    const completedCount = countEligiblePlayers(state, (player) => player.completed);
+    const deadline = toDate(state.autoEndAt);
+    const completionThresholdMet = eligibleCount > 0 && completedCount >= completionThreshold;
+    const roundExpired = Boolean(deadline && deadline.getTime() <= now.getTime());
+
+    if (completionThresholdMet || roundExpired) {
+      return completeGameRound(state);
+    }
+  }
+
+  return state;
 }

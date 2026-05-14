@@ -8,8 +8,13 @@ import {
 import {
   canSessionManageGameSession,
   canSessionSubmitGameEvent,
+  advanceGameSessionState,
+  completeGameRound,
   getClassroomGameSessionPayload,
-  readClassroomGameSessionState,
+  pauseGameRound,
+  resetGameRound,
+  resumeGameRound,
+  startLiveGameRound,
   startNewGameRound,
   updateClassroomGameSessionState,
 } from '@/lib/server/classroom-game-session';
@@ -37,6 +42,7 @@ interface GameSessionBody {
 
 const TEACHER_ACTIONS = new Set<ClassroomGameTeacherAction>([
   'start_round',
+  'start_now',
   'pause',
   'resume',
   'reset',
@@ -149,25 +155,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  const currentPayload = await getClassroomGameSessionPayload(id, access.auth.session);
+  const eligiblePlayers = currentPayload?.participants ?? [];
   const updated = await updateClassroomGameSessionState(id, (state) => {
     switch (action) {
       case 'start_round':
-        return startNewGameRound(state);
+        return startNewGameRound(state, eligiblePlayers);
+      case 'start_now':
+        return startLiveGameRound(state);
       case 'pause':
-        return { ...state, status: 'paused' };
+        return pauseGameRound(state);
       case 'resume':
-        return { ...state, status: 'live' };
+        return resumeGameRound(state);
       case 'complete':
-        return { ...state, status: 'completed' };
+        return completeGameRound(state);
       case 'reset':
-        return {
-          ...state,
-          roundId: null,
-          status: 'idle',
-          controllerSessionId: null,
-          latestSharedState: null,
-          players: {},
-        };
+        return resetGameRound(state);
       case 'set_mode':
         return isMode(body.mode) ? { ...state, mode: body.mode } : state;
       case 'assign_controller':
@@ -207,7 +210,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const current = await readClassroomGameSessionState(id);
+  const current = await getClassroomGameSessionPayload(id, access.auth.session);
+  if (!current) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Classroom not found',
+    );
+  }
+
   if (!canSessionSubmitGameEvent(current, access.auth.session, event)) {
     return apiErrorWithRequestSession(
       request,
@@ -222,6 +234,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const timestamp = new Date().toISOString();
     const progress = clampProgress(body.progress);
     const score = normalizeScore(body.score);
+    const eligible = state.eligibleSessionIds.includes(access.auth.session.id);
+    const late =
+      existing?.late ??
+      Boolean(
+        state.roundId && state.status !== 'idle' && state.status !== 'completed' && !eligible,
+      );
     const player = {
       sessionId: access.auth.session.id,
       userId: access.auth.user.id,
@@ -232,21 +250,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       progress: existing?.progress ?? 0,
       completed: existing?.completed ?? false,
       bridgeReady: existing?.bridgeReady ?? false,
+      eligible,
+      late: eligible ? false : late,
       lastEventAt: timestamp,
       lastSeenAt: timestamp,
     };
 
     if (event === 'ready') player.ready = true;
     if (event === 'bridge_ready') player.bridgeReady = true;
-    if (score !== undefined) player.score = score;
-    if (progress !== undefined) player.progress = progress;
+    if (event === 'score' && score !== undefined) player.score = score;
+    if ((event === 'score' || event === 'progress') && progress !== undefined) {
+      player.progress = progress;
+    }
     if (event === 'complete') {
       player.completed = true;
       player.progress = progress ?? 100;
       if (score !== undefined) player.score = score;
     }
 
-    return {
+    return advanceGameSessionState({
       ...state,
       latestSharedState:
         event === 'shared_state' || event === 'control_input'
@@ -256,7 +278,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ...state.players,
         [player.sessionId]: player,
       },
-    };
+    });
   });
 
   await emitGameSessionEvent(id, access, {

@@ -67,8 +67,15 @@ function buildGameSessionState(
     roundNumber: 0,
     mode: 'both',
     status: 'idle',
+    pausedStatus: null,
     controllerSessionId: null,
     latestSharedState: null,
+    eligibleSessionIds: [],
+    armedAt: null,
+    autoStartAt: null,
+    liveStartedAt: null,
+    autoEndAt: null,
+    pausedAt: null,
     players: {},
     createdAt: '2026-05-12T00:00:00.000Z',
     updatedAt: '2026-05-12T00:00:00.000Z',
@@ -83,6 +90,15 @@ function buildGameSessionState(
     viewerCanSubmit: true,
     viewerIsController: false,
     multiplayerSupported: false,
+    eligibleCount: 0,
+    readyCount: 0,
+    readyThreshold: 0,
+    completedCount: 0,
+    completionThreshold: 0,
+    viewerIsLate: false,
+    phaseEndsAt: null,
+    phaseRemainingMs: null,
+    serverNow: '2026-05-12T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -245,6 +261,60 @@ describe('useClassroomGameSessionState', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(onStateChange).toHaveBeenCalledWith(reconnectedState);
+  });
+
+  it('keeps polling during healthy SSE streams while a clocked round is active', async () => {
+    const activeState = buildGameSessionState({
+      roundId: 'round-1',
+      roundNumber: 1,
+      status: 'arming',
+      autoStartAt: '2026-05-12T00:00:45.000Z',
+      phaseEndsAt: '2026-05-12T00:00:45.000Z',
+      phaseRemainingMs: 45_000,
+      viewerSessionId: 'active-session',
+    });
+    const completedState = buildGameSessionState({
+      ...activeState,
+      status: 'completed',
+      phaseEndsAt: null,
+      phaseRemainingMs: null,
+    });
+    const onStateChange = vi.fn();
+
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...activeState,
+        }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          ...completedState,
+        }),
+      });
+
+    await mountHook(onStateChange);
+
+    const source = MockEventSource.instances[0];
+    await act(async () => {
+      source.emit('open');
+      source.emit('game-session-state', activeState);
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+      await Promise.resolve();
+    });
+
+    expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining(completedState));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('does not fetch while disabled', async () => {

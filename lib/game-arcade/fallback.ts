@@ -414,8 +414,46 @@ export function buildFallbackGameWidget(
       let started = false;
       let animationFrame = null;
       let classroomGameSession = null;
+      let lastRoundId = null;
+
+      function classroomStatus() {
+        return classroomGameSession && classroomGameSession.status;
+      }
+
+      function canMarkReady() {
+        const status = classroomStatus();
+        return !status || status === 'arming' || status === 'live';
+      }
+
+      function canPlayRound() {
+        const status = classroomStatus();
+        return !status || status === 'live';
+      }
+
+      function stopLoop() {
+        if (animationFrame) {
+          window.cancelAnimationFrame(animationFrame);
+          animationFrame = null;
+        }
+      }
+
+      function resetLocalGame(status) {
+        score = 0;
+        progress = 0;
+        started = false;
+        stopLoop();
+        updateHud(status || fallbackCopy.ready);
+      }
 
       function postGameEvent(eventName, payload) {
+        const status = classroomStatus();
+        const scoreEvents = ['score', 'progress', 'complete'];
+        if (status && scoreEvents.indexOf(eventName) >= 0 && status !== 'live') {
+          return;
+        }
+        if (status && eventName === 'ready' && !canMarkReady()) {
+          return;
+        }
         try {
           window.parent.postMessage(Object.assign({
             type: 'RAIC_GAME_EVENT',
@@ -460,6 +498,13 @@ export function buildFallbackGameWidget(
       }
 
       function startGame() {
+        if (!canPlayRound()) {
+          if (canMarkReady()) {
+            postGameEvent('ready', { score: score, progress: progress });
+          }
+          updateHud(classroomStatus() === 'paused' ? fallbackCopy.paused : fallbackCopy.ready);
+          return;
+        }
         started = true;
         score = Math.max(score, 0);
         progress = Math.max(progress, 10);
@@ -473,6 +518,7 @@ export function buildFallbackGameWidget(
 
       function completeChallenge() {
         if (!started) startGame();
+        if (!started) return;
         score += 10;
         progress = Math.min(100, progress + 25);
         updateHud(progress >= 100 ? fallbackCopy.complete : fallbackCopy.checkpointReached);
@@ -530,21 +576,33 @@ export function buildFallbackGameWidget(
 
         if (type === 'RAIC_GAME_STATE') {
           classroomGameSession = message.gameSession || null;
+          if (classroomGameSession && classroomGameSession.roundId !== lastRoundId) {
+            lastRoundId = classroomGameSession.roundId || null;
+            if (classroomGameSession.status === 'arming') {
+              resetLocalGame(fallbackCopy.ready);
+            }
+          }
           if (classroomGameSession && classroomGameSession.status === 'paused') {
             started = false;
+            stopLoop();
             updateHud(fallbackCopy.paused);
           }
           if (classroomGameSession && classroomGameSession.status === 'live' && !started) {
             startGame();
           }
+          if (classroomGameSession && classroomGameSession.status === 'completed') {
+            started = false;
+            stopLoop();
+            updateHud(fallbackCopy.complete);
+          }
+          if (classroomGameSession && classroomGameSession.status === 'idle') {
+            resetLocalGame(fallbackCopy.ready);
+          }
         }
 
         if (type === 'RAIC_GAME_CONTROL') {
           if (payload.action === 'reset') {
-            score = 0;
-            progress = 0;
-            started = false;
-            updateHud(fallbackCopy.ready);
+            resetLocalGame(fallbackCopy.ready);
           }
         }
       });
