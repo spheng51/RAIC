@@ -9,12 +9,15 @@ import {
   isValidClassroomJobId,
   readClassroomGenerationJob,
 } from '@/lib/server/classroom-job-store';
-import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ClassroomJob API');
 
 export const dynamic = 'force-dynamic';
+
+function buildPollUrl(req: NextRequest, jobId: string): string {
+  return new URL(`/api/generate-classroom/${jobId}`, req.nextUrl.origin).toString();
+}
 
 export async function GET(req: NextRequest, context: { params: Promise<{ jobId: string }> }) {
   let resolvedJobId: string | undefined;
@@ -55,7 +58,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       );
     }
 
-    const pollUrl = `${buildRequestOrigin(req)}/api/generate-classroom/${jobId}`;
+    const pollUrl = buildPollUrl(req, jobId);
 
     return apiSuccessWithRequestSession(req, {
       jobId: job.id,
