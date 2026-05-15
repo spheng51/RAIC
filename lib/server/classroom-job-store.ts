@@ -2,6 +2,13 @@ import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
 import path from 'path';
 import type { AuthContext } from '@/lib/auth/current-user';
+import { isPostgresConfigured } from '@/lib/db/client';
+import {
+  findClassroomGenerationJobRecordByRequestKey,
+  insertClassroomGenerationJobRecord,
+  readClassroomGenerationJobRecord,
+  updateClassroomGenerationJobRecord,
+} from '@/lib/db/repositories/classroom-generation-jobs';
 import type { PlatformRole } from '@/lib/db/schema';
 import type {
   ClassroomGenerationProgress,
@@ -92,6 +99,31 @@ function buildInputSummary(input: GenerateClassroomInput): ClassroomGenerationJo
     hasPdf: !!input.pdfContent,
     pdfTextLength: input.pdfContent?.text.length || 0,
     pdfImageCount: input.pdfContent?.images.length || 0,
+  };
+}
+
+function buildClassroomGenerationJob(
+  jobId: string,
+  input: GenerateClassroomInput,
+  owner: ClassroomGenerationJobOwner,
+  requestKey?: string,
+): ClassroomGenerationJob {
+  const now = new Date().toISOString();
+  return {
+    id: jobId,
+    ...(requestKey ? { requestKey } : {}),
+    status: 'queued',
+    step: 'queued',
+    progress: 0,
+    message: 'Classroom generation job queued',
+    createdAt: now,
+    updatedAt: now,
+    owner,
+    attempt: 1,
+    maxAttempts: 1,
+    canRetry: false,
+    inputSummary: buildInputSummary(input),
+    scenesGenerated: 0,
   };
 }
 
@@ -301,23 +333,23 @@ export async function createClassroomGenerationJob(
   owner: ClassroomGenerationJobOwner,
   requestKey?: string,
 ): Promise<ClassroomGenerationJob> {
-  const now = new Date().toISOString();
-  const job: ClassroomGenerationJob = {
-    id: jobId,
-    ...(requestKey ? { requestKey } : {}),
-    status: 'queued',
-    step: 'queued',
-    progress: 0,
-    message: 'Classroom generation job queued',
-    createdAt: now,
-    updatedAt: now,
-    owner,
-    attempt: 1,
-    maxAttempts: 1,
-    canRetry: false,
-    inputSummary: buildInputSummary(input),
-    scenesGenerated: 0,
-  };
+  const job = buildClassroomGenerationJob(jobId, input, owner, requestKey);
+
+  if (isPostgresConfigured()) {
+    const inserted = await insertClassroomGenerationJobRecord(job);
+    if (inserted) {
+      return inserted;
+    }
+
+    if (requestKey) {
+      const existing = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+      if (existing) {
+        return existing;
+      }
+    }
+
+    throw new Error(`Classroom generation job insert conflicted: ${jobId}`);
+  }
 
   await ensureClassroomJobsDir();
   await writeJsonFileAtomic(jobFilePath(jobId), job);
@@ -330,6 +362,34 @@ export async function createOrReuseClassroomGenerationJob(
   owner: ClassroomGenerationJobOwner,
   requestKey?: string,
 ): Promise<{ existing: boolean; job: ClassroomGenerationJob }> {
+  if (isPostgresConfigured()) {
+    if (!requestKey) {
+      return {
+        existing: false,
+        job: await createClassroomGenerationJob(jobId, input, owner),
+      };
+    }
+
+    const existingJob = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    if (existingJob) {
+      return { existing: true, job: existingJob };
+    }
+
+    const inserted = await insertClassroomGenerationJobRecord(
+      buildClassroomGenerationJob(jobId, input, owner, requestKey),
+    );
+    if (inserted) {
+      return { existing: false, job: inserted };
+    }
+
+    const conflictingJob = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    if (conflictingJob) {
+      return { existing: true, job: conflictingJob };
+    }
+
+    throw new Error(`Classroom generation job request-key conflict could not be resolved: ${jobId}`);
+  }
+
   if (!requestKey) {
     return {
       existing: false,
@@ -395,6 +455,11 @@ function classroomGenerationJobOwnerMatches(
 export async function readClassroomGenerationJob(
   jobId: string,
 ): Promise<ClassroomGenerationJob | null> {
+  if (isPostgresConfigured()) {
+    const job = await readClassroomGenerationJobRecord(jobId);
+    return job ? markStaleIfNeeded(job) : null;
+  }
+
   return readClassroomGenerationJobFile(jobId);
 }
 
@@ -420,6 +485,10 @@ export async function findClassroomGenerationJobByRequestKey(
 ): Promise<ClassroomGenerationJob | null> {
   if (!requestKey) {
     return null;
+  }
+
+  if (isPostgresConfigured()) {
+    return findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
   }
 
   await ensureClassroomJobsDir();
@@ -476,6 +545,14 @@ export async function updateClassroomGenerationJob(
       updatedAt: new Date().toISOString(),
     };
 
+    if (isPostgresConfigured()) {
+      const persisted = await updateClassroomGenerationJobRecord(updated);
+      if (!persisted) {
+        throw new Error(`Classroom generation job not found: ${jobId}`);
+      }
+      return persisted;
+    }
+
     await writeJsonFileAtomic(jobFilePath(jobId), updated);
     return updated;
   });
@@ -497,6 +574,14 @@ export async function markClassroomGenerationJobRunning(
       message: 'Classroom generation started',
       updatedAt: new Date().toISOString(),
     };
+
+    if (isPostgresConfigured()) {
+      const persisted = await updateClassroomGenerationJobRecord(updated);
+      if (!persisted) {
+        throw new Error(`Classroom generation job not found: ${jobId}`);
+      }
+      return persisted;
+    }
 
     await writeJsonFileAtomic(jobFilePath(jobId), updated);
     return updated;

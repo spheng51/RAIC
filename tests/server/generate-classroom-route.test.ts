@@ -130,7 +130,7 @@ describe('POST /api/generate-classroom', () => {
       status: 'pending',
       step: 'initializing',
       message: 'Queued',
-      pollUrl: 'http://localhost:3000/api/generate-classroom/job-123456',
+      pollUrl: 'http://localhost/api/generate-classroom/job-123456',
       pollIntervalMs: 5000,
     });
     expect(createClassroomGenerationJobMock).toHaveBeenCalledWith(
@@ -260,7 +260,7 @@ describe('POST /api/generate-classroom', () => {
       status: 'queued',
       step: 'generating_outlines',
       message: 'Queued',
-      pollUrl: 'http://localhost:3000/api/generate-classroom/job-existing',
+      pollUrl: 'http://localhost/api/generate-classroom/job-existing',
       pollIntervalMs: 5000,
     });
     expect(createOrReuseClassroomGenerationJobMock).toHaveBeenCalledWith(
@@ -310,7 +310,7 @@ describe('POST /api/generate-classroom', () => {
       status: 'running',
       step: 'generating_outlines',
       message: 'Still working',
-      pollUrl: 'http://localhost:3000/api/generate-classroom/job-running',
+      pollUrl: 'http://localhost/api/generate-classroom/job-running',
       pollIntervalMs: 5000,
     });
     expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
@@ -346,7 +346,7 @@ describe('POST /api/generate-classroom', () => {
       status: 'succeeded',
       step: 'completed',
       message: 'Done',
-      pollUrl: 'http://localhost:3000/api/generate-classroom/job-complete',
+      pollUrl: 'http://localhost/api/generate-classroom/job-complete',
       pollIntervalMs: 5000,
     });
     expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();

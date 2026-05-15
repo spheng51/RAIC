@@ -235,6 +235,7 @@ describe('GET /api/generate-classroom/[jobId]', () => {
       success: true,
       jobId: 'job-1',
       status: 'succeeded',
+      pollUrl: 'http://localhost:3000/api/generate-classroom/job-1',
       scenesGenerated: 1,
       scenesFailed: 1,
       totalScenes: 2,

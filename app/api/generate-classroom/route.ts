@@ -32,6 +32,10 @@ type GenerateClassroomRequestBody = Partial<GenerateClassroomInput> & {
   requestKey?: string;
 };
 
+function buildPollUrl(req: NextRequest, jobId: string): string {
+  return new URL(`/api/generate-classroom/${jobId}`, req.nextUrl.origin).toString();
+}
+
 function readScheduledClassGenerationInput(value: unknown): ScheduledClassGenerationInput | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -143,9 +147,9 @@ export async function POST(req: NextRequest) {
       : {
           existing: false,
           job: await createClassroomGenerationJob(generatedJobId, body, owner),
-        };
+    };
     const jobId = job.id;
-    const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
+    const pollUrl = buildPollUrl(req, jobId);
 
     if (!existing) {
       after(() =>
