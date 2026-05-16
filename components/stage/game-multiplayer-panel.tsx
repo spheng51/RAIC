@@ -1,8 +1,20 @@
 'use client';
 
-import { Gamepad2, Pause, Play, RotateCcw, Trophy, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  Clock,
+  Flag,
+  Gamepad2,
+  Pause,
+  Play,
+  RotateCcw,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type {
   ClassroomGameSessionMode,
   ClassroomGameSessionPayload,
@@ -26,22 +38,63 @@ function modeLabel(mode: ClassroomGameSessionMode) {
   return 'Both modes';
 }
 
+function statusLabel(status: ClassroomGameSessionPayload['status']) {
+  if (status === 'arming') return 'Arming';
+  if (status === 'live') return 'Live';
+  if (status === 'paused') return 'Paused';
+  if (status === 'completed') return 'Complete';
+  return 'Idle';
+}
+
+function formatRemaining(ms: number | null) {
+  if (ms === null) return '--:--';
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 export function GameMultiplayerPanel({
   className,
   state,
   onTeacherAction,
   onStudentReady,
 }: GameMultiplayerPanelProps) {
+  const [controlOpen, setControlOpen] = useState(false);
   const viewer = state.players[state.viewerSessionId];
-  const topPlayers = state.leaderboard.slice(0, 4);
+  const topPlayers = state.leaderboard.slice(0, 5);
   const controller = state.controllerSessionId
     ? state.participants.find((participant) => participant.sessionId === state.controllerSessionId)
     : null;
+  const viewerRank = useMemo(() => {
+    const index = state.leaderboard.findIndex(
+      (player) => player.sessionId === state.viewerSessionId,
+    );
+    return index >= 0 ? index + 1 : null;
+  }, [state.leaderboard, state.viewerSessionId]);
+  const canArm = state.status === 'idle' || state.status === 'completed';
+  const canStartNow = state.status === 'arming';
+  const canPause =
+    state.status === 'arming' || state.status === 'live' || state.status === 'paused';
+  const canEnd = state.status === 'live' || state.status === 'paused';
+  const timeLabel =
+    state.status === 'arming'
+      ? 'Starts in'
+      : state.status === 'live'
+        ? 'Time left'
+        : state.status === 'paused'
+          ? 'Paused at'
+          : 'Timer';
+  const viewerReady = viewer?.ready ?? false;
+  const readyDisabled =
+    viewerReady ||
+    (state.status !== 'arming' && state.status !== 'live') ||
+    !state.multiplayerSupported;
 
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute bottom-4 left-4 z-30 w-[min(24rem,calc(100%-2rem))] rounded-lg border border-white/50 bg-white/90 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82',
+        'pointer-events-auto absolute right-4 top-4 z-30 w-[min(23rem,calc(100%-2rem))] rounded-lg border border-white/50 bg-white/92 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/86',
         className,
       )}
     >
@@ -52,15 +105,18 @@ export function GameMultiplayerPanel({
             Multiplayer game
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">{state.status}</Badge>
+            <Badge variant={state.status === 'live' ? 'default' : 'outline'}>
+              {statusLabel(state.status)}
+            </Badge>
             <Badge variant="outline">{modeLabel(state.mode)}</Badge>
+            {state.viewerIsLate ? <Badge variant="secondary">Late join</Badge> : null}
             <Badge variant="outline">
               <Users />
               {state.participantCount}
             </Badge>
           </div>
         </div>
-        <div className="rounded-lg bg-violet-50 px-2 py-1 text-right text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-200">
+        <div className="rounded-md bg-violet-50 px-2 py-1 text-right text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-200">
           Round {state.roundNumber || 0}
         </div>
       </div>
@@ -71,21 +127,64 @@ export function GameMultiplayerPanel({
         </p>
       ) : null}
 
+      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md border bg-muted/25 px-2 py-1.5">
+          <div className="text-muted-foreground">Ready</div>
+          <div className="font-semibold tabular-nums">
+            {state.readyCount}/{state.eligibleCount}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/25 px-2 py-1.5">
+          <div className="text-muted-foreground">Done</div>
+          <div className="font-semibold tabular-nums">
+            {state.completedCount}/{state.eligibleCount}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/25 px-2 py-1.5">
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <Clock className="size-3" />
+            {timeLabel}
+          </div>
+          <div className="font-mono font-semibold tabular-nums">
+            {formatRemaining(state.phaseRemainingMs)}
+          </div>
+        </div>
+      </div>
+
       {state.viewerCanManage ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => void onTeacherAction('start_round')}>
-            <Play className="size-4" />
-            Start round
-          </Button>
+          {canArm ? (
+            <Button type="button" size="sm" onClick={() => void onTeacherAction('start_round')}>
+              <Flag className="size-4" />
+              Arm round
+            </Button>
+          ) : null}
+          {canStartNow ? (
+            <Button type="button" size="sm" onClick={() => void onTeacherAction('start_now')}>
+              <Play className="size-4" />
+              Start now
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
             variant="outline"
+            disabled={!canPause}
             onClick={() => void onTeacherAction(state.status === 'paused' ? 'resume' : 'pause')}
           >
             {state.status === 'paused' ? <Play className="size-4" /> : <Pause className="size-4" />}
             {state.status === 'paused' ? 'Resume' : 'Pause'}
           </Button>
+          {canEnd ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void onTeacherAction('complete')}
+            >
+              End
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
@@ -95,28 +194,40 @@ export function GameMultiplayerPanel({
             <RotateCcw className="size-4" />
             Reset
           </Button>
-          {(['both', 'leaderboard', 'shared-control'] as const).map((mode) => (
-            <Button
-              key={mode}
-              type="button"
-              size="sm"
-              variant={state.mode === mode ? 'default' : 'outline'}
-              onClick={() => void onTeacherAction('set_mode', { mode })}
-            >
-              {modeLabel(mode)}
-            </Button>
-          ))}
+          <div className="flex flex-wrap gap-1.5">
+            {(['both', 'leaderboard', 'shared-control'] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                size="sm"
+                variant={state.mode === mode ? 'default' : 'outline'}
+                onClick={() => void onTeacherAction('set_mode', { mode })}
+              >
+                {modeLabel(mode)}
+              </Button>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border bg-muted/25 px-3 py-2">
           <div className="min-w-0 text-xs">
-            <p className="font-semibold">{viewer?.displayName ?? 'Student'}</p>
+            <p className="font-semibold">
+              {viewer?.displayName ?? 'Student'}
+              {state.viewerIsLate ? ' · late' : ''}
+            </p>
             <p className="text-muted-foreground">
               Score {viewer?.score ?? 0} · Progress {viewer?.progress ?? 0}%
+              {viewerRank ? ` · Rank ${viewerRank}` : ''}
             </p>
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={() => void onStudentReady()}>
-            Ready
+          <Button
+            type="button"
+            size="sm"
+            variant={viewerReady ? 'secondary' : 'outline'}
+            disabled={readyDisabled}
+            onClick={() => void onStudentReady()}
+          >
+            {viewerReady ? 'Ready' : 'Mark ready'}
           </Button>
         </div>
       )}
@@ -137,6 +248,7 @@ export function GameMultiplayerPanel({
               >
                 <span className="min-w-0 truncate">
                   {index + 1}. {player.displayName}
+                  {player.late ? ' · late' : ''}
                   {controller?.sessionId === player.sessionId ? ' · controller' : ''}
                 </span>
                 <span className="font-mono tabular-nums">
@@ -149,33 +261,48 @@ export function GameMultiplayerPanel({
       </div>
 
       {state.viewerCanManage && state.participants.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {state.participants.map((participant) => (
-            <Button
-              key={participant.sessionId}
-              type="button"
-              size="sm"
-              variant={state.controllerSessionId === participant.sessionId ? 'default' : 'outline'}
-              onClick={() =>
-                void onTeacherAction('assign_controller', {
-                  targetSessionId: participant.sessionId,
-                })
-              }
-            >
-              {participant.displayName}
+        <Collapsible open={controlOpen} onOpenChange={setControlOpen}>
+          <CollapsibleTrigger asChild>
+            <Button type="button" size="sm" variant="ghost" className="mt-3 w-full justify-between">
+              Shared control
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                {controller?.displayName ?? 'None'}
+                <ChevronDown className="size-4" />
+              </span>
             </Button>
-          ))}
-          {state.controllerSessionId ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => void onTeacherAction('clear_controller')}
-            >
-              Clear controller
-            </Button>
-          ) : null}
-        </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 flex flex-wrap gap-1.5 rounded-md border bg-muted/20 p-2">
+              {state.participants.map((participant) => (
+                <Button
+                  key={participant.sessionId}
+                  type="button"
+                  size="sm"
+                  variant={
+                    state.controllerSessionId === participant.sessionId ? 'default' : 'outline'
+                  }
+                  onClick={() =>
+                    void onTeacherAction('assign_controller', {
+                      targetSessionId: participant.sessionId,
+                    })
+                  }
+                >
+                  {participant.displayName}
+                </Button>
+              ))}
+              {state.controllerSessionId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void onTeacherAction('clear_controller')}
+                >
+                  Clear controller
+                </Button>
+              ) : null}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
     </div>
   );
