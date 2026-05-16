@@ -92,6 +92,16 @@ const payload = {
   serverNow: '2026-05-11T00:00:00.000Z',
 };
 
+let currentGameSessionState: Record<string, unknown>;
+
+function setCurrentGameSessionState(overrides: Record<string, unknown> = {}) {
+  currentGameSessionState = {
+    ...payload,
+    players: {},
+    ...overrides,
+  };
+}
+
 describe('/api/classroom/[id]/game-session', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -102,11 +112,9 @@ describe('/api/classroom/[id]/game-session', () => {
     canSessionSubmitGameEventMock.mockReset();
     canSessionSubmitGameEventMock.mockReturnValue(true);
     getClassroomGameSessionPayloadMock.mockResolvedValue(payload);
+    setCurrentGameSessionState();
     updateClassroomGameSessionStateMock.mockImplementation(async (_id, updater) =>
-      updater({
-        ...payload,
-        players: {},
-      }),
+      updater(currentGameSessionState),
     );
   });
 
@@ -151,6 +159,10 @@ describe('/api/classroom/[id]/game-session', () => {
 
   it('allows students to submit score progress during live rounds', async () => {
     requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    setCurrentGameSessionState({
+      roundId: 'round-1',
+      status: 'live',
+    });
     getClassroomGameSessionPayloadMock.mockResolvedValue({
       ...payload,
       status: 'live',
@@ -161,7 +173,7 @@ describe('/api/classroom/[id]/game-session', () => {
     const response = await POST(
       new NextRequest('http://localhost/api/classroom/room-1/game-session', {
         method: 'POST',
-        body: JSON.stringify({ event: 'score', score: 42, progress: 80 }),
+        body: JSON.stringify({ event: 'score', roundId: 'round-1', score: 42, progress: 80 }),
       }),
       { params: Promise.resolve({ id: 'room-1' }) },
     );
@@ -181,17 +193,180 @@ describe('/api/classroom/[id]/game-session', () => {
   it('rejects score progress when the session guard disallows it', async () => {
     requireClassroomAccessMock.mockResolvedValue(studentAccess);
     canSessionSubmitGameEventMock.mockReturnValue(false);
+    setCurrentGameSessionState({
+      roundId: 'round-1',
+      status: 'live',
+    });
 
     const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
     const response = await POST(
       new NextRequest('http://localhost/api/classroom/room-1/game-session', {
         method: 'POST',
-        body: JSON.stringify({ event: 'score', score: 42, progress: 80 }),
+        body: JSON.stringify({ event: 'score', roundId: 'round-1', score: 42, progress: 80 }),
       }),
       { params: Promise.resolve({ id: 'room-1' }) },
     );
 
     expect(response.status).toBe(403);
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects score progress while the round is not live', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    setCurrentGameSessionState({
+      roundId: 'round-1',
+      status: 'paused',
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'score', roundId: 'round-1', score: 42, progress: 80 }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error).toBe('Game events can only update the round while it is live.');
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
+  });
+
+  it('allows readiness before live play without applying round score progress', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    let updatedPlayer:
+      | {
+          ready: boolean;
+          score: number;
+          progress: number;
+        }
+      | undefined;
+    updateClassroomGameSessionStateMock.mockImplementationOnce(async (_id, updater) => {
+      const updatedState = updater({ ...payload, players: {} });
+      updatedPlayer = updatedState.players['student-session'];
+      return updatedState;
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'ready', score: 42, progress: 80 }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(updatedPlayer).toMatchObject({
+      ready: true,
+      score: 0,
+      progress: 0,
+    });
+  });
+
+  it('rejects stale round events', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    setCurrentGameSessionState({
+      roundId: 'round-current',
+      status: 'live',
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'progress', roundId: 'round-old', progress: 20 }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error).toBe('This game event belongs to a stale round.');
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects live round events that omit the current round id', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    setCurrentGameSessionState({
+      roundId: 'round-current',
+      status: 'live',
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'progress', progress: 20 }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error).toBe('This game event is missing a round id.');
     expect(updateClassroomGameSessionStateMock).not.toHaveBeenCalled();
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized game event payloads', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    setCurrentGameSessionState({
+      roundId: 'round-1',
+      status: 'live',
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'shared_state', state: { blob: 'x'.repeat(17_000) } }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    expect(response.status).toBe(413);
+    expect(updateClassroomGameSessionStateMock).not.toHaveBeenCalled();
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-controller shared-control submissions', async () => {
+    requireClassroomAccessMock.mockResolvedValue(studentAccess);
+    canSessionSubmitGameEventMock.mockReturnValue(false);
+    setCurrentGameSessionState({
+      roundId: 'round-1',
+      status: 'live',
+      mode: 'shared-control',
+      controllerSessionId: 'other-student',
+    });
+
+    const { POST } = await import('@/app/api/classroom/[id]/game-session/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/classroom/room-1/game-session', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'control_input', roundId: 'round-1', input: { x: 1 } }),
+      }),
+      { params: Promise.resolve({ id: 'room-1' }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(updateClassroomGameSessionStateMock).toHaveBeenCalledWith(
+      'room-1',
+      expect.any(Function),
+    );
+    expect(recordClassroomRoomEventMock).not.toHaveBeenCalled();
   });
 });

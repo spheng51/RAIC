@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import {
+  type ApiErrorCode,
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
@@ -34,11 +35,21 @@ interface GameSessionBody {
   event?: ClassroomGameStudentEventType;
   mode?: ClassroomGameSessionMode;
   targetSessionId?: string;
+  roundId?: string | null;
   score?: number;
   progress?: number;
   state?: Record<string, unknown>;
   input?: Record<string, unknown>;
 }
+
+const GAME_EVENT_PAYLOAD_LIMIT_BYTES = 16 * 1024;
+const LIVE_ROUND_EVENTS = new Set<ClassroomGameStudentEventType>([
+  'progress',
+  'score',
+  'complete',
+  'shared_state',
+  'control_input',
+]);
 
 const TEACHER_ACTIONS = new Set<ClassroomGameTeacherAction>([
   'start_round',
@@ -61,6 +72,16 @@ const STUDENT_EVENTS = new Set<ClassroomGameStudentEventType>([
   'bridge_ready',
 ]);
 
+class GameSessionMutationError extends Error {
+  constructor(
+    readonly code: ApiErrorCode,
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 function clampProgress(value: unknown) {
   const progress = Number(value);
   return Number.isFinite(progress) ? Math.min(100, Math.max(0, progress)) : undefined;
@@ -73,6 +94,18 @@ function normalizeScore(value: unknown) {
 
 function isMode(value: unknown): value is ClassroomGameSessionMode {
   return value === 'both' || value === 'leaderboard' || value === 'shared-control';
+}
+
+function getSerializedPayloadSize(value: unknown) {
+  if (value === undefined) return 0;
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function isPayloadTooLarge(body: GameSessionBody) {
+  return (
+    getSerializedPayloadSize(body.state) > GAME_EVENT_PAYLOAD_LIMIT_BYTES ||
+    getSerializedPayloadSize(body.input) > GAME_EVENT_PAYLOAD_LIMIT_BYTES
+  );
 }
 
 async function requireAccess(request: NextRequest, classroomId: string) {
@@ -156,7 +189,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const currentPayload = await getClassroomGameSessionPayload(id, access.auth.session);
-  const eligiblePlayers = currentPayload?.participants ?? [];
+  const eligiblePlayers =
+    currentPayload?.participants.filter((participant) => participant.active !== false) ?? [];
   const updated = await updateClassroomGameSessionState(id, (state) => {
     switch (action) {
       case 'start_round':
@@ -210,79 +244,120 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const current = await getClassroomGameSessionPayload(id, access.auth.session);
-  if (!current) {
+  if (isPayloadTooLarge(body)) {
     return apiErrorWithRequestSession(
       request,
       API_ERROR_CODES.INVALID_REQUEST,
-      404,
-      'Classroom not found',
+      413,
+      'Game event payload is too large.',
     );
   }
 
-  if (!canSessionSubmitGameEvent(current, access.auth.session, event)) {
+  const isLiveRoundEvent = LIVE_ROUND_EVENTS.has(event);
+  if (isLiveRoundEvent && (typeof body.roundId !== 'string' || body.roundId.trim().length === 0)) {
     return apiErrorWithRequestSession(
       request,
-      API_ERROR_CODES.FORBIDDEN,
-      403,
-      'This classroom session cannot submit that game event.',
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'This game event is missing a round id.',
     );
   }
 
-  const updated = await updateClassroomGameSessionState(id, (state) => {
-    const existing = state.players[access.auth.session.id];
-    const timestamp = new Date().toISOString();
-    const progress = clampProgress(body.progress);
-    const score = normalizeScore(body.score);
-    const eligible = state.eligibleSessionIds.includes(access.auth.session.id);
-    const late =
-      existing?.late ??
-      Boolean(
-        state.roundId && state.status !== 'idle' && state.status !== 'completed' && !eligible,
-      );
-    const player = {
-      sessionId: access.auth.session.id,
-      userId: access.auth.user.id,
-      displayName: access.auth.user.displayName || 'Student',
-      role: access.auth.session.role,
-      ready: existing?.ready ?? false,
-      score: existing?.score ?? 0,
-      progress: existing?.progress ?? 0,
-      completed: existing?.completed ?? false,
-      bridgeReady: existing?.bridgeReady ?? false,
-      eligible,
-      late: eligible ? false : late,
-      lastEventAt: timestamp,
-      lastSeenAt: timestamp,
-    };
+  let updated: Awaited<ReturnType<typeof updateClassroomGameSessionState>>;
+  try {
+    updated = await updateClassroomGameSessionState(id, (state) => {
+      if (isLiveRoundEvent && state.status !== 'live') {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.INVALID_REQUEST,
+          409,
+          'Game events can only update the round while it is live.',
+        );
+      }
 
-    if (event === 'ready') player.ready = true;
-    if (event === 'bridge_ready') player.bridgeReady = true;
-    if (event === 'score' && score !== undefined) player.score = score;
-    if ((event === 'score' || event === 'progress') && progress !== undefined) {
-      player.progress = progress;
-    }
-    if (event === 'complete') {
-      player.completed = true;
-      player.progress = progress ?? 100;
-      if (score !== undefined) player.score = score;
-    }
+      if (isLiveRoundEvent && body.roundId !== state.roundId) {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.INVALID_REQUEST,
+          409,
+          'This game event belongs to a stale round.',
+        );
+      }
 
-    return advanceGameSessionState({
-      ...state,
-      latestSharedState:
-        event === 'shared_state' || event === 'control_input'
-          ? (body.state ?? body.input ?? state.latestSharedState)
-          : state.latestSharedState,
-      players: {
-        ...state.players,
-        [player.sessionId]: player,
-      },
+      if (!canSessionSubmitGameEvent(state, access.auth.session, event)) {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.FORBIDDEN,
+          403,
+          'This classroom session cannot submit that game event.',
+        );
+      }
+
+      const existing = state.players[access.auth.session.id];
+      const timestamp = new Date().toISOString();
+      const progress = clampProgress(body.progress);
+      const score = normalizeScore(body.score);
+      const eligible = state.eligibleSessionIds.includes(access.auth.session.id);
+      const late =
+        existing?.late ??
+        Boolean(
+          state.roundId && state.status !== 'idle' && state.status !== 'completed' && !eligible,
+        );
+      const player = {
+        sessionId: access.auth.session.id,
+        userId: access.auth.user.id,
+        displayName: access.auth.user.displayName || 'Student',
+        role: access.auth.session.role,
+        ready: existing?.ready ?? false,
+        score: existing?.score ?? 0,
+        progress: existing?.progress ?? 0,
+        completed: existing?.completed ?? false,
+        bridgeReady: existing?.bridgeReady ?? false,
+        eligible,
+        late: eligible ? false : late,
+        lastEventAt: timestamp,
+        lastSeenAt: timestamp,
+      };
+
+      if (event === 'ready') player.ready = true;
+      if (event === 'bridge_ready') player.bridgeReady = true;
+      if (
+        (event === 'score' || event === 'progress' || event === 'complete') &&
+        score !== undefined
+      ) {
+        player.score = score;
+      }
+      if (
+        (event === 'score' || event === 'progress' || event === 'complete') &&
+        progress !== undefined
+      ) {
+        player.progress = progress;
+      }
+      if (event === 'complete') {
+        player.completed = true;
+        player.progress = progress ?? 100;
+        if (score !== undefined) player.score = score;
+      }
+
+      return advanceGameSessionState({
+        ...state,
+        latestSharedState:
+          event === 'shared_state' || event === 'control_input'
+            ? (body.state ?? body.input ?? state.latestSharedState)
+            : state.latestSharedState,
+        players: {
+          ...state.players,
+          [player.sessionId]: player,
+        },
+      });
     });
-  });
+  } catch (error) {
+    if (error instanceof GameSessionMutationError) {
+      return apiErrorWithRequestSession(request, error.code, error.status, error.message);
+    }
+    throw error;
+  }
 
   await emitGameSessionEvent(id, access, {
     event,
+    roundId: updated.roundId,
     status: updated.status,
     score: body.score ?? null,
     progress: body.progress ?? null,

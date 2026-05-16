@@ -186,7 +186,106 @@ describe('GameMultiplayerPanel', () => {
       startNow?.click();
     });
 
-    expect(onTeacherAction).toHaveBeenCalledWith('start_now');
+    expect(onTeacherAction).toHaveBeenCalledWith('start_now', undefined);
+  });
+
+  it('marks inactive players while preserving their leaderboard score', async () => {
+    const activePlayer = buildPlayer('student-active', {
+      displayName: 'Ada Lovelace With A Very Long Display Name',
+      score: 25,
+      progress: 50,
+    });
+    const inactivePlayer = buildPlayer('student-inactive', {
+      displayName: 'Grace Hopper',
+      active: false,
+      score: 90,
+      progress: 100,
+      completed: true,
+    });
+    const { container } = await renderPanel(
+      buildPayload({
+        status: 'live',
+        roundId: 'round-1',
+        roundNumber: 1,
+        participantCount: 1,
+        players: {
+          [activePlayer.sessionId]: activePlayer,
+          [inactivePlayer.sessionId]: inactivePlayer,
+        },
+        participants: [activePlayer, inactivePlayer],
+        leaderboard: [inactivePlayer, activePlayer],
+        multiplayerSupported: true,
+      }),
+    );
+
+    expect(container.textContent).toContain('Grace Hopper · inactive');
+    expect(container.textContent).toContain('90 · 100%');
+    expect(container.textContent).toContain('1/2');
+    expect(
+      container.querySelector<HTMLButtonElement>('button[aria-label="Inactive player Grace Hopper"]')
+        ?.disabled,
+    ).toBe(true);
+  });
+
+  it('summarizes multiplayer round review details for teachers', async () => {
+    const completedPlayer = buildPlayer('student-complete', {
+      displayName: 'Ada Lovelace',
+      score: 90,
+      progress: 100,
+      completed: true,
+    });
+    const stuckPlayer = buildPlayer('student-stuck', {
+      displayName: 'Grace Hopper',
+      score: 20,
+      progress: 40,
+      completed: false,
+    });
+    const nearlyDonePlayer = buildPlayer('student-nearly-done', {
+      displayName: 'Katherine Johnson',
+      score: 60,
+      progress: 80,
+      completed: false,
+    });
+    const inactivePlayer = buildPlayer('student-inactive', {
+      displayName: 'Inactive Reviewer',
+      active: false,
+      score: 99,
+      progress: 0,
+      completed: false,
+    });
+    const { container } = await renderPanel(
+      buildPayload({
+        status: 'completed',
+        roundId: 'round-1',
+        roundNumber: 1,
+        participantCount: 3,
+        players: {
+          [completedPlayer.sessionId]: completedPlayer,
+          [stuckPlayer.sessionId]: stuckPlayer,
+          [nearlyDonePlayer.sessionId]: nearlyDonePlayer,
+          [inactivePlayer.sessionId]: inactivePlayer,
+        },
+        participants: [completedPlayer, stuckPlayer, nearlyDonePlayer, inactivePlayer],
+        leaderboard: [inactivePlayer, completedPlayer, nearlyDonePlayer, stuckPlayer],
+        multiplayerSupported: true,
+        eligibleCount: 3,
+        readyCount: 3,
+        completedCount: 1,
+        completionThreshold: 3,
+        readyThreshold: 3,
+      }),
+    );
+
+    const reviewPanel = container.querySelector('[data-testid="multiplayer-round-review"]');
+    expect(reviewPanel?.textContent).toContain('Round review');
+    expect(reviewPanel?.textContent).toContain('Ready to debrief');
+    expect(reviewPanel?.textContent).toContain('Completed1/3');
+    expect(reviewPanel?.textContent).toContain('Ready3/3');
+    expect(reviewPanel?.textContent).toContain('Avg progress73%');
+    expect(reviewPanel?.textContent).toContain('Top score99');
+    expect(reviewPanel?.textContent).toContain('Grace Hopper, Katherine Johnson');
+    expect(reviewPanel?.textContent).not.toContain('Inactive Reviewer');
+    expect(container.textContent).toContain('Arm round');
   });
 
   it('renders student score, rank, and late join state', async () => {

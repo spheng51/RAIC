@@ -5,6 +5,7 @@ import {
   API_ERROR_CODES,
   withRequestWebSession,
 } from '@/lib/server/api-response';
+import { touchSession } from '@/lib/db/repositories/sessions';
 import {
   getClassroomGameSessionFingerprint,
   getClassroomGameSessionPayload,
@@ -19,6 +20,7 @@ export const dynamic = 'force-dynamic';
 
 const encoder = new TextEncoder();
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 20_000;
 
 function encodeEvent(name: string, payload: unknown, id?: string) {
   const lines = id
@@ -109,14 +111,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       };
 
+      const touchPresence = () => {
+        void touchSession(access.auth.session.id, {
+          lastSeenAt: new Date().toISOString(),
+          expiresAt: access.auth.session.expiresAt,
+        }).catch(() => undefined);
+      };
+
       controller.enqueue(
         encodeEvent('game-session-state', initialPayload, latestRelevantRoomEventId),
       );
+      touchPresence();
       heartbeatInterval = setInterval(() => {
         if (!closed) {
+          touchPresence();
           controller.enqueue(encodeEvent('heartbeat', { ts: new Date().toISOString() }));
         }
-      }, 20_000);
+      }, HEARTBEAT_INTERVAL_MS);
       unsubscribeFromRoomEvents = subscribeToClassroomRoomEvents(id, (event) => {
         if (event.kind === 'game_session.updated') {
           void emitGameSessionState(event.eventId);

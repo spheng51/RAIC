@@ -198,6 +198,7 @@ function buildPlayerFromSession(
     userId: session.userId,
     displayName,
     role: session.role,
+    active: true,
     ready: existing?.ready ?? false,
     score: existing?.score ?? 0,
     progress: existing?.progress ?? 0,
@@ -219,12 +220,12 @@ export function canSessionSubmitGameEvent(
   session: SessionRecord,
   eventType?: string,
 ) {
-  if (canSessionManageGameSession(session)) {
-    return true;
-  }
-
   if (session.kind !== 'classroom' || session.role !== 'student') {
     return false;
+  }
+
+  if (!eventType) {
+    return true;
   }
 
   if (eventType === 'bridge_ready') {
@@ -276,8 +277,19 @@ export async function getClassroomGameSessionPayload(
     ),
   );
   const activeSessionIds = new Set(activePlayers.map((player) => player.sessionId));
+  const activeStudentSessionIds = new Set(
+    activePlayers.filter((player) => player.role === 'student').map((player) => player.sessionId),
+  );
   const allPlayers = {
-    ...state.players,
+    ...Object.fromEntries(
+      Object.values(state.players).map((player) => [
+        player.sessionId,
+        {
+          ...player,
+          active: activeSessionIds.has(player.sessionId),
+        },
+      ]),
+    ),
     ...Object.fromEntries(activePlayers.map((player) => [player.sessionId, player])),
   };
   const participants = Object.values(allPlayers).sort(
@@ -285,8 +297,8 @@ export async function getClassroomGameSessionPayload(
       Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt) ||
       left.displayName.localeCompare(right.displayName),
   );
-  const activeStudentParticipants = activePlayers.filter((player) => player.role === 'student');
-  const leaderboard = [...participants.filter((player) => player.role === 'student')].sort(
+  const studentParticipants = participants.filter((player) => player.role === 'student');
+  const leaderboard = [...studentParticipants].sort(
     (left, right) =>
       right.score - left.score ||
       right.progress - left.progress ||
@@ -324,16 +336,24 @@ export async function getClassroomGameSessionPayload(
     roomVersion: classroom.roomVersion,
     controllerSessionId,
     players: allPlayers,
-    participants: activeStudentParticipants,
-    participantCount: activeStudentParticipants.length,
+    participants: studentParticipants,
+    participantCount: activeStudentSessionIds.size,
     leaderboard,
     viewerSessionId: session.id,
     viewerRole: session.role,
     viewerKind: session.kind,
     viewerCanManage,
-    viewerCanSubmit: canSessionSubmitGameEvent(state, session),
+    viewerCanSubmit: canSessionSubmitGameEvent(
+      {
+        ...state,
+        controllerSessionId,
+      },
+      session,
+    ),
     viewerIsController: controllerSessionId === session.id,
-    multiplayerSupported: participants.some((player) => player.bridgeReady),
+    multiplayerSupported: studentParticipants.some(
+      (player) => player.active !== false && player.bridgeReady,
+    ),
     eligibleCount,
     readyCount,
     readyThreshold,
@@ -380,6 +400,7 @@ export function getClassroomGameSessionFingerprint(payload: ClassroomGameSession
       progress: player.progress,
       completed: player.completed,
       bridgeReady: player.bridgeReady,
+      active: player.active !== false,
       eligible: player.eligible,
       late: player.late,
       lastEventAt: player.lastEventAt,
@@ -510,6 +531,7 @@ export function resetGameRound(state: ClassroomGameSessionState): ClassroomGameS
   return {
     ...state,
     roundId: null,
+    roundNumber: 0,
     status: 'idle',
     pausedStatus: null,
     controllerSessionId: null,

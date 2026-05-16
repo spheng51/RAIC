@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import {
+  CheckCircle2,
   ChevronDown,
   Clock,
+  ClipboardCheck,
   Flag,
   Gamepad2,
+  Loader2,
   Pause,
   Play,
   RotateCcw,
@@ -18,6 +21,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type {
   ClassroomGameSessionMode,
   ClassroomGameSessionPayload,
+  ClassroomGameSessionPlayer,
   ClassroomGameTeacherAction,
 } from '@/lib/types/classroom-game-session';
 import { cn } from '@/lib/utils';
@@ -54,6 +58,12 @@ function formatRemaining(ms: number | null) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function averageProgress(players: ClassroomGameSessionPlayer[]) {
+  if (players.length === 0) return 0;
+  const total = players.reduce((sum, player) => sum + player.progress, 0);
+  return Math.round(total / players.length);
+}
+
 export function GameMultiplayerPanel({
   className,
   state,
@@ -61,8 +71,28 @@ export function GameMultiplayerPanel({
   onStudentReady,
 }: GameMultiplayerPanelProps) {
   const [controlOpen, setControlOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ClassroomGameTeacherAction | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const viewer = state.players[state.viewerSessionId];
   const topPlayers = state.leaderboard.slice(0, 5);
+  const activeParticipants = state.participants.filter(
+    (participant) => participant.active !== false,
+  );
+  const inactiveParticipants = state.participants.filter(
+    (participant) => participant.active === false,
+  );
+  const reviewParticipants = activeParticipants;
+  const reviewAverageProgress = averageProgress(reviewParticipants);
+  const topScore = state.leaderboard[0]?.score ?? 0;
+  const followUpPlayers = reviewParticipants
+    .filter((participant) => !participant.completed)
+    .sort(
+      (left, right) =>
+        left.progress - right.progress ||
+        left.score - right.score ||
+        left.displayName.localeCompare(right.displayName),
+    )
+    .slice(0, 3);
   const controller = state.controllerSessionId
     ? state.participants.find((participant) => participant.sessionId === state.controllerSessionId)
     : null;
@@ -90,6 +120,25 @@ export function GameMultiplayerPanel({
     viewerReady ||
     (state.status !== 'arming' && state.status !== 'live') ||
     !state.multiplayerSupported;
+  const hostBusy = pendingAction !== null;
+
+  const runTeacherAction = async (
+    action: ClassroomGameTeacherAction,
+    body?: { mode?: ClassroomGameSessionMode; targetSessionId?: string },
+  ) => {
+    if (hostBusy) return;
+    setPendingAction(action);
+    setActionError(null);
+    try {
+      await onTeacherAction(action, body);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to update multiplayer game session.',
+      );
+    } finally {
+      setPendingAction(null);
+    }
+  };
 
   return (
     <div
@@ -112,7 +161,8 @@ export function GameMultiplayerPanel({
             {state.viewerIsLate ? <Badge variant="secondary">Late join</Badge> : null}
             <Badge variant="outline">
               <Users />
-              {state.participantCount}
+              {activeParticipants.length}
+              {inactiveParticipants.length > 0 ? `/${state.participants.length}` : ''}
             </Badge>
           </div>
         </div>
@@ -124,6 +174,12 @@ export function GameMultiplayerPanel({
       {!state.multiplayerSupported ? (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           Waiting for the game bridge. Older game widgets may not support multiplayer events.
+        </p>
+      ) : null}
+
+      {actionError ? (
+        <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {actionError}
         </p>
       ) : null}
 
@@ -154,14 +210,32 @@ export function GameMultiplayerPanel({
       {state.viewerCanManage ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {canArm ? (
-            <Button type="button" size="sm" onClick={() => void onTeacherAction('start_round')}>
-              <Flag className="size-4" />
+            <Button
+              type="button"
+              size="sm"
+              disabled={hostBusy}
+              onClick={() => void runTeacherAction('start_round')}
+            >
+              {pendingAction === 'start_round' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Flag className="size-4" />
+              )}
               Arm round
             </Button>
           ) : null}
           {canStartNow ? (
-            <Button type="button" size="sm" onClick={() => void onTeacherAction('start_now')}>
-              <Play className="size-4" />
+            <Button
+              type="button"
+              size="sm"
+              disabled={hostBusy}
+              onClick={() => void runTeacherAction('start_now')}
+            >
+              {pendingAction === 'start_now' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Play className="size-4" />
+              )}
               Start now
             </Button>
           ) : null}
@@ -169,10 +243,16 @@ export function GameMultiplayerPanel({
             type="button"
             size="sm"
             variant="outline"
-            disabled={!canPause}
-            onClick={() => void onTeacherAction(state.status === 'paused' ? 'resume' : 'pause')}
+            disabled={hostBusy || !canPause}
+            onClick={() => void runTeacherAction(state.status === 'paused' ? 'resume' : 'pause')}
           >
-            {state.status === 'paused' ? <Play className="size-4" /> : <Pause className="size-4" />}
+            {pendingAction === 'pause' || pendingAction === 'resume' ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : state.status === 'paused' ? (
+              <Play className="size-4" />
+            ) : (
+              <Pause className="size-4" />
+            )}
             {state.status === 'paused' ? 'Resume' : 'Pause'}
           </Button>
           {canEnd ? (
@@ -180,8 +260,14 @@ export function GameMultiplayerPanel({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => void onTeacherAction('complete')}
+              disabled={hostBusy}
+              onClick={() => void runTeacherAction('complete')}
             >
+              {pendingAction === 'complete' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="size-4" />
+              )}
               End
             </Button>
           ) : null}
@@ -189,9 +275,14 @@ export function GameMultiplayerPanel({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => void onTeacherAction('reset')}
+            disabled={hostBusy}
+            onClick={() => void runTeacherAction('reset')}
           >
-            <RotateCcw className="size-4" />
+            {pendingAction === 'reset' ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}
             Reset
           </Button>
           <div className="flex flex-wrap gap-1.5">
@@ -201,7 +292,8 @@ export function GameMultiplayerPanel({
                 type="button"
                 size="sm"
                 variant={state.mode === mode ? 'default' : 'outline'}
-                onClick={() => void onTeacherAction('set_mode', { mode })}
+                disabled={hostBusy}
+                onClick={() => void runTeacherAction('set_mode', { mode })}
               >
                 {modeLabel(mode)}
               </Button>
@@ -244,12 +336,16 @@ export function GameMultiplayerPanel({
             {topPlayers.map((player, index) => (
               <li
                 key={player.sessionId}
-                className="flex items-center justify-between gap-2 rounded-lg bg-muted/35 px-2 py-1.5 text-xs"
+                className={cn(
+                  'flex items-center justify-between gap-2 rounded-lg bg-muted/35 px-2 py-1.5 text-xs',
+                  player.active === false && 'opacity-60',
+                )}
               >
                 <span className="min-w-0 truncate">
                   {index + 1}. {player.displayName}
                   {player.late ? ' · late' : ''}
                   {controller?.sessionId === player.sessionId ? ' · controller' : ''}
+                  {player.active === false ? ' · inactive' : ''}
                 </span>
                 <span className="font-mono tabular-nums">
                   {player.score} · {player.progress}%
@@ -259,6 +355,59 @@ export function GameMultiplayerPanel({
           </ol>
         )}
       </div>
+
+      {state.viewerCanManage && state.participants.length > 0 ? (
+        <div
+          data-testid="multiplayer-round-review"
+          className="mt-3 rounded-lg border border-slate-200/80 bg-slate-50/80 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-900/55"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+              <ClipboardCheck className="size-3.5" />
+              Round review
+            </div>
+            <Badge variant="outline">
+              {state.status === 'completed' ? 'Ready to debrief' : 'Live snapshot'}
+            </Badge>
+          </div>
+          <dl className="mt-2 grid grid-cols-2 gap-1.5">
+            <div className="rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-950/50">
+              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Completed
+              </dt>
+              <dd className="font-mono font-semibold tabular-nums">
+                {state.completedCount}/{state.eligibleCount}
+              </dd>
+            </div>
+            <div className="rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-950/50">
+              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Ready</dt>
+              <dd className="font-mono font-semibold tabular-nums">
+                {state.readyCount}/{state.eligibleCount}
+              </dd>
+            </div>
+            <div className="rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-950/50">
+              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Avg progress
+              </dt>
+              <dd className="font-mono font-semibold tabular-nums">{reviewAverageProgress}%</dd>
+            </div>
+            <div className="rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-950/50">
+              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Top score
+              </dt>
+              <dd className="font-mono font-semibold tabular-nums">{topScore}</dd>
+            </div>
+          </dl>
+          <div className="mt-2 rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-950/50">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">Follow-up</p>
+            <p className="mt-0.5 text-muted-foreground">
+              {followUpPlayers.length > 0
+                ? followUpPlayers.map((player) => player.displayName).join(', ')
+                : 'No follow-up needed.'}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {state.viewerCanManage && state.participants.length > 0 ? (
         <Collapsible open={controlOpen} onOpenChange={setControlOpen}>
@@ -281,13 +430,19 @@ export function GameMultiplayerPanel({
                   variant={
                     state.controllerSessionId === participant.sessionId ? 'default' : 'outline'
                   }
+                  aria-label={
+                    participant.active === false
+                      ? `Inactive player ${participant.displayName}`
+                      : `Grant control to ${participant.displayName}`
+                  }
+                  disabled={hostBusy || participant.active === false}
                   onClick={() =>
-                    void onTeacherAction('assign_controller', {
+                    void runTeacherAction('assign_controller', {
                       targetSessionId: participant.sessionId,
                     })
                   }
                 >
-                  {participant.displayName}
+                  <span className="max-w-28 truncate">{participant.displayName}</span>
                 </Button>
               ))}
               {state.controllerSessionId ? (
@@ -295,7 +450,8 @@ export function GameMultiplayerPanel({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  onClick={() => void onTeacherAction('clear_controller')}
+                  disabled={hostBusy}
+                  onClick={() => void runTeacherAction('clear_controller')}
                 >
                   Clear controller
                 </Button>
