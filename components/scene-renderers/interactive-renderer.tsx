@@ -91,6 +91,14 @@ export function InteractiveRenderer({
     sendMessageToIframe('RAIC_GAME_STATE', { gameSession });
   }, [content.widgetType, gameSession, sendMessageToIframe]);
 
+  const clearPendingProgressEvent = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    pendingProgressEventRef.current = null;
+  }, []);
+
   const canForwardGameEvent = useCallback((event: ClassroomGameStudentEventType) => {
     const session = gameSessionRef.current;
     if (!session || session.viewerCanManage || !session.viewerCanSubmit) {
@@ -126,12 +134,8 @@ export function InteractiveRenderer({
   }, [gameSession]);
 
   useEffect(() => {
-    if (progressTimerRef.current) {
-      clearTimeout(progressTimerRef.current);
-      progressTimerRef.current = null;
-      pendingProgressEventRef.current = null;
-    }
-  }, [submissionGateKey]);
+    clearPendingProgressEvent();
+  }, [clearPendingProgressEvent, submissionGateKey]);
 
   useEffect(() => {
     sendGameSessionToIframe();
@@ -159,11 +163,9 @@ export function InteractiveRenderer({
 
   useEffect(
     () => () => {
-      if (progressTimerRef.current) {
-        clearTimeout(progressTimerRef.current);
-      }
+      clearPendingProgressEvent();
     },
-    [],
+    [clearPendingProgressEvent],
   );
 
   useEffect(() => {
@@ -204,6 +206,10 @@ export function InteractiveRenderer({
         return;
       }
 
+      if (payload.event === 'score' || payload.event === 'complete') {
+        clearPendingProgressEvent();
+      }
+
       onGameEvent(nextPayload);
     };
 
@@ -235,7 +241,13 @@ export function InteractiveRenderer({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [canForwardGameEvent, content.widgetType, gameSession?.roundId, onGameEvent]);
+  }, [
+    canForwardGameEvent,
+    clearPendingProgressEvent,
+    content.widgetType,
+    gameSession?.roundId,
+    onGameEvent,
+  ]);
 
   return (
     <div className="w-full h-full relative">

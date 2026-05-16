@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { requireClassroomAccess } from '@/lib/auth/classroom-access';
 import {
+  type ApiErrorCode,
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
@@ -9,7 +10,6 @@ import {
   canSessionManageGameSession,
   canSessionSubmitGameEvent,
   getClassroomGameSessionPayload,
-  readClassroomGameSessionState,
   startNewGameRound,
   updateClassroomGameSessionState,
 } from '@/lib/server/classroom-game-session';
@@ -64,6 +64,16 @@ const STUDENT_EVENTS = new Set<ClassroomGameStudentEventType>([
   'control_input',
   'bridge_ready',
 ]);
+
+class GameSessionMutationError extends Error {
+  constructor(
+    readonly code: ApiErrorCode,
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 function clampProgress(value: unknown) {
   const progress = Number(value);
@@ -230,7 +240,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const current = await readClassroomGameSessionState(id);
   if (isPayloadTooLarge(body)) {
     return apiErrorWithRequestSession(
       request,
@@ -242,15 +251,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const isLiveRoundEvent = LIVE_ROUND_EVENTS.has(event);
 
-  if (isLiveRoundEvent && current.status !== 'live') {
-    return apiErrorWithRequestSession(
-      request,
-      API_ERROR_CODES.INVALID_REQUEST,
-      409,
-      'Game events can only update the round while it is live.',
-    );
-  }
-
   if (isLiveRoundEvent && (typeof body.roundId !== 'string' || body.roundId.trim().length === 0)) {
     return apiErrorWithRequestSession(
       request,
@@ -260,75 +260,89 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  if (isLiveRoundEvent && body.roundId !== current.roundId) {
-    return apiErrorWithRequestSession(
-      request,
-      API_ERROR_CODES.INVALID_REQUEST,
-      409,
-      'This game event belongs to a stale round.',
-    );
+  let updated: Awaited<ReturnType<typeof updateClassroomGameSessionState>>;
+  try {
+    updated = await updateClassroomGameSessionState(id, (state) => {
+      if (isLiveRoundEvent && state.status !== 'live') {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.INVALID_REQUEST,
+          409,
+          'Game events can only update the round while it is live.',
+        );
+      }
+
+      if (isLiveRoundEvent && body.roundId !== state.roundId) {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.INVALID_REQUEST,
+          409,
+          'This game event belongs to a stale round.',
+        );
+      }
+
+      if (!canSessionSubmitGameEvent(state, access.auth.session, event)) {
+        throw new GameSessionMutationError(
+          API_ERROR_CODES.FORBIDDEN,
+          403,
+          'This classroom session cannot submit that game event.',
+        );
+      }
+
+      const existing = state.players[access.auth.session.id];
+      const timestamp = new Date().toISOString();
+      const progress = clampProgress(body.progress);
+      const score = normalizeScore(body.score);
+      const player = {
+        sessionId: access.auth.session.id,
+        userId: access.auth.user.id,
+        displayName: access.auth.user.displayName || 'Student',
+        role: access.auth.session.role,
+        ready: existing?.ready ?? false,
+        score: existing?.score ?? 0,
+        progress: existing?.progress ?? 0,
+        completed: existing?.completed ?? false,
+        bridgeReady: existing?.bridgeReady ?? false,
+        lastEventAt: timestamp,
+        lastSeenAt: timestamp,
+      };
+
+      if (event === 'ready') player.ready = true;
+      if (event === 'bridge_ready') player.bridgeReady = true;
+      if (
+        (event === 'score' || event === 'progress' || event === 'complete') &&
+        score !== undefined
+      ) {
+        player.score = score;
+      }
+      if (
+        (event === 'score' || event === 'progress' || event === 'complete') &&
+        progress !== undefined
+      ) {
+        player.progress = progress;
+      }
+      if (event === 'complete') {
+        player.completed = true;
+        player.progress = progress ?? 100;
+        if (score !== undefined) player.score = score;
+      }
+
+      return {
+        ...state,
+        latestSharedState:
+          event === 'shared_state' || event === 'control_input'
+            ? (body.state ?? body.input ?? state.latestSharedState)
+            : state.latestSharedState,
+        players: {
+          ...state.players,
+          [player.sessionId]: player,
+        },
+      };
+    });
+  } catch (error) {
+    if (error instanceof GameSessionMutationError) {
+      return apiErrorWithRequestSession(request, error.code, error.status, error.message);
+    }
+    throw error;
   }
-
-  if (!canSessionSubmitGameEvent(current, access.auth.session, event)) {
-    return apiErrorWithRequestSession(
-      request,
-      API_ERROR_CODES.FORBIDDEN,
-      403,
-      'This classroom session cannot submit that game event.',
-    );
-  }
-
-  const updated = await updateClassroomGameSessionState(id, (state) => {
-    const existing = state.players[access.auth.session.id];
-    const timestamp = new Date().toISOString();
-    const progress = clampProgress(body.progress);
-    const score = normalizeScore(body.score);
-    const player = {
-      sessionId: access.auth.session.id,
-      userId: access.auth.user.id,
-      displayName: access.auth.user.displayName || 'Student',
-      role: access.auth.session.role,
-      ready: existing?.ready ?? false,
-      score: existing?.score ?? 0,
-      progress: existing?.progress ?? 0,
-      completed: existing?.completed ?? false,
-      bridgeReady: existing?.bridgeReady ?? false,
-      lastEventAt: timestamp,
-      lastSeenAt: timestamp,
-    };
-
-    if (event === 'ready') player.ready = true;
-    if (event === 'bridge_ready') player.bridgeReady = true;
-    if (
-      (event === 'score' || event === 'progress' || event === 'complete') &&
-      score !== undefined
-    ) {
-      player.score = score;
-    }
-    if (
-      (event === 'score' || event === 'progress' || event === 'complete') &&
-      progress !== undefined
-    ) {
-      player.progress = progress;
-    }
-    if (event === 'complete') {
-      player.completed = true;
-      player.progress = progress ?? 100;
-      if (score !== undefined) player.score = score;
-    }
-
-    return {
-      ...state,
-      latestSharedState:
-        event === 'shared_state' || event === 'control_input'
-          ? (body.state ?? body.input ?? state.latestSharedState)
-          : state.latestSharedState,
-      players: {
-        ...state.players,
-        [player.sessionId]: player,
-      },
-    };
-  });
 
   await emitGameSessionEvent(id, access, {
     event,

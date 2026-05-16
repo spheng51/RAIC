@@ -135,6 +135,35 @@ describe('InteractiveRenderer game bridge', () => {
     });
   });
 
+  it('drops pending progress when a newer score or complete event arrives', async () => {
+    const { iframe, onGameEvent } = await renderRenderer(buildGameSession());
+
+    await act(async () => {
+      postFromIframe(iframe, { type: 'RAIC_GAME_EVENT', event: 'progress', progress: 40 });
+      await vi.advanceTimersByTimeAsync(250);
+      postFromIframe(iframe, {
+        type: 'RAIC_GAME_EVENT',
+        event: 'complete',
+        score: 90,
+        progress: 100,
+      });
+    });
+
+    expect(onGameEvent).toHaveBeenCalledTimes(1);
+    expect(onGameEvent).toHaveBeenCalledWith({
+      event: 'complete',
+      score: 90,
+      progress: 100,
+      roundId: 'round-1',
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(onGameEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('does not forward teacher iframe game events as player submissions', async () => {
     const { iframe, onGameEvent } = await renderRenderer(
       buildGameSession({
