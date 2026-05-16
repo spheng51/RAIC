@@ -97,6 +97,7 @@ Public launch on `open-raic.com`:
 7. Run the full local release gates on clean local `main` before each production merge:
    - `corepack pnpm run secrets:scan`
    - `corepack pnpm run ops:drift`
+   - `VERCEL_PROJECT_ID=<project-id> VERCEL_TEAM_ID=<team-id> VERCEL_TOKEN=<token> corepack pnpm run ops:env:vercel`
    - `corepack pnpm run check`
    - `corepack pnpm run build`
    - `corepack pnpm run test:mirofish:gate`
@@ -116,6 +117,7 @@ Public launch on `open-raic.com`:
    - One classroom flow still works end to end
    - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
+   - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke.
 9. Roll back with Vercel if production is unhealthy.
 
 Recommended when you want easiest CI/CD and global edge delivery.
@@ -159,6 +161,17 @@ Recommended for managed org configuration:
 - `RAIC_SECRET_ENCRYPTION_KEY` (enables encrypted org-managed provider secrets)
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_ID`
+
+Production Vercel env audit:
+
+```bash
+VERCEL_PROJECT_ID=prj_... \
+VERCEL_TEAM_ID=team_... \
+VERCEL_TOKEN=... \
+corepack pnpm run ops:env:vercel
+```
+
+The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
 
 Optional advanced parsing:
 
