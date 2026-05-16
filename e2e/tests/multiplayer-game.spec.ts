@@ -285,7 +285,11 @@ test('teacher and two students can run a synchronized multiplayer game round', a
     timeout: 10_000,
   });
 
-  await teacherRoom.page.getByRole('button', { name: 'Start round' }).click();
+  await teacherRoom.page.getByRole('button', { name: 'Arm round' }).click();
+  await expect(teacherRoom.page.getByText('Arming', { exact: true })).toBeVisible({
+    timeout: 10_000,
+  });
+  await teacherRoom.page.getByRole('button', { name: 'Start now' }).click();
   await expect(
     studentOne.page.frameLocator('iframe[title^="Interactive Scene"]').locator('#status'),
   ).toHaveText('Playing', { timeout: 10_000 });
@@ -303,7 +307,10 @@ test('teacher and two students can run a synchronized multiplayer game round', a
   await expect(resumeGameButton).toBeEnabled({ timeout: 10_000 });
   await resumeGameButton.click();
 
-  await teacherRoom.page.getByRole('button', { name: 'Shared control' }).click();
+  await teacherRoom.page
+    .locator('button[aria-expanded][aria-controls]')
+    .filter({ hasText: 'Shared control' })
+    .click();
   await teacherRoom.page
     .locator('button[aria-label="Grant control to Student One"]:not([disabled])')
     .first()
