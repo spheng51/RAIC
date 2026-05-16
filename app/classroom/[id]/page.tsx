@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { SessionReflectionDialog } from '@/components/stage/session-reflection-dialog';
 import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
 import { toast } from 'sonner';
-import { publishLocalClassroom } from '@/lib/utils/classroom-publish';
+import { publishLocalClassroom, type PublishWarning } from '@/lib/utils/classroom-publish';
 import {
   applyPersistedSessionContextFloor,
   applySceneSelectionSignal,
@@ -41,6 +41,7 @@ import type { ClassroomRevisitIntent } from '@/lib/types/classroom-intelligence'
 const log = createLogger('Classroom');
 const LOCAL_PUBLISH_INTENT_KEY = 'localClassroomPublishIntent';
 const OPEN_SHARE_DIALOG_KEY = 'openClassroomShareDialog';
+const PUBLISH_WARNINGS_KEY = 'localClassroomPublishWarnings';
 const OPEN_SHARE_QUERY_PARAM = 'share';
 
 interface ClassroomErrorAction {
@@ -76,6 +77,35 @@ function shouldOpenShareDialog(classroomId: string) {
     return parsed.classroomId === classroomId;
   } catch {
     return false;
+  }
+}
+
+function writePublishWarnings(classroomId: string, warnings: PublishWarning[]) {
+  if (warnings.length === 0) {
+    sessionStorage.removeItem(PUBLISH_WARNINGS_KEY);
+    return;
+  }
+
+  sessionStorage.setItem(PUBLISH_WARNINGS_KEY, JSON.stringify({ classroomId, warnings }));
+}
+
+function readPublishWarnings(classroomId: string) {
+  try {
+    const raw = sessionStorage.getItem(PUBLISH_WARNINGS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { classroomId?: unknown; warnings?: unknown };
+    if (parsed.classroomId !== classroomId || !Array.isArray(parsed.warnings)) return [];
+    sessionStorage.removeItem(PUBLISH_WARNINGS_KEY);
+    return parsed.warnings.filter((warning): warning is PublishWarning =>
+      Boolean(
+        warning &&
+        typeof warning === 'object' &&
+        'message' in warning &&
+        typeof warning.message === 'string',
+      ),
+    );
+  } catch {
+    return [];
   }
 }
 
@@ -126,6 +156,7 @@ export default function ClassroomDetailPage() {
   const [publishPending, setPublishPending] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
+  const [publishWarnings, setPublishWarnings] = useState<PublishWarning[]>([]);
 
   const generationStartedRef = useRef(false);
   const publishInFlightRef = useRef(false);
@@ -410,6 +441,7 @@ export default function ClassroomDetailPage() {
         (shouldOpenShareDialog(classroomId) || shouldOpenShareDialogFromUrl())
       ) {
         sessionStorage.removeItem(OPEN_SHARE_DIALOG_KEY);
+        setPublishWarnings(readPublishWarnings(classroomId));
         setShareDialogOpen(true);
         clearOpenShareDialogFromUrl(router);
       }
@@ -474,6 +506,7 @@ export default function ClassroomDetailPage() {
     publishInFlightRef.current = true;
     setPublishPending(true);
     setPublishError(null);
+    setPublishWarnings([]);
     setPublishStatus(t('classroom.share.publishing'));
     try {
       const result = await publishLocalClassroom({
@@ -506,6 +539,7 @@ export default function ClassroomDetailPage() {
 
       sessionStorage.removeItem(LOCAL_PUBLISH_INTENT_KEY);
       sessionStorage.setItem(OPEN_SHARE_DIALOG_KEY, JSON.stringify({ classroomId: result.id }));
+      writePublishWarnings(result.id, result.warnings ?? []);
       clearClassroomLaunchContext();
       writeClassroomLaunchContext({
         classroomId: result.id,
@@ -860,6 +894,43 @@ export default function ClassroomDetailPage() {
                       disabled={publishPending}
                     >
                       {t('common.retry')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {publishWarnings.length > 0 ? (
+                <div
+                  className="absolute left-1/2 top-4 z-40 w-[min(92vw,560px)] -translate-x-1/2 rounded-md border border-amber-300/70 bg-background/95 p-3 text-sm shadow-lg backdrop-blur"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-amber-800 dark:text-amber-200">
+                        {t('classroom.share.publishWarningDetails', {
+                          count: publishWarnings.length,
+                        })}
+                      </p>
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground">
+                          {t('classroom.share.viewPublishWarnings')}
+                        </summary>
+                        <ul className="mt-2 space-y-1">
+                          {publishWarnings.map((warning, index) => (
+                            <li key={`${warning.code}-${warning.assetId ?? index}`}>
+                              {warning.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPublishWarnings([])}
+                      aria-label={t('common.close')}
+                    >
+                      {t('common.close')}
                     </Button>
                   </div>
                 </div>

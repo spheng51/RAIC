@@ -25,6 +25,8 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const PLATFORM_STORE_PATH = path.join(DATA_DIR, 'platform', 'platform-store.json');
 const CLASSROOMS_DIR = path.join(DATA_DIR, 'classrooms');
 const CLASSROOM_JOBS_DIR = path.join(DATA_DIR, 'classroom-jobs');
+const CLASSROOM_GAME_SESSIONS_DIR = path.join(DATA_DIR, 'classroom-game-sessions');
+const CLASSROOM_ROOM_EVENTS_DIR = path.join(DATA_DIR, 'classroom-room-events');
 const ENCRYPTION_VERSION = 'v1';
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 const EMPTY_PLATFORM_STORE: PlatformStore = {
@@ -305,6 +307,8 @@ export async function resetRaicData() {
     fs.rm(path.dirname(PLATFORM_STORE_PATH), { recursive: true, force: true }),
     fs.rm(CLASSROOMS_DIR, { recursive: true, force: true }),
     fs.rm(CLASSROOM_JOBS_DIR, { recursive: true, force: true }),
+    fs.rm(CLASSROOM_GAME_SESSIONS_DIR, { recursive: true, force: true }),
+    fs.rm(CLASSROOM_ROOM_EVENTS_DIR, { recursive: true, force: true }),
   ]);
 }
 

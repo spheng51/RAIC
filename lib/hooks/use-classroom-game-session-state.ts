@@ -6,6 +6,14 @@ import type { ClassroomGameSessionPayload } from '@/lib/types/classroom-game-ses
 const POLL_INTERVAL_MS = 1_500;
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000] as const;
 
+function shouldPollForClock(state: ClassroomGameSessionPayload | null) {
+  return (
+    !!state &&
+    (state.status === 'arming' || state.status === 'live' || state.status === 'paused') &&
+    !!state.phaseEndsAt
+  );
+}
+
 interface UseClassroomGameSessionStateOptions {
   readonly classroomId?: string;
   readonly enabled?: boolean;
@@ -22,6 +30,7 @@ export function useClassroomGameSessionState({
   const pollInFlightRef = useRef(false);
   const queuedRefreshSilentRef = useRef<boolean | null>(null);
   const lastStateRef = useRef<string | null>(null);
+  const lastPayloadRef = useRef<ClassroomGameSessionPayload | null>(null);
   const fatalErrorRef = useRef(false);
   const refreshGameSessionStateRef = useRef<(silent?: boolean) => Promise<void>>(
     async () => undefined,
@@ -31,10 +40,12 @@ export function useClassroomGameSessionState({
     (nextState: ClassroomGameSessionPayload | null) => {
       if (!nextState) {
         lastStateRef.current = null;
+        lastPayloadRef.current = null;
         onStateChange(null);
         return;
       }
 
+      lastPayloadRef.current = nextState;
       const payloadKey = JSON.stringify(nextState);
       if (payloadKey === lastStateRef.current) {
         return;
@@ -62,9 +73,12 @@ export function useClassroomGameSessionState({
 
       pollInFlightRef.current = true;
       try {
-        const response = await fetch(`/api/classroom/${encodeURIComponent(classroomId)}/game-session`, {
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          `/api/classroom/${encodeURIComponent(classroomId)}/game-session`,
+          {
+            cache: 'no-store',
+          },
+        );
         const json = (await response.json().catch(() => null)) as
           | ({ success: true } & ClassroomGameSessionPayload)
           | { success?: false; error?: string }
@@ -125,9 +139,17 @@ export function useClassroomGameSessionState({
 
     const startPolling = () => {
       if (disposed || pollTimer || fatalErrorRef.current) return;
-      void refreshGameSessionState(true);
+      void refreshGameSessionState(true).then(() => {
+        if (eventSource && !shouldPollForClock(lastPayloadRef.current)) {
+          stopPolling();
+        }
+      });
       pollTimer = setInterval(() => {
-        void refreshGameSessionState(true);
+        void refreshGameSessionState(true).then(() => {
+          if (eventSource && !shouldPollForClock(lastPayloadRef.current)) {
+            stopPolling();
+          }
+        });
       }, POLL_INTERVAL_MS);
     };
 
@@ -157,18 +179,33 @@ export function useClassroomGameSessionState({
 
       source.addEventListener('open', () => {
         retryIndex = 0;
-        stopPolling();
+        if (shouldPollForClock(lastPayloadRef.current)) {
+          startPolling();
+        } else {
+          stopPolling();
+        }
       });
       source.addEventListener('game-session-state', (event) => {
         try {
-          applyIfChanged(JSON.parse((event as MessageEvent<string>).data));
+          const nextState = JSON.parse(
+            (event as MessageEvent<string>).data,
+          ) as ClassroomGameSessionPayload;
+          applyIfChanged(nextState);
           retryIndex = 0;
-          stopPolling();
+          if (shouldPollForClock(nextState)) {
+            startPolling();
+          } else {
+            stopPolling();
+          }
         } catch {
           // Ignore malformed events and let polling recover.
         }
       });
-      source.addEventListener('heartbeat', () => stopPolling());
+      source.addEventListener('heartbeat', () => {
+        if (!shouldPollForClock(lastPayloadRef.current)) {
+          stopPolling();
+        }
+      });
       source.onerror = () => {
         closeEventSource();
         if (fatalErrorRef.current) {

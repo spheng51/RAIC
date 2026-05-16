@@ -1,9 +1,10 @@
 import { promises as fs } from 'fs';
-import path from 'path';
-import { CLASSROOMS_DIR, readClassroom, updateClassroom } from '@/lib/server/classroom-storage';
+import { readClassroom, updateClassroom } from '@/lib/server/classroom-storage';
+import { getDataPath } from '@/lib/server/data-root';
 import type { Scene } from '@/lib/types/stage';
 
 export const MAX_PUBLISH_ASSET_BYTES = 100 * 1024 * 1024;
+export const DIRECT_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES = MAX_PUBLISH_ASSET_BYTES;
 export const MEDIA_FIELD_PREFIX = 'media:';
 export const AUDIO_FIELD_PREFIX = 'audio:';
 
@@ -29,6 +30,18 @@ export type PublishWarning = {
 };
 
 export type PublishAssetKind = 'media' | 'audio';
+
+export type RemotePublishAssetPayload = {
+  kind: PublishAssetKind;
+  assetId: string;
+  url: string;
+};
+
+export type DirectPublishAssetTokenPayload = {
+  classroomId: string;
+  kind: PublishAssetKind;
+  assetId: string;
+};
 
 export function collectMediaPlaceholders(scenes: Scene[]) {
   const placeholders = new Set<string>();
@@ -73,7 +86,8 @@ export function extensionForFile(file: File, fallback: string) {
   const fromMime = MIME_EXTENSIONS[file.type.toLowerCase()];
   if (fromMime) return fromMime;
 
-  const fromName = path.extname(file.name).toLowerCase();
+  const fromNameMatch = file.name.match(/\.([\w-]+)$/);
+  const fromName = fromNameMatch ? `.${fromNameMatch[1].toLowerCase()}` : '';
   if (fromName && /^[.\w-]+$/.test(fromName)) {
     return fromName;
   }
@@ -85,9 +99,108 @@ export function mediaServingUrl(baseUrl: string, classroomId: string, subPath: s
   return `${baseUrl}/api/classroom-media/${classroomId}/${subPath}`;
 }
 
+function classroomAssetDir(classroomId: string, subDir: 'media' | 'audio') {
+  return getDataPath('classrooms', classroomId, subDir);
+}
+
+function classroomAssetFilePath(classroomId: string, subDir: 'media' | 'audio', filename: string) {
+  return getDataPath('classrooms', classroomId, subDir, filename);
+}
+
+export function isDirectPublishAssetUploadConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+export function publishAssetPathname(input: {
+  classroomId: string;
+  kind: PublishAssetKind;
+  assetId: string;
+  filename: string;
+}) {
+  const subDir = input.kind === 'media' ? 'media' : 'audio';
+  return [
+    'classrooms',
+    safeAssetSegment(input.classroomId),
+    subDir,
+    `${safeAssetSegment(input.assetId)}-${safeAssetSegment(input.filename)}`,
+  ].join('/');
+}
+
+export function parseDirectPublishAssetTokenPayload(
+  rawValue: string | null | undefined,
+): DirectPublishAssetTokenPayload | null {
+  if (!rawValue) return null;
+
+  try {
+    const payload = JSON.parse(rawValue) as Partial<DirectPublishAssetTokenPayload>;
+    if (
+      typeof payload.classroomId === 'string' &&
+      payload.classroomId.trim() &&
+      (payload.kind === 'media' || payload.kind === 'audio') &&
+      typeof payload.assetId === 'string' &&
+      payload.assetId.trim()
+    ) {
+      return {
+        classroomId: payload.classroomId.trim(),
+        kind: payload.kind,
+        assetId: payload.assetId.trim(),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function parseRemotePublishAssetPayload(
+  rawValue: unknown,
+): RemotePublishAssetPayload | null {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
+    return null;
+  }
+
+  const payload = rawValue as Partial<RemotePublishAssetPayload>;
+  if (
+    (payload.kind === 'media' || payload.kind === 'audio') &&
+    typeof payload.assetId === 'string' &&
+    payload.assetId.trim() &&
+    typeof payload.url === 'string' &&
+    isAllowedRemoteAssetUrl(payload.url)
+  ) {
+    return {
+      kind: payload.kind,
+      assetId: payload.assetId.trim(),
+      url: payload.url.trim(),
+    };
+  }
+
+  return null;
+}
+
+export function isAllowedRemoteAssetUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === 'https:' && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function isPublishAssetReferenced(input: {
+  scenes: Scene[];
+  kind: PublishAssetKind;
+  assetId: string;
+}) {
+  return input.kind === 'media'
+    ? collectMediaPlaceholders(input.scenes).has(input.assetId)
+    : collectAudioIds(input.scenes).has(input.assetId);
+}
+
 export async function writeUploadedAsset(input: {
   file: File;
-  destinationDir: string;
+  classroomId: string;
+  subDir: 'media' | 'audio';
   filename: string;
   warnings: PublishWarning[];
 }) {
@@ -107,9 +220,11 @@ export async function writeUploadedAsset(input: {
     return false;
   }
 
-  await fs.mkdir(input.destinationDir, { recursive: true });
+  const destinationDir = classroomAssetDir(input.classroomId, input.subDir);
+  const destinationPath = classroomAssetFilePath(input.classroomId, input.subDir, input.filename);
+  await fs.mkdir(destinationDir, { recursive: true });
   const buffer = Buffer.from(await input.file.arrayBuffer());
-  await fs.writeFile(path.join(input.destinationDir, input.filename), buffer);
+  await fs.writeFile(destinationPath, buffer);
   return true;
 }
 
@@ -123,8 +238,6 @@ export async function writeAssetsFromFormData(input: {
 }) {
   const mediaMap = new Map<string, string>();
   const audioMap = new Map<string, string>();
-  const mediaDir = path.join(CLASSROOMS_DIR, input.classroomId, 'media');
-  const audioDir = path.join(CLASSROOMS_DIR, input.classroomId, 'audio');
 
   for (const [fieldName, value] of input.formData.entries()) {
     if (!(value instanceof File)) continue;
@@ -137,7 +250,8 @@ export async function writeAssetsFromFormData(input: {
       const filename = `${safeAssetSegment(elementId)}${ext}`;
       const written = await writeUploadedAsset({
         file: value,
-        destinationDir: mediaDir,
+        classroomId: input.classroomId,
+        subDir: 'media',
         filename,
         warnings: input.warnings,
       });
@@ -157,7 +271,8 @@ export async function writeAssetsFromFormData(input: {
       const filename = `${safeAssetSegment(audioId)}${extensionForFile(value, '.mp3')}`;
       const written = await writeUploadedAsset({
         file: value,
-        destinationDir: audioDir,
+        classroomId: input.classroomId,
+        subDir: 'audio',
         filename,
         warnings: input.warnings,
       });
@@ -287,6 +402,119 @@ function rewriteSingleSceneAsset(input: {
   return rewritten;
 }
 
+function hasRemoteAssetReference(input: {
+  scenes: Scene[];
+  kind: PublishAssetKind;
+  assetId: string;
+  url: string;
+}) {
+  for (const scene of input.scenes) {
+    if (input.kind === 'media' && scene.type === 'slide') {
+      const canvas = (
+        scene.content as {
+          canvas?: { elements?: Array<{ src?: unknown; type?: unknown }> };
+        }
+      )?.canvas;
+
+      if (
+        (canvas?.elements ?? []).some(
+          (element) =>
+            (element.type === 'image' || element.type === 'video') && element.src === input.url,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    if (input.kind === 'audio') {
+      if (
+        (scene.actions ?? []).some((action) => {
+          const speechAction = action as {
+            type?: string;
+            audioId?: unknown;
+            audioUrl?: string;
+          };
+          return (
+            speechAction.type === 'speech' &&
+            speechAction.audioId === input.assetId &&
+            speechAction.audioUrl === input.url
+          );
+        })
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export async function writeRemotePublishAssetReference(input: {
+  classroomId: string;
+  kind: PublishAssetKind;
+  assetId: string;
+  url: string;
+}): Promise<
+  | { status: 'written'; url: string }
+  | { status: 'classroom_not_found' }
+  | { status: 'unreferenced' }
+  | { status: 'invalid_asset'; httpStatus: number; warning: PublishWarning }
+> {
+  if (!isAllowedRemoteAssetUrl(input.url)) {
+    return {
+      status: 'invalid_asset',
+      httpStatus: 400,
+      warning: {
+        code: 'invalid_remote_asset_url',
+        message: `${input.assetId} did not provide a valid secure asset URL.`,
+      },
+    };
+  }
+
+  const classroom = await readClassroom(input.classroomId);
+  if (!classroom) {
+    return { status: 'classroom_not_found' };
+  }
+
+  const isReferenced = isPublishAssetReferenced({
+    scenes: classroom.scenes,
+    kind: input.kind,
+    assetId: input.assetId,
+  });
+  if (!isReferenced) {
+    if (
+      hasRemoteAssetReference({
+        scenes: classroom.scenes,
+        kind: input.kind,
+        assetId: input.assetId,
+        url: input.url,
+      })
+    ) {
+      return { status: 'written', url: input.url };
+    }
+
+    return { status: 'unreferenced' };
+  }
+
+  const updated = await updateClassroom(input.classroomId, (current) => {
+    const scenes = structuredClone(current.scenes);
+    const rewritten = rewriteSingleSceneAsset({
+      scenes,
+      kind: input.kind,
+      assetId: input.assetId,
+      url: input.url,
+    });
+
+    return rewritten ? { ...current, scenes } : current;
+  });
+
+  if (!updated) {
+    return { status: 'classroom_not_found' };
+  }
+
+  return { status: 'written', url: input.url };
+}
+
 export async function writeSinglePublishAsset(input: {
   classroomId: string;
   baseUrl: string;
@@ -342,10 +570,11 @@ export async function writeSinglePublishAsset(input: {
         ? '.png'
         : '.mp3';
   const filename = `${safeAssetSegment(input.assetId)}${extensionForFile(input.file, fallbackExt)}`;
-  const destinationDir = path.join(CLASSROOMS_DIR, input.classroomId, subDir);
+  const destinationDir = classroomAssetDir(input.classroomId, subDir);
+  const destinationPath = classroomAssetFilePath(input.classroomId, subDir, filename);
   await fs.mkdir(destinationDir, { recursive: true });
   const buffer = Buffer.from(await input.file.arrayBuffer());
-  await fs.writeFile(path.join(destinationDir, filename), buffer);
+  await fs.writeFile(destinationPath, buffer);
 
   const url = mediaServingUrl(input.baseUrl, input.classroomId, `${subDir}/${filename}`);
   const updated = await updateClassroom(input.classroomId, (current) => {

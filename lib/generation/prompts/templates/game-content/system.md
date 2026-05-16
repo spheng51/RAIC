@@ -124,10 +124,11 @@ Learning: Player EXPERIENCES F=ma by adjusting thrust and seeing result
 - Classroom multiplayer bridge:
   - On load, post `{ type: 'RAIC_GAME_EVENT', event: 'bridge_ready', score, progress }` to `window.parent`
   - Post `ready` when the player starts or becomes ready
-  - Post `score` or `progress` whenever score/progress changes, with numeric `score` and `progress`
+  - In classroom mode, wait for `message.gameSession.status === "live"` before posting `score`, `progress`, or `complete`
+  - Post `score` or `progress` whenever score/progress changes during a live round, with numeric `score` and `progress`
   - Post `complete` when the round finishes, with final `score`, `progress: 100`, and optional `state`
-  - Listen for `RAIC_GAME_STATE` parent messages and pause/resume/reset local UI from `message.gameSession.status`
-  - Listen for `RAIC_GAME_CONTROL` parent messages and safely ignore unknown actions
+  - Listen for `RAIC_GAME_STATE` parent messages and support `arming`, `live`, `paused`, `completed`, and `idle`
+  - Listen for `RAIC_GAME_CONTROL` parent messages; reset local score/progress on `{ action: "reset" }` and safely ignore unknown actions
 
 ## Fair Start Requirements (CRITICAL)
 

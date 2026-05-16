@@ -358,6 +358,8 @@
       "publishFailed": "教室の公開に失敗しました",
       "published": "共有可能な教室を作成しました",
       "publishWarnings": "共有可能な教室を作成しましたが、{{count}} 件のアセット警告があります。",
+      "publishWarningDetails": "共有可能な教室を作成しましたが、{{count}} 件のアセット警告があります。",
+      "viewPublishWarnings": "影響を受けたアセットを表示",
       "signInToPublish": "この教室を共有するには教師としてログインしてください。",
       "openRaicLink": "Open-RAIC classroom",
       "zoomTitle": "Zoom live meeting",

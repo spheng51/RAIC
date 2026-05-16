@@ -358,6 +358,8 @@
       "publishFailed": "Failed to publish classroom",
       "published": "Shareable classroom created",
       "publishWarnings": "Shareable classroom created with {{count}} asset warning(s).",
+      "publishWarningDetails": "Shareable classroom created with {{count}} asset warning(s).",
+      "viewPublishWarnings": "View affected assets",
       "signInToPublish": "Sign in as a teacher to make this classroom shareable.",
       "openRaicLink": "Open-RAIC classroom",
       "zoomTitle": "Zoom live meeting",

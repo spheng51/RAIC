@@ -38,16 +38,17 @@
 
 ## 🗞️ News
 
+- **2026-05-16** — v0.2.0 is the public classroom release milestone, with durable hosted publishing, public example classrooms, auto-paced multiplayer game classes, and benchmark-backed release gates. See the [changelog](CHANGELOG.md).
 - **2026-03-26** — v0.1.0 introduced discussion TTS, immersive mode, keyboard shortcuts, whiteboard enhancements, new providers, and more. See the [changelog](CHANGELOG.md).
 
-## 📌 What's New in v0.1.0
+## 📌 What's New in v0.2.0
 
-Open-RAIC's first tagged release introduced:
+Open-RAIC's public classroom release milestone introduces:
 
-- **Discussion TTS + immersive classroom mode** for richer, voice-first sessions
-- **Enhanced whiteboard & keyboard controls** for smoother live teaching
-- **Expanded provider support** across LLM, image, video, and audio generation
-- **Server-side media generation + stronger governance/security defaults**
+- **Durable public classroom publishing** with hosted share links, Blob-backed direct uploads for larger local media, and teacher-visible publish warnings
+- **Public example classroom flow** for the open-raic.com cutover path
+- **Auto-paced multiplayer game classes** with arming, live play, completion, and teacher review states
+- **Benchmark-backed release gates** through `pnpm benchmark:milestone` and `pnpm ops:verify`
 
 See the full release notes in [CHANGELOG.md](CHANGELOG.md).
 

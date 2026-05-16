@@ -934,6 +934,7 @@ export function Stage({
   const handleGameEvent = useCallback(
     async (input: {
       event: ClassroomGameStudentEventType;
+      roundId?: string | null;
       score?: number;
       progress?: number;
       state?: Record<string, unknown>;
@@ -2180,23 +2181,6 @@ export function Stage({
               />
             </div>
           ) : null}
-          {isCurrentGameScene && gameSessionState ? (
-            <GameMultiplayerPanel
-              state={gameSessionState}
-              onTeacherAction={(action, body) => {
-                void handleGameTeacherAction(action, body).catch((error) => {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : 'Failed to update multiplayer game session.',
-                  );
-                });
-              }}
-              onStudentReady={() => {
-                void handleGameEvent({ event: 'ready' });
-              }}
-            />
-          ) : null}
           <CanvasArea
             currentScene={currentScene}
             currentSceneIndex={currentSceneIndex}
@@ -2272,6 +2256,15 @@ export function Stage({
                 : undefined
             }
           />
+          {isCurrentGameScene && gameSessionState ? (
+            <GameMultiplayerPanel
+              state={gameSessionState}
+              onTeacherAction={handleGameTeacherAction}
+              onStudentReady={() => {
+                void handleGameEvent({ event: 'ready' });
+              }}
+            />
+          ) : null}
         </div>
 
         {/* Roundtable Area */}

@@ -358,6 +358,8 @@
       "publishFailed": "Не удалось опубликовать класс",
       "published": "Общий класс создан",
       "publishWarnings": "Общий класс создан с предупреждениями о ресурсах: {{count}}.",
+      "publishWarningDetails": "Общий класс создан с предупреждениями о ресурсах: {{count}}.",
+      "viewPublishWarnings": "Показать затронутые ресурсы",
       "signInToPublish": "Войдите как преподаватель, чтобы поделиться этим классом.",
       "openRaicLink": "Open-RAIC classroom",
       "zoomTitle": "Zoom live meeting",

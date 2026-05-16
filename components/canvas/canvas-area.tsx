@@ -43,6 +43,7 @@ interface CanvasAreaProps extends CanvasToolbarProps {
   readonly gameSession?: ClassroomGameSessionPayload | null;
   readonly onGameEvent?: (event: {
     event: ClassroomGameStudentEventType;
+    roundId?: string | null;
     score?: number;
     progress?: number;
     state?: Record<string, unknown>;

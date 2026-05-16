@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
       : {
           existing: false,
           job: await createClassroomGenerationJob(generatedJobId, body, owner),
-    };
+        };
     const jobId = job.id;
     const pollUrl = buildPollUrl(req, jobId);
 
