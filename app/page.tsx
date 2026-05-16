@@ -62,6 +62,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
 import {
+  EXAMPLE_COURSE_ID,
+  ensureOpenRaicExampleSeeded,
+} from '@/lib/utils/example-classroom-seed';
+import {
   clearClassroomLaunchContext,
   getHomePathForLaunchMode,
   type ClassroomLaunchMode,
@@ -455,6 +459,22 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     [launchMode, router],
   );
 
+  const handleOpenExampleClassroom = useCallback(async () => {
+    try {
+      await ensureOpenRaicExampleSeeded();
+      clearClassroomLaunchContext();
+      writeClassroomLaunchContext({
+        classroomId: EXAMPLE_COURSE_ID,
+        launchMode: 'public-demo',
+        homePath: getHomePathForLaunchMode('public-demo'),
+      });
+      router.push(`/classroom/${EXAMPLE_COURSE_ID}`);
+    } catch (err) {
+      log.error('Failed to seed example classroom:', err);
+      setError('Unable to open the example classroom.');
+    }
+  }, [router]);
+
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setPendingDeleteId(id);
@@ -833,6 +853,39 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
               transition={{ delay: 0.18, duration: 0.45, ease: 'easeOut' }}
               className="mx-auto h-auto w-full max-w-[760px]"
             />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-5 w-full max-w-[800px] rounded-2xl border border-border/50 bg-background/80 px-4 py-3 shadow-sm"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Public demo classroom:</span> Open an
+              example course that shows student-by-student differentiation by NWEA MAP RIT score.
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                data-testid="open-example-classroom-button"
+                onClick={() => void handleOpenExampleClassroom()}
+              >
+                Open demo classroom
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/example')}
+              >
+                Open /example
+              </Button>
+            </div>
           </div>
         </motion.div>
 
