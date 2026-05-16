@@ -63,14 +63,7 @@ export function InteractiveRenderer({
       gameSession.viewerCanSubmit ? 'can-submit' : 'cannot-submit',
       gameSession.viewerIsController ? 'controller' : 'not-controller',
     ].join(':');
-  }, [
-    gameSession?.mode,
-    gameSession?.roundId,
-    gameSession?.status,
-    gameSession?.viewerCanManage,
-    gameSession?.viewerCanSubmit,
-    gameSession?.viewerIsController,
-  ]);
+  }, [gameSession]);
   const sendMessageToIframe = useCallback((type: string, payload: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage({ type, ...payload }, '*');
   }, []);
