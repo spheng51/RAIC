@@ -6,8 +6,9 @@ import {
   getServerTTSProviders,
 } from '@/lib/server/provider-config';
 import { getHealthReadiness } from '@/lib/server/health-readiness';
+import packageJson from '@/package.json';
 
-const version = process.env.npm_package_version || '0.1.0';
+const version = process.env.npm_package_version || packageJson.version || '0.1.0';
 
 export async function GET() {
   const readiness = await getHealthReadiness();

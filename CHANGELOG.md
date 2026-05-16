@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-05-16
+
+`v0.2.1` stabilizes the public release lane after the `v0.2.0` production deploy.
+
+### Added
+
+- `pnpm run ops:env:vercel`, a secret-safe Vercel production environment audit that reports required key presence without printing values.
+- Focused unit coverage for Vercel env audit parsing, missing-key reporting, context selection, and secret redaction.
+
+### Changed
+
+- Production milestone smoke checks now validate whichever server-backed LLM is actually enabled instead of assuming a fixed OpenAI model ID.
+- MiroFish, TTS, image, video, and web-search smoke readiness are optional unless explicitly required by `RAIC_REQUIRED_PRODUCTION_FEATURES` or `RAIC_REQUIRE_<FEATURE>_SMOKE=true`.
+- Provider error smoke coverage now probes an unconfigured provider and accepts friendly 400-level provider errors instead of failing when a server key makes the configured provider valid.
+
+### Operations
+
+- Vercel env audit reads `VERCEL_PROJECT_ID`, optional `VERCEL_TEAM_ID`, and `VERCEL_TOKEN`/`VERCEL_API_TOKEN`; when auth or env listing is unavailable it prints a manual dashboard fallback checklist.
+- Public API surfaces remain unchanged from `v0.2.0`.
+
 ## [0.2.0] - 2026-05-16
 
 `v0.2.0` is the first production-ready public classroom release milestone, focused on durable hosted publishing, public example classrooms, and multiplayer game-class readiness.

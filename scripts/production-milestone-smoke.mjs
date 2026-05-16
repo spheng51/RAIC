@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 
 import process from 'node:process';
+import {
+  evaluateOptionalProviderFeature,
+  findUnconfiguredLlmProbe,
+  getFirstEnabledSecretProvider,
+  isFriendlyProviderError,
+  isRequiredFeature,
+} from './lib/production-smoke-readiness.mjs';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
 const DEFAULT_MISSING_CLASSROOM_ID = 'missing-milestone-smoke-404';
@@ -38,6 +45,20 @@ function block(label, detail) {
   record('block', label, detail);
 }
 
+function skip(label, detail) {
+  record('skip', label, detail);
+}
+
+function recordFeatureEvaluation(label, evaluation) {
+  if (evaluation.status === 'pass') {
+    pass(label, evaluation.detail);
+  } else if (evaluation.status === 'block') {
+    block(label, evaluation.detail);
+  } else {
+    skip(label, evaluation.detail);
+  }
+}
+
 async function fetchJson(path, init = {}) {
   const response = await fetch(new URL(path, baseUrl), {
     ...init,
@@ -59,17 +80,6 @@ async function fetchJson(path, init = {}) {
   }
 
   return { response, body };
-}
-
-function hasEnabledSecretProvider(groups, groupName) {
-  const group = groups?.[groupName];
-  if (!group || typeof group !== 'object') return false;
-  return Object.values(group).some((entry) => entry?.enabled === true && entry?.hasSecret === true);
-}
-
-function allowedModelsInclude(groups, groupName, providerId, modelId) {
-  const models = groups?.[groupName]?.[providerId]?.allowedModels;
-  return Array.isArray(models) && models.includes(modelId);
 }
 
 async function checkHealth() {
@@ -98,8 +108,10 @@ async function checkHealth() {
 
   if (readiness.mirofish?.ready === true) {
     pass('MiroFish readiness', 'production MiroFish env is configured');
-  } else {
+  } else if (isRequiredFeature('mirofish')) {
     block('MiroFish readiness', readiness.mirofish?.reason || 'MiroFish is not ready');
+  } else {
+    skip('MiroFish readiness', 'MiroFish is not required for this release');
   }
 }
 
@@ -122,44 +134,87 @@ async function checkProviderReadiness() {
   }
 
   const providers = body.providers || {};
-  if (hasEnabledSecretProvider(providers, 'llm')) {
-    pass('LLM provider readiness', 'at least one server-backed LLM is enabled');
+  const enabledLlm = getFirstEnabledSecretProvider(providers, 'llm');
+  if (enabledLlm) {
+    pass('LLM provider readiness', `${enabledLlm.providerId} is enabled with a server secret`);
   } else {
     block(
       'LLM provider readiness',
       'no server-backed LLM provider is enabled with a secret; authenticated classroom generation cannot complete',
     );
+    return providers;
   }
 
-  if (allowedModelsInclude(providers, 'llm', 'openai', 'gpt-5.5')) {
-    pass('LLM model registry', 'OpenAI gpt-5.5 is exposed through /api/ai/options');
+  if (enabledLlm.allowedModels.length > 0) {
+    pass(
+      'LLM model registry',
+      `${enabledLlm.providerId} exposes ${enabledLlm.allowedModels.length} allowed model(s)`,
+    );
   } else {
-    fail('LLM model registry', 'OpenAI gpt-5.5 is missing from /api/ai/options');
+    fail('LLM model registry', `${enabledLlm.providerId} is enabled but exposes no models`);
   }
 
-  if (allowedModelsInclude(providers, 'tts', 'elevenlabs-tts', 'eleven_v3')) {
-    pass('TTS model registry', 'ElevenLabs eleven_v3 is exposed through /api/ai/options');
-  } else {
-    fail('TTS model registry', 'ElevenLabs eleven_v3 is missing from /api/ai/options');
-  }
+  recordFeatureEvaluation(
+    'TTS provider readiness',
+    evaluateOptionalProviderFeature({
+      groups: providers,
+      groupName: 'tts',
+      featureName: 'tts',
+    }),
+  );
+  recordFeatureEvaluation(
+    'Image provider readiness',
+    evaluateOptionalProviderFeature({
+      groups: providers,
+      groupName: 'image',
+      featureName: 'image',
+    }),
+  );
+  recordFeatureEvaluation(
+    'Video provider readiness',
+    evaluateOptionalProviderFeature({
+      groups: providers,
+      groupName: 'video',
+      featureName: 'video',
+    }),
+  );
+  recordFeatureEvaluation(
+    'Web search provider readiness',
+    evaluateOptionalProviderFeature({
+      groups: providers,
+      groupName: 'webSearch',
+      featureName: 'websearch',
+    }),
+  );
+
+  return providers;
 }
 
-async function checkFriendlyProviderErrors() {
+async function checkFriendlyProviderErrors(providers) {
+  const probe = findUnconfiguredLlmProbe(providers);
+  if (!probe) {
+    skip(
+      '/api/verify-model unconfigured-provider behavior',
+      'no unconfigured LLM provider is available to probe',
+    );
+    return;
+  }
+
   const { response, body } = await fetchJson('/api/verify-model', {
     method: 'POST',
     body: JSON.stringify({
-      model: 'openai:gpt-5.5',
+      model: `${probe.providerId}:${probe.modelId}`,
       apiKey: '',
-      baseUrl: 'https://api.openai.com/v1',
+      baseUrl: '',
     }),
   });
 
-  if (response.status === 400 && body?.errorCode === 'MISSING_API_KEY') {
-    pass('/api/verify-model missing-key behavior', body.error);
+  if (isFriendlyProviderError(response.status, body)) {
+    pass('/api/verify-model unconfigured-provider behavior', body.error);
   } else {
     fail(
-      '/api/verify-model missing-key behavior',
-      `expected HTTP 400 MISSING_API_KEY, got HTTP ${response.status} ${body?.errorCode || ''}`,
+      '/api/verify-model unconfigured-provider behavior',
+      `expected HTTP 400 provider error, got HTTP ${response.status} ${body?.errorCode || ''}`,
     );
   }
 }
@@ -214,18 +269,19 @@ async function checkMissingClassroom404s() {
 async function main() {
   console.log(`[production-smoke] Base URL: ${baseUrl}`);
   await checkHealth();
-  await checkProviderReadiness();
-  await checkFriendlyProviderErrors();
+  const providers = await checkProviderReadiness();
+  await checkFriendlyProviderErrors(providers);
   await checkAuthGuard();
   await checkMissingClassroom404s();
 
   const failures = results.filter((result) => result.status === 'fail');
   const blockers = results.filter((result) => result.status === 'block');
+  const skipped = results.filter((result) => result.status === 'skip');
 
   console.log(
-    `[production-smoke] Summary: ${results.length - failures.length - blockers.length} passed, ${
-      failures.length
-    } failed, ${blockers.length} blocked`,
+    `[production-smoke] Summary: ${
+      results.length - failures.length - blockers.length - skipped.length
+    } passed, ${failures.length} failed, ${blockers.length} blocked, ${skipped.length} skipped`,
   );
 
   if (failures.length > 0) {

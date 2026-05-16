@@ -1,6 +1,6 @@
 {
   "name": "openraic",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "license": "AGPL-3.0",
   "engines": {
@@ -25,6 +25,7 @@
     "secrets:scan": "node scripts/ops-check.mjs secrets",
     "ops:verify": "node scripts/ops-check.mjs verify",
     "ops:drift:ci": "node scripts/ops-check.mjs drift --ci",
+    "ops:env:vercel": "node scripts/vercel-env-audit.mjs",
     "smoke:production:milestone": "node scripts/production-milestone-smoke.mjs",
     "smoke:production:classroom": "node scripts/production-classroom-smoke.mjs",
     "verify:mirofish:deployment": "node scripts/verify-mirofish-deployment.mjs",
