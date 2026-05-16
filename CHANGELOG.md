@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-05-16
+
+`v0.2.0` is the first production-ready public classroom release milestone, focused on durable hosted publishing, public example classrooms, and multiplayer game-class readiness.
+
+### Added
+
+- Public Open-RAIC example classroom flow with release-facing README links and hosted cutover notes.
+- Durable local classroom publish uploads with Vercel Blob direct upload support for larger local media assets.
+- Auto-paced multiplayer game rounds with arming, live, pause/resume, completion, and teacher review states.
+- `pnpm benchmark:milestone`, which records current multiplayer benchmark evidence for `ops:verify`.
+
+### Changed
+
+- Classroom publish APIs preserve stable shareable-classroom behavior while returning upload warnings for skipped or oversized media.
+- Multiplayer game-session submissions now require `roundId` for live score, progress, complete, shared-state, and control-input events.
+- Multiplayer review surfaces focus teacher follow-up on active participants while retaining inactive leaderboard history.
+
+### Fixed
+
+- Reject stale or non-live multiplayer game events before they can mutate score/progress state.
+- Debounce player progress events and clear pending progress when score, completion, or round changes supersede it.
+- Harden production classroom smoke checks for hosted Make shareable, join-link entry, and multiplayer scheduling coverage.
+
+### Operations
+
+- Public production requires `DATABASE_URL`, `RAIC_SECRET_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, Google OAuth client IDs, and at least one LLM provider key.
+- MiroFish and Discord environment variables are release-scoped only when those surfaces are included in the deployed public stack.
+- Final release gates must run from clean local `main`; `ops:verify` intentionally refuses off-main verification.
+
 ## [0.1.0] - 2026-03-26
 
 The first `0.1.0` release record of Open-RAIC, carrying forward the launch improvements from the initial open-source release.

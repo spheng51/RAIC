@@ -84,6 +84,7 @@ Public launch on `open-raic.com`:
    - at least one production LLM provider key
    - any image/video/TTS/ASR/search provider keys needed for the public surface
    - MiroFish variables if MiroFish is part of the live deployment
+   - Discord scheduled-class sync variables only if Discord class sync is part of this release
    - Keep the live Google sign-in IDs in `Production`; leave generic preview URLs out of teacher/admin auth unless you add a fixed staging domain with its own exact authorized origin.
 - Hosted teacher and admin auth require a working `DATABASE_URL`. Without it, the JSON fallback only writes to temporary runtime storage and web identity/session state is not durable.
 - Hosted local-demo publishing can create the shareable classroom without Blob storage, but local media/audio over the small per-function upload cap is only preserved when `BLOB_READ_WRITE_TOKEN` is configured. Without Blob, those large assets are skipped and shown in the teacher warning detail panel; assets over 100 MB remain skipped until a larger durable upload policy is added.
@@ -93,14 +94,15 @@ Public launch on `open-raic.com`:
 6. In Google Cloud OAuth, authorize `https://open-raic.com` and `https://www.open-raic.com` only if that hostname will actually serve the app.
    For local development, also authorize `http://localhost:3000` and `http://localhost:3005`.
    For this GIS ID-token flow, do not deploy a Google client secret.
-7. Run the full local release gates on `main` before each production merge:
+7. Run the full local release gates on clean local `main` before each production merge:
    - `corepack pnpm run secrets:scan`
    - `corepack pnpm run ops:drift`
    - `corepack pnpm run check`
    - `corepack pnpm run build`
    - `corepack pnpm run test:mirofish:gate`
    - `corepack pnpm run test:mirofish:e2e`
-   - `$env:CI='1'; corepack pnpm run test:e2e`
+   - `CI=1 corepack pnpm run test:e2e`
+   - `corepack pnpm run benchmark:milestone`
    - `corepack pnpm run ops:verify`
 8. Merge to `main`, let Vercel deploy production automatically, then smoke-check the auth and governed surfaces before declaring the release healthy:
    - Signed out: `/studio` redirects to `/sign-in?next=%2Fstudio`
@@ -112,6 +114,7 @@ Public launch on `open-raic.com`:
    - Signed in as teacher: Studio settings show governed provider state without exposing org secrets
    - Sign-out clears the web session and classroom cookies
    - One classroom flow still works end to end
+   - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
 9. Roll back with Vercel if production is unhealthy.
 
