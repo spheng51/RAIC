@@ -4,6 +4,7 @@ import type { Scene } from '@/lib/types/stage';
 type SessionProgressScene = Pick<Scene, 'id' | 'order' | 'title' | 'type'>;
 
 export interface SessionContextPayload {
+  requirement?: string;
   stageName: string;
   language: string;
   lastCompletedSceneId: string | null;
@@ -27,6 +28,7 @@ function getOrderedScenes(scenes: SessionProgressScene[]): SessionProgressScene[
 }
 
 export function buildSessionContextPayload(input: {
+  requirement?: string | null;
   stageName: string;
   language?: string | null;
   scenes: SessionProgressScene[];
@@ -39,6 +41,7 @@ export function buildSessionContextPayload(input: {
   const lastCompletedScene = completedScenes[completedScenes.length - 1] ?? null;
 
   return {
+    ...(input.requirement ? { requirement: input.requirement } : {}),
     stageName: input.stageName,
     language: input.language ?? 'en-US',
     lastCompletedSceneId: lastCompletedScene?.id ?? null,

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-05-16
+
+`v0.3.0` activates teacher-only Adaptive Classroom Intelligence for repeated classroom sessions.
+
+### Added
+
+- Teacher-managed classroom generation now reuses prior session context and reflection summaries when the same teacher repeats a matching requirement.
+- Outline and scene generation prompts receive adaptive context for repeated-session teachers without changing public generation request payloads.
+- Replay coverage verifies adaptive prompt markers for last completed segment, mastery hints, revisit/remediation intent, and latest reflection summary.
+
+### Changed
+
+- Session progress capture and the session reflection dialog remain teacher-only and continue to fail open for public demo, anonymous, student, and classroom-cookie flows.
+- Provider Composer, Discord scheduled-class sync, and student-facing analytics remain deferred to later milestones.
+
+### Operations
+
+- No new Vercel environment variables are required; continue using `pnpm run ops:env:vercel` before production release.
+- Final release gates still require a clean local `main`, benchmark evidence, and `ops:verify`.
+
 ## [0.2.1] - 2026-05-16
 
 `v0.2.1` stabilizes the public release lane after the `v0.2.0` production deploy.

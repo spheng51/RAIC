@@ -76,6 +76,7 @@ describe('classroom session progress signals', () => {
 
   it('builds the persisted session-context payload from explicit completion state', () => {
     const payload = buildSessionContextPayload({
+      requirement: 'Teach orbital mechanics with simulations',
       stageName: 'Orbital Mechanics',
       language: 'en-US',
       scenes: [...scenes],
@@ -84,6 +85,7 @@ describe('classroom session progress signals', () => {
     });
 
     expect(payload).toEqual({
+      requirement: 'Teach orbital mechanics with simulations',
       stageName: 'Orbital Mechanics',
       language: 'en-US',
       lastCompletedSceneId: 'scene-2',
@@ -113,6 +115,7 @@ describe('classroom session progress signals', () => {
   it('prevents reconnect posts from regressing below the persisted session context', () => {
     const payload = applyPersistedSessionContextFloor({
       payload: buildSessionContextPayload({
+        requirement: 'Teach orbital mechanics with simulations',
         stageName: 'Orbital Mechanics',
         language: 'en-US',
         scenes: [...scenes],
@@ -130,6 +133,7 @@ describe('classroom session progress signals', () => {
     });
 
     expect(payload).toEqual({
+      requirement: 'Teach orbital mechanics with simulations',
       stageName: 'Orbital Mechanics',
       language: 'en-US',
       lastCompletedSceneId: 'scene-3',

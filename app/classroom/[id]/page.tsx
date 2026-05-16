@@ -136,6 +136,14 @@ function isPersistedSessionContextSnapshot(
   );
 }
 
+function getAdaptiveRequirementForStage(stage: {
+  learningGoal?: string | null;
+  description?: string | null;
+  name: string;
+}) {
+  return stage.learningGoal || stage.description || stage.name;
+}
+
 export default function ClassroomDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -234,7 +242,12 @@ export default function ClassroomDetailPage() {
   );
 
   const hydratePersistedSessionContext = useCallback(
-    async (input: { stageName: string; language?: string | null; scenes: typeof scenes }) => {
+    async (input: {
+      requirement?: string | null;
+      stageName: string;
+      language?: string | null;
+      scenes: typeof scenes;
+    }) => {
       try {
         const response = await fetch(
           `/api/classroom/${encodeURIComponent(classroomId)}/session-context`,
@@ -267,6 +280,7 @@ export default function ClassroomDetailPage() {
         lastSessionContextPayloadRef.current = JSON.stringify(
           applyPersistedSessionContextFloor({
             payload: buildSessionContextPayload({
+              requirement: input.requirement,
               stageName: input.stageName,
               language: input.language ?? 'en-US',
               scenes: input.scenes,
@@ -424,6 +438,7 @@ export default function ClassroomDetailPage() {
         const loadedStageState = useStageStore.getState();
         if (loadedStageState.stage && loadedStageState.scenes.length > 0) {
           await hydratePersistedSessionContext({
+            requirement: getAdaptiveRequirementForStage(loadedStageState.stage),
             stageName: loadedStageState.stage.name,
             language: loadedStageState.stage.language ?? 'en-US',
             scenes: loadedStageState.scenes,
@@ -595,6 +610,7 @@ export default function ClassroomDetailPage() {
       const orderedScenes = [...scenes].sort((a, b) => a.order - b.order);
       const payload = applyPersistedSessionContextFloor({
         payload: buildSessionContextPayload({
+          requirement: getAdaptiveRequirementForStage(stage),
           stageName: stage.name,
           language: stage.language ?? 'en-US',
           scenes: orderedScenes,

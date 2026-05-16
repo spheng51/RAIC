@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  noAdaptivePromptExpectation,
+  repeatedSessionAdaptiveContext,
+  repeatedSessionPromptExpectation,
+  scorePromptReplay,
+} from '../support/adaptive-runtime-replay';
 
 const generateSceneOutlinesFromRequirementsMock = vi.fn();
 const executeScenesWithPolicyMock = vi.fn();
@@ -6,6 +12,8 @@ const generateMediaForClassroomMock = vi.fn();
 const generateTTSForClassroomMock = vi.fn();
 const persistClassroomMock = vi.fn();
 const resolveModelMock = vi.fn();
+const buildAdaptiveGenerationContextMock = vi.fn();
+const formatAdaptiveContextForPromptMock = vi.fn();
 
 vi.mock('@/lib/generation/outline-generator', () => ({
   applyOutlineFallbacks: <T>(outline: T) => outline,
@@ -28,6 +36,11 @@ vi.mock('@/lib/server/classroom-storage', () => ({
 
 vi.mock('@/lib/server/resolve-model', () => ({
   resolveModel: resolveModelMock,
+}));
+
+vi.mock('@/lib/server/classroom-intelligence', () => ({
+  buildAdaptiveGenerationContext: buildAdaptiveGenerationContextMock,
+  formatAdaptiveContextForPrompt: formatAdaptiveContextForPromptMock,
 }));
 
 vi.mock('@/lib/ai/llm', () => ({
@@ -80,6 +93,8 @@ describe('generateClassroom', () => {
     generateTTSForClassroomMock.mockReset();
     persistClassroomMock.mockReset();
     resolveModelMock.mockReset();
+    buildAdaptiveGenerationContextMock.mockReset();
+    formatAdaptiveContextForPromptMock.mockReset();
 
     resolveModelMock.mockResolvedValue({
       model: 'model-stub',
@@ -92,6 +107,8 @@ describe('generateClassroom', () => {
       providerId: 'openai',
       apiKey: 'test-key',
     });
+    buildAdaptiveGenerationContextMock.mockResolvedValue(null);
+    formatAdaptiveContextForPromptMock.mockReturnValue('');
 
     generateSceneOutlinesFromRequirementsMock.mockResolvedValue({
       success: true,
@@ -258,5 +275,97 @@ describe('generateClassroom', () => {
       }),
       'http://localhost:3000',
     );
+  });
+
+  it('passes teacher repeated-session adaptive context into outline and scene generation', async () => {
+    const adaptivePrompt =
+      '## Adaptive Session Context\n' +
+      'This requirement matches 1 prior session(s). Treat this as a repeated-session classroom, not a first-time lesson.\n' +
+      '- Last completed segment: Orbital transfer maneuvers\n' +
+      '- Revisit intent: remediate\n' +
+      '- Pacing policy: remediate\n' +
+      '- Latest self-reported confidence: 2/5\n' +
+      '- Mastery hints: transfer windows; burn timing\n' +
+      '- Reflection summary: Spend more time on transfer windows before moving on.';
+    buildAdaptiveGenerationContextMock.mockResolvedValue(repeatedSessionAdaptiveContext);
+    formatAdaptiveContextForPromptMock.mockReturnValue(adaptivePrompt);
+
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    await generateClassroom(
+      {
+        requirement: 'Teach orbital mechanics with simulations',
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(buildAdaptiveGenerationContextMock).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      requirement: 'Teach orbital mechanics with simulations',
+    });
+    expect(formatAdaptiveContextForPromptMock).toHaveBeenCalledWith(repeatedSessionAdaptiveContext);
+
+    const outlineOptions = generateSceneOutlinesFromRequirementsMock.mock.calls[0]?.[5] as
+      | { adaptivePrompt?: string }
+      | undefined;
+    expect(
+      scorePromptReplay(outlineOptions?.adaptivePrompt, repeatedSessionPromptExpectation),
+    ).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+
+    const sceneItems = executeScenesWithPolicyMock.mock.calls[0]?.[0]?.items as Array<{
+      context?: { adaptivePrompt?: string };
+    }>;
+    expect(
+      scorePromptReplay(sceneItems[0]?.context?.adaptivePrompt, repeatedSessionPromptExpectation),
+    ).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('omits adaptive generation prompts when no teacher user scope is available', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    await generateClassroom(
+      {
+        requirement: 'Teach gravity',
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+      },
+    );
+
+    expect(buildAdaptiveGenerationContextMock).not.toHaveBeenCalled();
+    expect(formatAdaptiveContextForPromptMock).not.toHaveBeenCalled();
+
+    const outlineOptions = generateSceneOutlinesFromRequirementsMock.mock.calls[0]?.[5] as
+      | { adaptivePrompt?: string }
+      | undefined;
+    expect(scorePromptReplay(outlineOptions?.adaptivePrompt, noAdaptivePromptExpectation)).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+
+    const sceneItems = executeScenesWithPolicyMock.mock.calls[0]?.[0]?.items as Array<{
+      context?: { adaptivePrompt?: string };
+    }>;
+    expect(
+      scorePromptReplay(sceneItems[0]?.context?.adaptivePrompt, noAdaptivePromptExpectation),
+    ).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
   });
 });

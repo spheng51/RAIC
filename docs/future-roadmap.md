@@ -21,11 +21,11 @@ The active cycle plan for this window is documented in [Execution Plan: Release 
   - Goal: decompose parked intelligence/provider work into promotable slices and clear the current MiroFish and benchmark-evidence blockers.
   - Focus: reviewed correctness fixes, MiroFish reclaim-control E2E recovery, live benchmark snapshot capture, and clean merge-lane hygiene.
 
-- Milestone 1: Adaptive Classroom Intelligence v1
+- Milestone 1: Adaptive Classroom Intelligence v1 (`v0.3.0`)
   - Goal: activate teacher-only repeated-session intelligence using session-context and reflection as the source of truth.
   - Acceptance: deterministic adaptation replay coverage, unchanged public/student flows, and no regression against classroom runtime budgets.
 
-- Milestone 2: Experimentation & Provider Composer v1
+- Milestone 2: Experimentation & Provider Composer v1 (`v0.3.1`)
   - Goal: complete provider-scenario routing with explicit capability validation, fallback telemetry, and rollback-ready internal routing coverage.
   - Acceptance: fail-closed behavior, unchanged public provider contracts, and benchmark-backed routing stability.
 

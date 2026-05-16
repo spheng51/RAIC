@@ -34,6 +34,10 @@ Return a clear `languageDirective` that downstream scene, quiz, and narration pr
 
 {{teacherContext}}
 
+{{#if adaptivePrompt}}
+{{adaptivePrompt}}
+{{/if}}
+
 ---
 
 ## Output Requirements

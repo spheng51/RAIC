@@ -74,6 +74,7 @@ export async function generateSceneOutlinesFromRequirements(
     videoGenerationEnabled?: boolean;
     researchContext?: string;
     teacherContext?: string;
+    adaptivePrompt?: string;
   },
 ): Promise<GenerationResult<{ languageDirective: string; outlines: SceneOutline[] }>> {
   // Build available images description for the prompt
@@ -151,6 +152,7 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
+    adaptivePrompt: options?.adaptivePrompt || '',
     languageDirective,
     gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
     gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,

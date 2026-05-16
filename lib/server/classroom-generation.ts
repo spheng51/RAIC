@@ -17,6 +17,10 @@ import { isProviderKeyRequired } from '@/lib/ai/providers';
 import { resolveGovernedProviderConfig } from '@/lib/server/ai-governance';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
+import {
+  buildAdaptiveGenerationContext,
+  formatAdaptiveContextForPrompt,
+} from '@/lib/server/classroom-intelligence';
 import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
 import { persistClassroom } from '@/lib/server/classroom-storage';
 import {
@@ -322,6 +326,19 @@ export async function generateClassroom(
     agents = getDefaultAgents();
   }
   const teacherContext = formatTeacherPersonaForPrompt(agents);
+  let adaptivePrompt: string | undefined;
+  if (options.userId) {
+    try {
+      const adaptiveContext = await buildAdaptiveGenerationContext({
+        organizationId: options.organizationId ?? null,
+        userId: options.userId,
+        requirement,
+      });
+      adaptivePrompt = formatAdaptiveContextForPrompt(adaptiveContext) || undefined;
+    } catch (e) {
+      log.warn('Adaptive generation context unavailable, continuing without it:', e);
+    }
+  }
 
   await options.onProgress?.({
     step: 'researching',
@@ -390,6 +407,7 @@ export async function generateClassroom(
       videoGenerationEnabled: input.enableVideoGeneration,
       researchContext,
       teacherContext,
+      adaptivePrompt,
     },
   );
 
@@ -473,6 +491,7 @@ export async function generateClassroom(
         aiCall,
         agents,
         languageDirective,
+        adaptivePrompt,
       },
     })),
     executeScene: async (item, attempt) =>

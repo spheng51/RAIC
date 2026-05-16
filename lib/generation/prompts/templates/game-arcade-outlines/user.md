@@ -36,6 +36,10 @@ Create a classroom game arcade for this learning goal:
 
 {{teacherContext}}
 
+{{#if adaptivePrompt}}
+{{adaptivePrompt}}
+{{/if}}
+
 ## Scene Mix
 
 - 1 optional hook slide
