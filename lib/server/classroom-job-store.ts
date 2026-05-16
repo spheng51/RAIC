@@ -387,7 +387,9 @@ export async function createOrReuseClassroomGenerationJob(
       return { existing: true, job: conflictingJob };
     }
 
-    throw new Error(`Classroom generation job request-key conflict could not be resolved: ${jobId}`);
+    throw new Error(
+      `Classroom generation job request-key conflict could not be resolved: ${jobId}`,
+    );
   }
 
   if (!requestKey) {

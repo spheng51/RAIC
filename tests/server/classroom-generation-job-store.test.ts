@@ -128,12 +128,7 @@ function createMockPostgresJobDb() {
             row.request_key === next.request_key &&
             row.status !== 'failed' &&
             next.status !== 'failed' &&
-            sameOwner(
-              row,
-              next.owner_organization_id,
-              next.owner_user_id,
-              next.owner_actor_role,
-            )),
+            sameOwner(row, next.owner_organization_id, next.owner_user_id, next.owner_actor_role)),
       );
       if (hasConflict) return [];
       rows.push(next);

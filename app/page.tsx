@@ -61,10 +61,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
-import {
-  EXAMPLE_COURSE_ID,
-  ensureOpenRaicExampleSeeded,
-} from '@/lib/utils/example-classroom-seed';
+import { EXAMPLE_COURSE_ID, ensureOpenRaicExampleSeeded } from '@/lib/utils/example-classroom-seed';
 import {
   clearClassroomLaunchContext,
   getHomePathForLaunchMode,

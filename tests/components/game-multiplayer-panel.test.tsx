@@ -222,8 +222,9 @@ describe('GameMultiplayerPanel', () => {
     expect(container.textContent).toContain('90 · 100%');
     expect(container.textContent).toContain('1/2');
     expect(
-      container.querySelector<HTMLButtonElement>('button[aria-label="Inactive player Grace Hopper"]')
-        ?.disabled,
+      container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Inactive player Grace Hopper"]',
+      )?.disabled,
     ).toBe(true);
   });
 
