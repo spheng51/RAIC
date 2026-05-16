@@ -29,11 +29,21 @@ interface GameSessionBody {
   event?: ClassroomGameStudentEventType;
   mode?: ClassroomGameSessionMode;
   targetSessionId?: string;
+  roundId?: string | null;
   score?: number;
   progress?: number;
   state?: Record<string, unknown>;
   input?: Record<string, unknown>;
 }
+
+const GAME_EVENT_PAYLOAD_LIMIT_BYTES = 16 * 1024;
+const LIVE_ROUND_EVENTS = new Set<ClassroomGameStudentEventType>([
+  'progress',
+  'score',
+  'complete',
+  'shared_state',
+  'control_input',
+]);
 
 const TEACHER_ACTIONS = new Set<ClassroomGameTeacherAction>([
   'start_round',
@@ -67,6 +77,18 @@ function normalizeScore(value: unknown) {
 
 function isMode(value: unknown): value is ClassroomGameSessionMode {
   return value === 'both' || value === 'leaderboard' || value === 'shared-control';
+}
+
+function getSerializedPayloadSize(value: unknown) {
+  if (value === undefined) return 0;
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function isPayloadTooLarge(body: GameSessionBody) {
+  return (
+    getSerializedPayloadSize(body.state) > GAME_EVENT_PAYLOAD_LIMIT_BYTES ||
+    getSerializedPayloadSize(body.input) > GAME_EVENT_PAYLOAD_LIMIT_BYTES
+  );
 }
 
 async function requireAccess(request: NextRequest, classroomId: string) {
@@ -163,6 +185,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return {
           ...state,
           roundId: null,
+          roundNumber: 0,
           status: 'idle',
           controllerSessionId: null,
           latestSharedState: null,
@@ -208,6 +231,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const current = await readClassroomGameSessionState(id);
+  if (isPayloadTooLarge(body)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      413,
+      'Game event payload is too large.',
+    );
+  }
+
+  const isLiveRoundEvent = LIVE_ROUND_EVENTS.has(event);
+
+  if (isLiveRoundEvent && current.status !== 'live') {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'Game events can only update the round while it is live.',
+    );
+  }
+
+  if (isLiveRoundEvent && (typeof body.roundId !== 'string' || body.roundId.trim().length === 0)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'This game event is missing a round id.',
+    );
+  }
+
+  if (isLiveRoundEvent && body.roundId !== current.roundId) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      409,
+      'This game event belongs to a stale round.',
+    );
+  }
+
   if (!canSessionSubmitGameEvent(current, access.auth.session, event)) {
     return apiErrorWithRequestSession(
       request,
@@ -238,8 +299,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (event === 'ready') player.ready = true;
     if (event === 'bridge_ready') player.bridgeReady = true;
-    if (score !== undefined) player.score = score;
-    if (progress !== undefined) player.progress = progress;
+    if (
+      (event === 'score' || event === 'progress' || event === 'complete') &&
+      score !== undefined
+    ) {
+      player.score = score;
+    }
+    if (
+      (event === 'score' || event === 'progress' || event === 'complete') &&
+      progress !== undefined
+    ) {
+      player.progress = progress;
+    }
     if (event === 'complete') {
       player.completed = true;
       player.progress = progress ?? 100;
@@ -261,6 +332,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   await emitGameSessionEvent(id, access, {
     event,
+    roundId: updated.roundId,
     status: updated.status,
     score: body.score ?? null,
     progress: body.progress ?? null,

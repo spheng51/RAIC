@@ -116,6 +116,7 @@ function buildPlayerFromSession(
     userId: session.userId,
     displayName,
     role: session.role,
+    active: true,
     ready: existing?.ready ?? false,
     score: existing?.score ?? 0,
     progress: existing?.progress ?? 0,
@@ -135,10 +136,6 @@ export function canSessionSubmitGameEvent(
   session: SessionRecord,
   eventType?: string,
 ) {
-  if (canSessionManageGameSession(session)) {
-    return true;
-  }
-
   if (session.kind !== 'classroom' || session.role !== 'student') {
     return false;
   }
@@ -163,15 +160,22 @@ export async function getClassroomGameSessionPayload(
   const sessions = await listRecentClassroomSessions(classroomId);
   const users = await Promise.all(sessions.map((entry) => findUserById(entry.userId)));
   const activePlayers = sessions.map((entry, index) =>
-    buildPlayerFromSession(
-      entry,
-      users[index]?.displayName || 'Student',
-      state.players[entry.id],
-    ),
+    buildPlayerFromSession(entry, users[index]?.displayName || 'Student', state.players[entry.id]),
   );
   const activeSessionIds = new Set(activePlayers.map((player) => player.sessionId));
+  const activeStudentSessionIds = new Set(
+    activePlayers.filter((player) => player.role === 'student').map((player) => player.sessionId),
+  );
   const allPlayers = {
-    ...state.players,
+    ...Object.fromEntries(
+      Object.values(state.players).map((player) => [
+        player.sessionId,
+        {
+          ...player,
+          active: activeSessionIds.has(player.sessionId),
+        },
+      ]),
+    ),
     ...Object.fromEntries(activePlayers.map((player) => [player.sessionId, player])),
   };
   const participants = Object.values(allPlayers).sort(
@@ -198,15 +202,21 @@ export async function getClassroomGameSessionPayload(
     controllerSessionId,
     players: allPlayers,
     participants: studentParticipants,
-    participantCount: studentParticipants.length,
+    participantCount: activeStudentSessionIds.size,
     leaderboard,
     viewerSessionId: session.id,
     viewerRole: session.role,
     viewerKind: session.kind,
     viewerCanManage,
-    viewerCanSubmit: canSessionSubmitGameEvent(state, session),
+    viewerCanSubmit: canSessionSubmitGameEvent(
+      {
+        ...state,
+        controllerSessionId,
+      },
+      session,
+    ),
     viewerIsController: controllerSessionId === session.id,
-    multiplayerSupported: participants.some((player) => player.bridgeReady),
+    multiplayerSupported: studentParticipants.some((player) => player.active && player.bridgeReady),
   };
 }
 
@@ -258,6 +268,7 @@ export function startNewGameRound(state: ClassroomGameSessionState): ClassroomGa
     roundId: randomUUID(),
     roundNumber,
     status: 'live',
+    latestSharedState: null,
     players: resetPlayers,
   };
 }

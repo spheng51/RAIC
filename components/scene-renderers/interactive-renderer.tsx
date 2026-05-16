@@ -9,6 +9,15 @@ import type {
   ClassroomGameStudentEventType,
 } from '@/lib/types/classroom-game-session';
 
+const GAME_PROGRESS_DEBOUNCE_MS = 500;
+const LIVE_GAME_EVENTS = new Set<ClassroomGameStudentEventType>([
+  'progress',
+  'score',
+  'complete',
+  'shared_state',
+  'control_input',
+]);
+
 interface InteractiveRendererProps {
   readonly content: InteractiveContent;
   readonly mode: 'autonomous' | 'playback';
@@ -16,6 +25,7 @@ interface InteractiveRendererProps {
   readonly gameSession?: ClassroomGameSessionPayload | null;
   readonly onGameEvent?: (event: {
     event: ClassroomGameStudentEventType;
+    roundId?: string | null;
     score?: number;
     progress?: number;
     state?: Record<string, unknown>;
@@ -31,20 +41,74 @@ export function InteractiveRenderer({
   onGameEvent,
 }: InteractiveRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const gameSessionRef = useRef<ClassroomGameSessionPayload | null>(gameSession ?? null);
+  const previousGameSessionRef = useRef<{
+    roundId: string | null;
+    status: ClassroomGameSessionPayload['status'];
+  } | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingProgressEventRef = useRef<Parameters<NonNullable<typeof onGameEvent>>[0] | null>(
+    null,
+  );
   const registerIframe = useWidgetIframeStore((state) => state.registerIframe);
   const setActiveScene = useWidgetIframeStore((state) => state.setActiveScene);
   const patchedHtml = useMemo(
     () => (content.html ? patchHtmlForIframe(content.html) : undefined),
     [content.html],
   );
+  const submissionGateKey = useMemo(() => {
+    if (!gameSession) return 'no-session';
+    return [
+      gameSession.roundId ?? 'no-round',
+      gameSession.status,
+      gameSession.mode,
+      gameSession.viewerCanManage ? 'manager' : 'player',
+      gameSession.viewerCanSubmit ? 'can-submit' : 'cannot-submit',
+      gameSession.viewerIsController ? 'controller' : 'not-controller',
+    ].join(':');
+  }, [
+    gameSession?.mode,
+    gameSession?.roundId,
+    gameSession?.status,
+    gameSession?.viewerCanManage,
+    gameSession?.viewerCanSubmit,
+    gameSession?.viewerIsController,
+  ]);
   const sendMessageToIframe = useCallback((type: string, payload: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage({ type, ...payload }, '*');
   }, []);
+
+  const sendGameControlToIframe = useCallback(
+    (action: string, payload: Record<string, unknown> = {}) => {
+      if (content.widgetType !== 'game') return;
+      sendMessageToIframe('RAIC_GAME_CONTROL', { payload: { action, ...payload } });
+    },
+    [content.widgetType, sendMessageToIframe],
+  );
 
   const sendGameSessionToIframe = useCallback(() => {
     if (!gameSession || content.widgetType !== 'game') return;
     sendMessageToIframe('RAIC_GAME_STATE', { gameSession });
   }, [content.widgetType, gameSession, sendMessageToIframe]);
+
+  const canForwardGameEvent = useCallback((event: ClassroomGameStudentEventType) => {
+    const session = gameSessionRef.current;
+    if (!session || session.viewerCanManage || !session.viewerCanSubmit) {
+      return false;
+    }
+
+    if (LIVE_GAME_EVENTS.has(event)) {
+      if (session.status !== 'live' || !session.roundId) {
+        return false;
+      }
+
+      if (event === 'shared_state' || event === 'control_input') {
+        return session.mode !== 'leaderboard' && session.viewerIsController;
+      }
+    }
+
+    return true;
+  }, []);
 
   useEffect(() => {
     registerIframe(sceneId, sendMessageToIframe);
@@ -58,34 +122,109 @@ export function InteractiveRenderer({
   }, [registerIframe, sceneId, sendMessageToIframe, setActiveScene]);
 
   useEffect(() => {
+    gameSessionRef.current = gameSession ?? null;
+  }, [gameSession]);
+
+  useEffect(() => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+      pendingProgressEventRef.current = null;
+    }
+  }, [submissionGateKey]);
+
+  useEffect(() => {
     sendGameSessionToIframe();
-  }, [sendGameSessionToIframe]);
+    if (!gameSession || content.widgetType !== 'game') {
+      previousGameSessionRef.current = null;
+      return;
+    }
+
+    const previous = previousGameSessionRef.current;
+    if (!previous) {
+      sendGameControlToIframe('request_bridge_ready');
+    } else if (
+      previous &&
+      gameSession.status === 'idle' &&
+      (previous.status !== 'idle' || previous.roundId !== gameSession.roundId)
+    ) {
+      sendGameControlToIframe('reset');
+      sendGameControlToIframe('request_bridge_ready');
+    }
+    previousGameSessionRef.current = {
+      roundId: gameSession.roundId,
+      status: gameSession.status,
+    };
+  }, [content.widgetType, gameSession, sendGameControlToIframe, sendGameSessionToIframe]);
+
+  useEffect(
+    () => () => {
+      if (progressTimerRef.current) {
+        clearTimeout(progressTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (content.widgetType !== 'game' || !onGameEvent) {
       return;
     }
 
+    const flushProgressEvent = () => {
+      const pending = pendingProgressEventRef.current;
+      pendingProgressEventRef.current = null;
+      progressTimerRef.current = null;
+      if (pending && canForwardGameEvent(pending.event)) {
+        onGameEvent(pending);
+      }
+    };
+
+    const forwardGameEvent = (payload: {
+      event: ClassroomGameStudentEventType;
+      score?: number;
+      progress?: number;
+      state?: Record<string, unknown>;
+      input?: Record<string, unknown>;
+    }) => {
+      if (!canForwardGameEvent(payload.event)) {
+        return;
+      }
+
+      const nextPayload = {
+        ...payload,
+        roundId: gameSession?.roundId ?? null,
+      };
+
+      if (payload.event === 'progress') {
+        pendingProgressEventRef.current = nextPayload;
+        if (!progressTimerRef.current) {
+          progressTimerRef.current = setTimeout(flushProgressEvent, GAME_PROGRESS_DEBOUNCE_MS);
+        }
+        return;
+      }
+
+      onGameEvent(nextPayload);
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) {
         return;
       }
 
-      const message = event.data as
-        | {
-            type?: string;
-            event?: ClassroomGameStudentEventType;
-            score?: number;
-            progress?: number;
-            state?: Record<string, unknown>;
-            input?: Record<string, unknown>;
-          }
-        | null;
+      const message = event.data as {
+        type?: string;
+        event?: ClassroomGameStudentEventType;
+        score?: number;
+        progress?: number;
+        state?: Record<string, unknown>;
+        input?: Record<string, unknown>;
+      } | null;
       if (!message || message.type !== 'RAIC_GAME_EVENT' || !message.event) {
         return;
       }
 
-      onGameEvent({
+      forwardGameEvent({
         event: message.event,
         ...(typeof message.score === 'number' ? { score: message.score } : {}),
         ...(typeof message.progress === 'number' ? { progress: message.progress } : {}),
@@ -96,7 +235,7 @@ export function InteractiveRenderer({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [content.widgetType, onGameEvent]);
+  }, [canForwardGameEvent, content.widgetType, gameSession?.roundId, onGameEvent]);
 
   return (
     <div className="w-full h-full relative">
@@ -107,7 +246,10 @@ export function InteractiveRenderer({
         className="absolute inset-0 w-full h-full border-0"
         title={`Interactive Scene ${sceneId}`}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        onLoad={sendGameSessionToIframe}
+        onLoad={() => {
+          sendGameSessionToIframe();
+          sendGameControlToIframe('request_bridge_ready');
+        }}
       />
     </div>
   );

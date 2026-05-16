@@ -27,6 +27,7 @@ export interface ClassroomGameSessionPlayer {
   userId: string;
   displayName: string;
   role: string;
+  active?: boolean;
   ready: boolean;
   score: number;
   progress: number;

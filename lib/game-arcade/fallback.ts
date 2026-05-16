@@ -540,6 +540,9 @@ export function buildFallbackGameWidget(
         }
 
         if (type === 'RAIC_GAME_CONTROL') {
+          if (payload.action === 'request_bridge_ready') {
+            postGameEvent('bridge_ready', { score: score, progress: progress });
+          }
           if (payload.action === 'reset') {
             score = 0;
             progress = 0;
