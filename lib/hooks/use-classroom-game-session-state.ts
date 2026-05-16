@@ -62,9 +62,12 @@ export function useClassroomGameSessionState({
 
       pollInFlightRef.current = true;
       try {
-        const response = await fetch(`/api/classroom/${encodeURIComponent(classroomId)}/game-session`, {
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          `/api/classroom/${encodeURIComponent(classroomId)}/game-session`,
+          {
+            cache: 'no-store',
+          },
+        );
         const json = (await response.json().catch(() => null)) as
           | ({ success: true } & ClassroomGameSessionPayload)
           | { success?: false; error?: string }

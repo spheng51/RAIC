@@ -71,16 +71,14 @@ export function InteractiveRenderer({
         return;
       }
 
-      const message = event.data as
-        | {
-            type?: string;
-            event?: ClassroomGameStudentEventType;
-            score?: number;
-            progress?: number;
-            state?: Record<string, unknown>;
-            input?: Record<string, unknown>;
-          }
-        | null;
+      const message = event.data as {
+        type?: string;
+        event?: ClassroomGameStudentEventType;
+        score?: number;
+        progress?: number;
+        state?: Record<string, unknown>;
+        input?: Record<string, unknown>;
+      } | null;
       if (!message || message.type !== 'RAIC_GAME_EVENT' || !message.event) {
         return;
       }

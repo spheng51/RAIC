@@ -2,11 +2,15 @@ import type { Scene, Stage } from '@/lib/types/stage';
 import { db } from '@/lib/utils/database';
 
 export const LOCAL_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES = 3_500_000;
+export const DIRECT_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 const MEDIA_PLACEHOLDER_RE = /^gen_(img|vid)_[\w-]+$/i;
 
 export interface PublishWarning {
   code: string;
   message: string;
+  assetId?: string;
+  kind?: 'media' | 'audio';
+  filename?: string;
 }
 
 export interface PublishLocalClassroomResult {
@@ -35,6 +39,7 @@ export interface LocalClassroomPublishManifest {
   stage: Stage;
   scenes: Scene[];
   assets: LocalClassroomPublishAsset[];
+  directAssets: LocalClassroomPublishAsset[];
   warnings: PublishWarning[];
 }
 
@@ -160,15 +165,84 @@ function assetTooLargeWarning(assetName: string, size: number): PublishWarning {
   };
 }
 
+function assetExceedsDirectUploadWarning(assetName: string, size: number): PublishWarning {
+  return {
+    code: 'asset_too_large',
+    message: `${assetName} is ${Math.ceil(
+      size / 1024 / 1024,
+    )} MB and exceeds the 100 MB publish asset limit, so it was skipped for sharing.`,
+  };
+}
+
+function safeAssetSegment(value: string) {
+  return value.replace(/[^\w-]/g, '_').slice(0, 120) || 'asset';
+}
+
+function publishAssetPathname(input: {
+  classroomId: string;
+  kind: 'media' | 'audio';
+  assetId: string;
+  filename: string;
+}) {
+  const subDir = input.kind === 'media' ? 'media' : 'audio';
+  return [
+    'classrooms',
+    safeAssetSegment(input.classroomId),
+    subDir,
+    `${safeAssetSegment(input.assetId)}-${safeAssetSegment(input.filename)}`,
+  ].join('/');
+}
+
+function pushPublishAsset(input: {
+  assets: LocalClassroomPublishAsset[];
+  directAssets: LocalClassroomPublishAsset[];
+  warnings: PublishWarning[];
+  asset: LocalClassroomPublishAsset;
+  maxAssetBytes: number;
+  directUploadAssets: boolean;
+  directMaxAssetBytes: number;
+}) {
+  if (input.asset.blob.size <= input.maxAssetBytes) {
+    input.assets.push(input.asset);
+    return;
+  }
+
+  if (input.directUploadAssets && input.asset.blob.size <= input.directMaxAssetBytes) {
+    input.directAssets.push(input.asset);
+    return;
+  }
+
+  input.warnings.push(
+    input.asset.blob.size > input.directMaxAssetBytes
+      ? {
+          ...assetExceedsDirectUploadWarning(input.asset.assetId, input.asset.blob.size),
+          assetId: input.asset.assetId,
+          kind: input.asset.kind,
+          filename: input.asset.filename,
+        }
+      : {
+          ...assetTooLargeWarning(input.asset.assetId, input.asset.blob.size),
+          assetId: input.asset.assetId,
+          kind: input.asset.kind,
+          filename: input.asset.filename,
+        },
+  );
+}
+
 export async function buildLocalClassroomPublishManifest(input: {
   stage: Stage;
   scenes: Scene[];
   maxAssetBytes?: number;
+  directUploadAssets?: boolean;
+  directMaxAssetBytes?: number;
 }): Promise<LocalClassroomPublishManifest> {
   const maxAssetBytes = input.maxAssetBytes ?? LOCAL_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES;
+  const directMaxAssetBytes = input.directMaxAssetBytes ?? DIRECT_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES;
+  const directUploadAssets = input.directUploadAssets ?? false;
   const stage = cloneJson(input.stage);
   const scenes = cloneJson(input.scenes);
   const assets: LocalClassroomPublishAsset[] = [];
+  const directAssets: LocalClassroomPublishAsset[] = [];
   const warnings: PublishWarning[] = [];
 
   const mediaPlaceholders = collectMediaPlaceholders(scenes);
@@ -195,18 +269,21 @@ export async function buildLocalClassroomPublishManifest(input: {
 
       const mimeType = record.blob.type || record.mimeType;
       const blob = record.blob.type ? record.blob : new Blob([record.blob], { type: mimeType });
-      if (blob.size > maxAssetBytes) {
-        warnings.push(assetTooLargeWarning(elementId, blob.size));
-        continue;
-      }
-
       const ext = extensionFromMime(mimeType, record.type === 'video' ? '.mp4' : '.png');
-      assets.push({
-        kind: 'media',
-        assetId: elementId,
-        filename: `${elementId}${ext}`,
-        mimeType,
-        blob,
+      pushPublishAsset({
+        assets,
+        directAssets,
+        warnings,
+        asset: {
+          kind: 'media',
+          assetId: elementId,
+          filename: `${elementId}${ext}`,
+          mimeType,
+          blob,
+        },
+        maxAssetBytes,
+        directUploadAssets,
+        directMaxAssetBytes,
       });
     }
   }
@@ -240,22 +317,26 @@ export async function buildLocalClassroomPublishManifest(input: {
 
     const mimeType = record.blob.type || mimeFromAudioFormat(record.format);
     const blob = record.blob.type ? record.blob : new Blob([record.blob], { type: mimeType });
-    if (blob.size > maxAssetBytes) {
-      warnings.push(assetTooLargeWarning(audioId, blob.size));
-      continue;
-    }
 
     const ext = extensionFromMime(mimeType, `.${record.format || 'mp3'}`);
-    assets.push({
-      kind: 'audio',
-      assetId: audioId,
-      filename: `${audioId}${ext}`,
-      mimeType,
-      blob,
+    pushPublishAsset({
+      assets,
+      directAssets,
+      warnings,
+      asset: {
+        kind: 'audio',
+        assetId: audioId,
+        filename: `${audioId}${ext}`,
+        mimeType,
+        blob,
+      },
+      maxAssetBytes,
+      directUploadAssets,
+      directMaxAssetBytes,
     });
   }
 
-  return { stage, scenes, assets, warnings };
+  return { stage, scenes, assets, directAssets, warnings };
 }
 
 export async function buildLocalClassroomPublishForm(input: { stage: Stage; scenes: Scene[] }) {
@@ -295,12 +376,85 @@ export async function buildLocalClassroomPublishForm(input: { stage: Stage; scen
   return formData;
 }
 
+async function attachRemotePublishAsset(input: {
+  classroomId: string;
+  asset: LocalClassroomPublishAsset;
+  url: string;
+}) {
+  const response = await fetch(
+    `/api/classroom/${encodeURIComponent(input.classroomId)}/publish-local-asset`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: input.asset.kind,
+        assetId: input.asset.assetId,
+        url: input.url,
+      }),
+    },
+  );
+  const body = (await response.json().catch(() => null)) as {
+    warnings?: PublishWarning[];
+    error?: string;
+    details?: string;
+  } | null;
+
+  if (!response.ok) {
+    throw new Error(
+      body?.details ||
+        body?.error ||
+        `${input.asset.assetId} remote asset reference failed with HTTP ${response.status}.`,
+    );
+  }
+
+  return body?.warnings ?? [];
+}
+
+async function uploadDirectPublishAsset(input: {
+  classroomId: string;
+  asset: LocalClassroomPublishAsset;
+}) {
+  const { upload } = await import('@vercel/blob/client');
+  const blob = await upload(
+    publishAssetPathname({
+      classroomId: input.classroomId,
+      kind: input.asset.kind,
+      assetId: input.asset.assetId,
+      filename: input.asset.filename,
+    }),
+    input.asset.blob,
+    {
+      access: 'public',
+      contentType: input.asset.mimeType,
+      handleUploadUrl: `/api/classroom/${encodeURIComponent(
+        input.classroomId,
+      )}/publish-local-asset/direct`,
+      clientPayload: JSON.stringify({
+        kind: input.asset.kind,
+        assetId: input.asset.assetId,
+        filename: input.asset.filename,
+        mimeType: input.asset.mimeType,
+      }),
+      multipart: input.asset.blob.size > LOCAL_PUBLISH_ASSET_UPLOAD_LIMIT_BYTES,
+    },
+  );
+
+  return attachRemotePublishAsset({
+    classroomId: input.classroomId,
+    asset: input.asset,
+    url: blob.url,
+  });
+}
+
 export async function publishLocalClassroom(input: {
   stage: Stage;
   scenes: Scene[];
   onProgress?: (progress: PublishLocalClassroomProgress) => void;
 }): Promise<PublishLocalClassroomResult> {
-  const manifest = await buildLocalClassroomPublishManifest(input);
+  const manifest = await buildLocalClassroomPublishManifest({
+    ...input,
+    directUploadAssets: true,
+  });
   const warnings = [...manifest.warnings];
 
   input.onProgress?.({ phase: 'metadata' });
@@ -328,12 +482,15 @@ export async function publishLocalClassroom(input: {
   warnings.push(...(body.warnings ?? []));
 
   if (body.id) {
+    const totalAssets = manifest.assets.length + manifest.directAssets.length;
+    let completedAssets = 0;
+
     for (let index = 0; index < manifest.assets.length; index += 1) {
       const asset = manifest.assets[index];
       input.onProgress?.({
         phase: 'assets',
-        completed: index,
-        total: manifest.assets.length,
+        completed: completedAssets,
+        total: totalAssets,
         currentAssetId: asset.assetId,
       });
 
@@ -366,13 +523,53 @@ export async function publishLocalClassroom(input: {
             uploadBody?.details ||
             uploadBody?.error ||
             `${asset.assetId} upload failed with HTTP ${uploadResponse.status}.`,
+          assetId: asset.assetId,
+          kind: asset.kind,
+          filename: asset.filename,
         });
       }
 
+      completedAssets += 1;
       input.onProgress?.({
         phase: 'assets',
-        completed: index + 1,
-        total: manifest.assets.length,
+        completed: completedAssets,
+        total: totalAssets,
+      });
+    }
+
+    for (let index = 0; index < manifest.directAssets.length; index += 1) {
+      const asset = manifest.directAssets[index];
+      input.onProgress?.({
+        phase: 'assets',
+        completed: completedAssets,
+        total: totalAssets,
+        currentAssetId: asset.assetId,
+      });
+
+      try {
+        const uploadWarnings = await uploadDirectPublishAsset({
+          classroomId: body.id,
+          asset,
+        });
+        warnings.push(...uploadWarnings);
+      } catch (error) {
+        warnings.push({
+          code: 'direct_asset_upload_failed',
+          message:
+            error instanceof Error
+              ? `${asset.assetId} direct upload failed: ${error.message}`
+              : `${asset.assetId} direct upload failed.`,
+          assetId: asset.assetId,
+          kind: asset.kind,
+          filename: asset.filename,
+        });
+      }
+
+      completedAssets += 1;
+      input.onProgress?.({
+        phase: 'assets',
+        completed: completedAssets,
+        total: totalAssets,
       });
     }
   }

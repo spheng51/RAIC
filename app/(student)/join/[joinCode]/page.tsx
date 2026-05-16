@@ -56,8 +56,15 @@ export default async function JoinClassroomPage({
             <Clock3 className="size-4 text-primary" />
             <span>Valid until {new Date(joinToken.expiresAt).toLocaleString()}</span>
           </div>
-          <form action={`/join/${encodeURIComponent(joinCode)}/enter`} method="post" className="space-y-3">
-            <label htmlFor="student-display-name" className="block text-sm font-medium text-foreground">
+          <form
+            action={`/join/${encodeURIComponent(joinCode)}/enter`}
+            method="post"
+            className="space-y-3"
+          >
+            <label
+              htmlFor="student-display-name"
+              className="block text-sm font-medium text-foreground"
+            >
               Your display name
             </label>
             <input
@@ -70,9 +77,9 @@ export default async function JoinClassroomPage({
               placeholder="Enter your name"
             />
             <p>
-              You&apos;ll enter as a classroom-scoped student session, so teacher controls stay hidden
-              while the shared presentation, multiplayer games, and classroom sidecars stay aligned
-              with the rest of the room.
+              You&apos;ll enter as a classroom-scoped student session, so teacher controls stay
+              hidden while the shared presentation, multiplayer games, and classroom sidecars stay
+              aligned with the rest of the room.
             </p>
             {liveMeeting ? <StudentJoinLiveMeetingCard liveMeeting={liveMeeting} /> : null}
             <Button type="submit" className="w-full">

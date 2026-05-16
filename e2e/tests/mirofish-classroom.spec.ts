@@ -29,11 +29,20 @@ async function createAuthedClassroomPage(browser: Browser, token: string, classr
   return { context, page, classroom };
 }
 
-async function joinClassroom(browser: Browser, rawJoinToken: string, classroomId: string) {
+async function joinClassroom(
+  browser: Browser,
+  rawJoinToken: string,
+  classroomId: string,
+  displayName: string,
+) {
   const context = await browser.newContext();
   const page = await context.newPage();
   const classroom = new ClassroomPage(page);
-  await page.goto(`${APP_BASE_URL}/join/${rawJoinToken}/enter`);
+  await page.goto(`${APP_BASE_URL}/join/${rawJoinToken}`);
+  const displayNameInput = page.getByRole('textbox', { name: 'Your display name' });
+  await expect(displayNameInput).toBeVisible();
+  await displayNameInput.fill(displayName);
+  await page.getByRole('button', { name: 'Enter classroom' }).click();
   await page.waitForURL(new RegExp(`/classroom/${classroomId}$`));
   await classroom.waitForLoaded();
   await waitForClassroomAccessCookie(context);
@@ -196,7 +205,12 @@ test('single-controller classrooms switch surfaces and reclaim student control',
     );
     teacherContext = teacher.context;
 
-    const student = await joinClassroom(browser, joinToken.rawToken, 'mirofish-single-room');
+    const student = await joinClassroom(
+      browser,
+      joinToken.rawToken,
+      'mirofish-single-room',
+      'Student One',
+    );
     studentContext = student.context;
 
     await expect(teacher.page.getByText('1 students')).toBeVisible({ timeout: 30_000 });
@@ -329,10 +343,20 @@ test('multi-user classrooms issue participant embeds, moderate collaboration, an
     );
     teacherContext = teacher.context;
 
-    const studentOne = await joinClassroom(browser, studentOneJoin.rawToken, 'mirofish-multi-room');
+    const studentOne = await joinClassroom(
+      browser,
+      studentOneJoin.rawToken,
+      'mirofish-multi-room',
+      'Student One',
+    );
     studentOneContext = studentOne.context;
 
-    const studentTwo = await joinClassroom(browser, studentTwoJoin.rawToken, 'mirofish-multi-room');
+    const studentTwo = await joinClassroom(
+      browser,
+      studentTwoJoin.rawToken,
+      'mirofish-multi-room',
+      'Student Two',
+    );
     studentTwoContext = studentTwo.context;
 
     await expect(teacher.page.getByText('2 students')).toBeVisible({ timeout: 30_000 });
@@ -465,7 +489,12 @@ test('join links reuse the same classroom session while a MiroFish simulation is
   let studentContext: BrowserContext | undefined;
 
   try {
-    const student = await joinClassroom(browser, joinToken.rawToken, 'mirofish-reuse-room');
+    const student = await joinClassroom(
+      browser,
+      joinToken.rawToken,
+      'mirofish-reuse-room',
+      'Returning Student',
+    );
     studentContext = student.context;
 
     await expectMiroFishFrameSrc(student.classroom, /\/simulation\/reuse-sim\/start/);

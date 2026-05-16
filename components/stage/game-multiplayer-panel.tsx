@@ -73,11 +73,7 @@ export function GameMultiplayerPanel({
 
       {state.viewerCanManage ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void onTeacherAction('start_round')}
-          >
+          <Button type="button" size="sm" onClick={() => void onTeacherAction('start_round')}>
             <Play className="size-4" />
             Start round
           </Button>
@@ -159,9 +155,7 @@ export function GameMultiplayerPanel({
               key={participant.sessionId}
               type="button"
               size="sm"
-              variant={
-                state.controllerSessionId === participant.sessionId ? 'default' : 'outline'
-              }
+              variant={state.controllerSessionId === participant.sessionId ? 'default' : 'outline'}
               onClick={() =>
                 void onTeacherAction('assign_controller', {
                   targetSessionId: participant.sessionId,
