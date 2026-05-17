@@ -1567,6 +1567,26 @@ export function Stage({
   const hasNextPending = generatingOutlines.length > 0;
   const isCourseComplete = scenes.length > 0 && generatingOutlines.length === 0;
 
+  const courseCompletionContextKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPendingScene || !isCourseComplete || scenes.length === 0) {
+      return;
+    }
+
+    const finalScene = [...scenes].sort((a, b) => a.order - b.order)[scenes.length - 1];
+    if (!finalScene) {
+      return;
+    }
+
+    const completionKey = `${stage?.id ?? 'stage'}:${finalScene.id}:${scenes.length}`;
+    if (courseCompletionContextKeyRef.current === completionKey) {
+      return;
+    }
+
+    courseCompletionContextKeyRef.current = completionKey;
+    onSceneCompleted?.(finalScene.id);
+  }, [isCourseComplete, isPendingScene, onSceneCompleted, scenes, stage?.id]);
+
   // previous scene (gated)
   const handlePreviousScene = useCallback(() => {
     if (isPendingScene) {
