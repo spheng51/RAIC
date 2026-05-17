@@ -171,6 +171,7 @@ export function applySceneSelectionSignal(input: {
   fromSceneId: string | null;
   toSceneId: string;
   reason: 'manual' | 'auto' | 'pending';
+  isCourseCompletion?: boolean;
 }): {
   shouldPost: boolean;
   completedSceneIds: Set<string>;
@@ -192,7 +193,7 @@ export function applySceneSelectionSignal(input: {
       : (orderedScenes.find((scene) => scene.id === input.fromSceneId) ?? null);
   const targetScene = orderedScenes.find((scene) => scene.id === input.toSceneId) ?? null;
 
-  if (!targetScene) {
+  if (!targetScene && !input.isCourseCompletion) {
     return {
       shouldPost: false,
       completedSceneIds: nextCompletedSceneIds,
@@ -202,10 +203,18 @@ export function applySceneSelectionSignal(input: {
 
   if (
     fromScene &&
-    targetScene.order > fromScene.order &&
+    (input.isCourseCompletion || (targetScene && targetScene.order > fromScene.order)) &&
     !nextCompletedSceneIds.has(fromScene.id)
   ) {
     nextCompletedSceneIds.add(fromScene.id);
+  }
+
+  if (!targetScene) {
+    return {
+      shouldPost: fromScene != null,
+      completedSceneIds: nextCompletedSceneIds,
+      revisitIntent: input.revisitIntent,
+    };
   }
 
   const highestCompletedOrder = orderedScenes.reduce((highest, scene) => {
