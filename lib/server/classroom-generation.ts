@@ -315,8 +315,9 @@ export async function generateClassroom(
     gameTemplateId: input.gameTemplateId,
     gameCreativeBrief: input.gameCreativeBrief,
   };
-  const pdfText = pdfContent?.text || undefined;
-  const pdfAttached = Boolean(pdfText || input.pdfFileName);
+  const pdfText = pdfContent?.text?.trim() ? pdfContent.text : undefined;
+  const hasPdfSourceContext = Boolean(pdfText?.trim());
+  const pdfAttached = Boolean(hasPdfSourceContext || input.pdfFileName);
 
   // Resolve agents based on agentMode
   let agents: AgentInfo[];
@@ -400,7 +401,7 @@ export async function generateClassroom(
 
   if (
     experiencePresetRequiresSource(requirements.experiencePreset) &&
-    !pdfAttached &&
+    !hasPdfSourceContext &&
     !researchContext
   ) {
     throw new Error(HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE);
@@ -457,7 +458,7 @@ export async function generateClassroom(
       ...(input.pdfFileName ? { pdfName: input.pdfFileName } : {}),
       tavilyEnabled: Boolean(input.enableWebSearch),
       sourceMode: deriveClassroomSourceMode({
-        pdfAttached,
+        pdfAttached: hasPdfSourceContext,
         tavilyEnabled: Boolean(researchContext?.trim()),
       }),
       language: lang,

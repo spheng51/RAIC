@@ -563,11 +563,7 @@ function GenerationPreviewContent() {
         return;
       }
 
-      const hasHistoricalVlogPdfSource = Boolean(
-        currentSession.pdfText?.trim() ||
-        currentSession.pdfFileName ||
-        currentSession.pdfStorageKey,
-      );
+      const hasHistoricalVlogPdfSource = Boolean(currentSession.pdfText?.trim());
 
       // Step: Web Search (if enabled)
       const webSearchStepIdx = activeSteps.findIndex((s) => s.id === 'web-search');
@@ -652,6 +648,7 @@ function GenerationPreviewContent() {
       const pdfAttached = Boolean(
         currentSession.pdfFileName || currentSession.pdfText || currentSession.pdfStorageKey,
       );
+      const hasPdfSourceContext = Boolean(currentSession.pdfText?.trim());
       const webContextAvailable = Boolean(currentSession.researchContext?.trim());
       const stage: Stage = {
         id: stageId,
@@ -666,7 +663,7 @@ function GenerationPreviewContent() {
           ...(currentSession.pdfFileName ? { pdfName: currentSession.pdfFileName } : {}),
           tavilyEnabled: Boolean(currentSession.requirements.webSearch),
           sourceMode: deriveClassroomSourceMode({
-            pdfAttached,
+            pdfAttached: hasPdfSourceContext,
             tavilyEnabled: webContextAvailable,
           }),
           language: currentSession.requirements.language || 'zh-CN',

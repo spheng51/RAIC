@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const hasPdfSource = Boolean(rawBody.pdfFileName?.trim() || rawBody.pdfContent?.text?.trim());
+    const hasPdfSource = Boolean(rawBody.pdfContent?.text?.trim());
     if (
       experiencePresetRequiresSource(body.experiencePreset) &&
       !body.enableWebSearch &&

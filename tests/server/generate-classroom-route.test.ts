@@ -126,6 +126,27 @@ describe('POST /api/generate-classroom', () => {
     expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
   });
 
+  it('rejects historical-vlogger requests with only a PDF filename and no web search', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          pdfFileName: 'titanic-archive.pdf',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(body.error).toContain('History Vlog requires');
+    expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
+  });
+
   it('creates a classroom-generation job and schedules the async runner', async () => {
     const { POST } = await import('@/app/api/generate-classroom/route');
     const response = await POST(

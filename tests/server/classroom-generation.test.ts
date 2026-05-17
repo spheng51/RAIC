@@ -327,6 +327,28 @@ describe('generateClassroom', () => {
     expect(executeScenesWithPolicyMock).not.toHaveBeenCalled();
   });
 
+  it('rejects historical-vlogger generation with only a PDF filename and no usable source context', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    await expect(
+      generateClassroom(
+        {
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          pdfFileName: 'titanic-archive.pdf',
+        },
+        {
+          baseUrl: 'http://localhost:3000',
+          organizationId: 'org-1',
+          userId: 'teacher-1',
+        },
+      ),
+    ).rejects.toThrow('History Vlog needs usable source context');
+
+    expect(generateSceneOutlinesFromRequirementsMock).not.toHaveBeenCalled();
+    expect(executeScenesWithPolicyMock).not.toHaveBeenCalled();
+  });
+
   it('allows historical-vlogger generation with PDF source context only', async () => {
     const { generateClassroom } = await import('@/lib/server/classroom-generation');
 
@@ -356,6 +378,34 @@ describe('generateClassroom', () => {
     });
     expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
     expect(searchWithTavilyMock).not.toHaveBeenCalled();
+  });
+
+  it('allows historical-vlogger generation with web source context only', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    const result = await generateClassroom(
+      {
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        enableWebSearch: true,
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(buildSearchQueryMock).toHaveBeenCalled();
+    expect(searchWithTavilyMock).toHaveBeenCalled();
+    expect(formatSearchResultsAsContextMock).toHaveBeenCalled();
+    expect(result.stage.sourceContext).toMatchObject({
+      pdfAttached: false,
+      tavilyEnabled: true,
+      sourceMode: 'web',
+      experiencePreset: 'historical-vlogger',
+    });
+    expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
   });
 
   it('falls back to PDF source context when historical-vlogger web search fails', async () => {
@@ -388,6 +438,60 @@ describe('generateClassroom', () => {
       pdfName: 'titanic-archive.pdf',
       tavilyEnabled: true,
       sourceMode: 'pdf',
+      experiencePreset: 'historical-vlogger',
+    });
+    expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
+  });
+
+  it('rejects historical-vlogger generation when web search fails and only a PDF filename exists', async () => {
+    searchWithTavilyMock.mockRejectedValueOnce(new Error('web search unavailable'));
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    await expect(
+      generateClassroom(
+        {
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          enableWebSearch: true,
+          pdfFileName: 'titanic-archive.pdf',
+        },
+        {
+          baseUrl: 'http://localhost:3000',
+          organizationId: 'org-1',
+          userId: 'teacher-1',
+        },
+      ),
+    ).rejects.toThrow('History Vlog needs usable source context');
+
+    expect(buildSearchQueryMock).toHaveBeenCalled();
+    expect(searchWithTavilyMock).toHaveBeenCalled();
+    expect(formatSearchResultsAsContextMock).not.toHaveBeenCalled();
+    expect(generateSceneOutlinesFromRequirementsMock).not.toHaveBeenCalled();
+    expect(executeScenesWithPolicyMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a PDF filename as display metadata without counting it as PDF source context', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    const result = await generateClassroom(
+      {
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        enableWebSearch: true,
+        pdfFileName: 'titanic-archive.pdf',
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(result.stage.sourceContext).toMatchObject({
+      pdfAttached: true,
+      pdfName: 'titanic-archive.pdf',
+      tavilyEnabled: true,
+      sourceMode: 'web',
       experiencePreset: 'historical-vlogger',
     });
     expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
