@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-05-17
+
+`v0.4.0` closes the Reliable Adaptive Learning Platform milestone by making adaptive classroom generation more governable, adding private teacher analytics, and preserving public/student API stability.
+
+### Added
+
+- Provider Composer scenario routing now covers scene outline, scene content, and scene action generation.
+- Private teacher/internal learning analytics summarize aggregate quality signals from existing session context and reflection records.
+- Release notes and roadmap docs now capture the v0.4.0 closeout, Node 24 runtime policy, and next hardening milestones.
+
+### Changed
+
+- Scenario-managed verification and generation paths fail closed with governed 4xx errors when no valid managed candidate remains.
+- Provider scenario telemetry records selected, fallback, denied, and validation status metadata for release diagnostics.
+- Legacy browser-key model verification remains available only for the documented one-release fallback path when a teacher explicitly tests a local key/base URL.
+
+### Operations
+
+- Public/student HTTP request and response payload shapes remain unchanged.
+- Adaptive Student Beta is deferred until privacy, consent, retention, feature-flag, rollback, and non-leakage review is complete.
+- Final release evidence should include clean-main Node 24 `ops:verify`, benchmark output, production deployment ID, production smokes, and signed-in classroom QA.
+
 ## [0.3.0] - 2026-05-16
 
 `v0.3.0` activates teacher-only Adaptive Classroom Intelligence for repeated classroom sessions.

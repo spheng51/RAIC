@@ -38,18 +38,19 @@
 
 ## 🗞️ News
 
+- **2026-05-17** — v0.4.0 closes the Reliable Adaptive Learning Platform milestone with Provider Composer scene routing, fail-closed provider hardening, and private teacher analytics. See the [changelog](CHANGELOG.md).
 - **2026-05-16** — v0.3.0 activates teacher-only Adaptive Classroom Intelligence for repeated classroom sessions. See the [changelog](CHANGELOG.md).
 - **2026-05-16** — v0.2.0 shipped the public classroom release milestone, with durable hosted publishing, public example classrooms, auto-paced multiplayer game classes, and benchmark-backed release gates. See the [changelog](CHANGELOG.md).
 - **2026-03-26** — v0.1.0 introduced discussion TTS, immersive mode, keyboard shortcuts, whiteboard enhancements, new providers, and more. See the [changelog](CHANGELOG.md).
 
-## 📌 What's New in v0.3.0
+## 📌 What's New in v0.4.0
 
-Open-RAIC's Adaptive Classroom Intelligence milestone introduces:
+Open-RAIC's Reliable Adaptive Learning Platform milestone introduces:
 
-- **Teacher-only repeated-session adaptation** using persisted session progress and latest teacher reflections
-- **Adaptive generation context** for outlines, scene content, scene actions, and runtime chat without public API shape changes
-- **Fail-open public/student behavior** so first-run, anonymous, public demo, and classroom-cookie flows remain unchanged
-- **Release-stable ops gates** across `pnpm benchmark:milestone`, `pnpm ops:verify`, and production smokes
+- **Provider Composer scene routing** for outlines, scene content, and scene actions
+- **Fail-closed provider hardening** for strict scenario-managed routes with governed 4xx denials
+- **Private teacher/internal analytics** derived from existing session context and reflection records
+- **Stable public/student APIs** with Adaptive Student Beta deferred for privacy, consent, retention, and rollback review
 
 See the full release notes in [CHANGELOG.md](CHANGELOG.md).
 
