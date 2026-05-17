@@ -348,7 +348,8 @@ export default function ClassroomDetailPage() {
             const json = await res.json();
             if (json.success && json.classroom) {
               const { stage, scenes } = json.classroom;
-              useStageStore.getState().setStage(stage);
+              const canonicalStage = { ...stage, id: classroomId };
+              useStageStore.getState().setStage(canonicalStage);
               useStageStore.setState({
                 scenes,
                 currentSceneId: scenes[0]?.id ?? null,
@@ -361,10 +362,10 @@ export default function ClassroomDetailPage() {
               // Hydrate server-generated agents into IndexedDB + registry.
               // Don't set selectedAgentIds here yet — the general agent
               // restoration logic below handles it uniformly.
-              if (stage.generatedAgentConfigs?.length) {
+              if (canonicalStage.generatedAgentConfigs?.length) {
                 const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
-                await saveGeneratedAgents(stage.id, stage.generatedAgentConfigs);
-                log.info('Hydrated server-generated agents for stage:', stage.id);
+                await saveGeneratedAgents(canonicalStage.id, canonicalStage.generatedAgentConfigs);
+                log.info('Hydrated server-generated agents for stage:', canonicalStage.id);
               }
             } else {
               throw new Error('Classroom payload is missing');

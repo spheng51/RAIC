@@ -45,7 +45,7 @@ describe('classroom session progress signals', () => {
     });
   });
 
-  it('marks the source scene complete when a teacher manually advances past an explicit checkpoint', () => {
+  it('marks the source scene complete when a teacher manually advances', () => {
     const result = applySceneSelectionSignal({
       scenes: [...scenes],
       completedSceneIds: new Set<string>(),
@@ -57,6 +57,21 @@ describe('classroom session progress signals', () => {
 
     expect(result.shouldPost).toBe(true);
     expect([...result.completedSceneIds]).toEqual(['scene-1']);
+    expect(result.revisitIntent).toBe('continue');
+  });
+
+  it('marks slide scenes complete when a teacher manually advances through them', () => {
+    const result = applySceneSelectionSignal({
+      scenes: [...scenes],
+      completedSceneIds: new Set<string>(['scene-1']),
+      revisitIntent: 'continue',
+      fromSceneId: 'scene-2',
+      toSceneId: 'scene-3',
+      reason: 'manual',
+    });
+
+    expect(result.shouldPost).toBe(true);
+    expect([...result.completedSceneIds]).toEqual(['scene-1', 'scene-2']);
     expect(result.revisitIntent).toBe('continue');
   });
 

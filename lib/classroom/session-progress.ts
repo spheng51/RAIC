@@ -203,7 +203,6 @@ export function applySceneSelectionSignal(input: {
   if (
     fromScene &&
     targetScene.order > fromScene.order &&
-    (fromScene.type === 'quiz' || fromScene.type === 'interactive' || fromScene.type === 'pbl') &&
     !nextCompletedSceneIds.has(fromScene.id)
   ) {
     nextCompletedSceneIds.add(fromScene.id);
