@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import type { AuthContext } from '@/lib/auth/current-user';
 
 const buildSearchQueryMock = vi.fn();
 const appendAuditLogMock = vi.fn();
@@ -139,11 +140,63 @@ vi.mock('@/lib/server/provider-scenarios', () => ({
   getProviderScenarioProfile: getProviderScenarioProfileMock,
 }));
 
+const authTimestamp = '2026-05-17T00:00:00.000Z';
 const authContext = {
-  organization: { id: 'org-1' },
-  session: { role: 'teacher' },
-  user: { id: 'teacher-1' },
-};
+  activeMembership: {
+    id: 'membership-1',
+    organizationId: 'org-1',
+    userId: 'teacher-1',
+    role: 'teacher',
+    createdAt: authTimestamp,
+    updatedAt: authTimestamp,
+  },
+  memberships: [
+    {
+      id: 'membership-1',
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      role: 'teacher',
+      createdAt: authTimestamp,
+      updatedAt: authTimestamp,
+    },
+  ],
+  organization: {
+    id: 'org-1',
+    name: 'Test Organization',
+    slug: 'test-org',
+    kind: 'school',
+    domainAllowlist: [],
+    createdAt: authTimestamp,
+    updatedAt: authTimestamp,
+  },
+  session: {
+    id: 'session-1',
+    userId: 'teacher-1',
+    organizationId: 'org-1',
+    classroomId: null,
+    role: 'teacher',
+    kind: 'web',
+    tokenHash: 'token-hash',
+    userAgent: null,
+    ipAddress: null,
+    createdAt: authTimestamp,
+    updatedAt: authTimestamp,
+    lastSeenAt: authTimestamp,
+    expiresAt: '2026-05-18T00:00:00.000Z',
+    absoluteExpiresAt: '2026-06-17T00:00:00.000Z',
+    revokedAt: null,
+  },
+  user: {
+    id: 'teacher-1',
+    googleSub: null,
+    email: 'teacher@example.test',
+    displayName: 'Teacher',
+    avatarUrl: null,
+    createdAt: authTimestamp,
+    updatedAt: authTimestamp,
+    lastLoginAt: authTimestamp,
+  },
+} satisfies AuthContext;
 
 describe('provider and verification routes', () => {
   afterEach(() => {
