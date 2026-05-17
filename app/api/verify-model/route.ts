@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
           apiKey: apiKey || '',
           baseUrl: baseUrl || undefined,
           providerType,
+          strictUnmatchedCandidate: true,
         })) ||
         (await resolveModel({
           modelString: model,

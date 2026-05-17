@@ -98,6 +98,7 @@ interface ResolveVerificationModelScenarioInput {
   apiKey?: string;
   baseUrl?: string;
   providerType?: ProviderType;
+  strictUnmatchedCandidate?: boolean;
 }
 
 interface ResolveSceneGenerationScenarioInput {
@@ -119,6 +120,7 @@ interface ResolveScenarioManagedProviderRouteInput {
   requestedSecret?: string;
   requestedBaseUrl?: string;
   selectionMode?: ScenarioSelectionMode;
+  strictUnmatchedCandidate?: boolean;
   validateResolvedCandidate?: ScenarioProviderRouteValidator;
 }
 
@@ -591,6 +593,33 @@ export async function resolveVerificationModelScenario(
     requested.modelId,
   );
   if (!managed.managed) {
+    if (input.strictUnmatchedCandidate) {
+      const attempts: ScenarioAttemptRecord[] = [
+        {
+          providerId: requested.providerId,
+          modelId: requested.modelId,
+          status: 'rejected',
+          reason: `requested model "${input.requestedModelString}" is not managed by scenario profile "${profile.id}"`,
+        },
+      ];
+      const failureMetadata = createAuditMetadata({
+        profileId: profile.id,
+        taskBucket: input.taskBucket,
+        routeId: input.routeId,
+        selectedProviderId: null,
+        selectedModelId: null,
+        fallbackProviderId: null,
+        fallbackModelId: null,
+        validationStatus: 'failed_closed',
+        attempts,
+        requestedProviderId: requested.providerId,
+        requestedModelId: requested.modelId,
+      });
+      await appendScenarioAuditLog(input.auth, 'provider_scenario.route_denied', failureMetadata);
+      throw createScenarioResolutionError(
+        `Requested model "${input.requestedModelString}" is not managed by scenario profile "${profile.id}" for route "${input.routeId}".`,
+      );
+    }
     return null;
   }
 
@@ -776,6 +805,33 @@ export async function resolveScenarioManagedProviderRoute(
     requestedModelId,
   );
   if (!managed.managed) {
+    if (input.strictUnmatchedCandidate) {
+      const attempts: ScenarioAttemptRecord[] = [
+        {
+          providerId: requestedProviderId ?? 'unknown',
+          modelId: requestedModelId,
+          status: 'rejected',
+          reason: `requested provider "${requestedProviderId ?? 'unknown'}" is not managed by scenario profile "${profile.id}"`,
+        },
+      ];
+      const failureMetadata = createAuditMetadata({
+        profileId: profile.id,
+        taskBucket: input.taskBucket,
+        routeId: input.routeId,
+        selectedProviderId: null,
+        selectedModelId: null,
+        fallbackProviderId: null,
+        fallbackModelId: null,
+        validationStatus: 'failed_closed',
+        attempts,
+        requestedProviderId,
+        requestedModelId,
+      });
+      await appendScenarioAuditLog(input.auth, 'provider_scenario.route_denied', failureMetadata);
+      throw createScenarioResolutionError(
+        `Requested provider "${requestedProviderId ?? 'unknown'}" is not managed by scenario profile "${profile.id}" for route "${input.routeId}".`,
+      );
+    }
     return null;
   }
 
@@ -882,5 +938,6 @@ export async function resolveVerificationProviderScenario(input: {
     requestedSecret: input.requestedSecret,
     requestedBaseUrl: input.requestedBaseUrl,
     selectionMode: 'requested_provider',
+    strictUnmatchedCandidate: true,
   });
 }
