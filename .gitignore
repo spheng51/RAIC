@@ -73,8 +73,5 @@ next-env.d.ts
 /.codex-*.log
 /.codex-*.png
 
-# docs
-/docs
-
 run_next_err.txt
 run_next_out.txt

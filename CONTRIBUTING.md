@@ -24,7 +24,7 @@ The `spheng51/RAIC` fork does not currently expose GitHub Issues, Discussions, o
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 20.9.0
+- [Node.js](https://nodejs.org/) 24.x
 - [pnpm](https://pnpm.io/) (latest)
 - A copy of `.env.local` — see [`.env.example`](.env.example) for reference
 
