@@ -218,6 +218,49 @@ describe('POST /api/generate-classroom', () => {
     );
   });
 
+  it('accepts and forwards PDF-only historical-vlogger requests', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          pdfFileName: 'titanic-archive.pdf',
+          pdfContent: {
+            text: 'RMS Titanic archival timeline excerpt.',
+            images: [],
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(createClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        pdfFileName: 'titanic-archive.pdf',
+        pdfContent: {
+          text: 'RMS Titanic archival timeline excerpt.',
+          images: [],
+        },
+      }),
+      expect.any(Object),
+    );
+    expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        pdfFileName: 'titanic-archive.pdf',
+      }),
+      'http://localhost:3000',
+      expect.any(Object),
+    );
+  });
+
   it('accepts scheduled class metadata and strips client classroom ids', async () => {
     const { POST } = await import('@/app/api/generate-classroom/route');
     const response = await POST(

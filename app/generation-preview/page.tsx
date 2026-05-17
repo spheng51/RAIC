@@ -45,6 +45,7 @@ import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-g
 import { toast } from 'sonner';
 import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 import { experiencePresetRequiresSource } from '@/lib/generation/experience-presets';
+import { deriveClassroomSourceMode } from '@/lib/classroom/source-context';
 
 const log = createLogger('GenerationPreview');
 
@@ -562,6 +563,12 @@ function GenerationPreviewContent() {
         return;
       }
 
+      const hasHistoricalVlogPdfSource = Boolean(
+        currentSession.pdfText?.trim() ||
+        currentSession.pdfFileName ||
+        currentSession.pdfStorageKey,
+      );
+
       // Step: Web Search (if enabled)
       const webSearchStepIdx = activeSteps.findIndex((s) => s.id === 'web-search');
       if (currentSession.requirements.webSearch && webSearchStepIdx >= 0) {
@@ -584,31 +591,32 @@ function GenerationPreviewContent() {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({ error: 'Web search failed' }));
-          throw new Error(data.error || t('generation.webSearchFailed'));
+          if (
+            !experiencePresetRequiresSource(currentSession.requirements.experiencePreset) ||
+            !hasHistoricalVlogPdfSource
+          ) {
+            throw new Error(data.error || t('generation.webSearchFailed'));
+          }
+          log.warn('Web search failed; continuing History Vlog generation with PDF source context');
+        } else {
+          const searchData = await res.json();
+          const sources = (searchData.sources || []).map((s: { title: string; url: string }) => ({
+            title: s.title,
+            url: s.url,
+          }));
+          setWebSearchSources(sources);
+
+          const updatedSessionWithSearch = {
+            ...currentSession,
+            researchContext: searchData.context || '',
+            researchSources: sources,
+          };
+          updateGenerationSession(updatedSessionWithSearch);
+          currentSession = updatedSessionWithSearch;
+          activeSteps = getActiveSteps(currentSession);
         }
-
-        const searchData = await res.json();
-        const sources = (searchData.sources || []).map((s: { title: string; url: string }) => ({
-          title: s.title,
-          url: s.url,
-        }));
-        setWebSearchSources(sources);
-
-        const updatedSessionWithSearch = {
-          ...currentSession,
-          researchContext: searchData.context || '',
-          researchSources: sources,
-        };
-        updateGenerationSession(updatedSessionWithSearch);
-        currentSession = updatedSessionWithSearch;
-        activeSteps = getActiveSteps(currentSession);
       }
 
-      const hasHistoricalVlogPdfSource = Boolean(
-        currentSession.pdfText?.trim() ||
-        currentSession.pdfFileName ||
-        currentSession.pdfStorageKey,
-      );
       if (
         experiencePresetRequiresSource(currentSession.requirements.experiencePreset) &&
         !hasHistoricalVlogPdfSource &&
@@ -641,6 +649,10 @@ function GenerationPreviewContent() {
 
       // Create stage client-side (needed for agent generation stageId)
       const stageId = nanoid(10);
+      const pdfAttached = Boolean(
+        currentSession.pdfFileName || currentSession.pdfText || currentSession.pdfStorageKey,
+      );
+      const webContextAvailable = Boolean(currentSession.researchContext?.trim());
       const stage: Stage = {
         id: stageId,
         name: extractTopicFromRequirement(currentSession.requirements.requirement),
@@ -650,11 +662,13 @@ function GenerationPreviewContent() {
         style: 'professional',
         interactiveMode: currentSession.requirements.interactiveMode || undefined,
         sourceContext: {
-          pdfAttached: Boolean(
-            currentSession.pdfFileName || currentSession.pdfText || currentSession.pdfStorageKey,
-          ),
+          pdfAttached,
           ...(currentSession.pdfFileName ? { pdfName: currentSession.pdfFileName } : {}),
           tavilyEnabled: Boolean(currentSession.requirements.webSearch),
+          sourceMode: deriveClassroomSourceMode({
+            pdfAttached,
+            tavilyEnabled: webContextAvailable,
+          }),
           language: currentSession.requirements.language || 'zh-CN',
           selectedModel: getCurrentModelConfig().modelString,
           creationMode: currentSession.requirements.creationMode,

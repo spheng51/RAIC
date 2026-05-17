@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-05-17
+
+`v0.5.0` introduces Source-Grounded Experience Presets, starting with History Vlog, and hardens source visibility and source-backed generation guardrails.
+
+### Added
+
+- History Vlog course preset for fictional time-traveler/vlogger narration with source-backed fact checks, reconstruction labels, AI caveats, and normal slide/quiz/interactive scenes.
+- Lightweight classroom source visibility metadata and UI labels showing whether a generated classroom used PDF context, web search context, both, or neither.
+- Reusable experience preset registry for source requirements, prompt context, UI chip metadata, and validation copy.
+
+### Changed
+
+- History Vlog generation now fails clearly without source context while allowing PDF fallback when web search is unavailable.
+- Preset prompt wiring now reinforces no invented citations, humane treatment of historical trauma, media-literacy moments, and source-literacy quiz coverage.
+
+### Testing
+
+- Regression coverage now includes PDF-only History Vlog generation, web-search failure with PDF fallback, Game mode preset clearing, scene action media-literacy prompts, and no-invented-citation prompt assertions.
+
 ## [0.4.0] - 2026-05-17
 
 `v0.4.0` closes the Reliable Adaptive Learning Platform milestone by making adaptive classroom generation more governable, adding private teacher analytics, and preserving public/student API stability.

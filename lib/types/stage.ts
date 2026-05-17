@@ -14,6 +14,8 @@ export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
 export type StageMode = 'autonomous' | 'playback';
 
+export type ClassroomSourceMode = 'none' | 'pdf' | 'web' | 'pdf-web';
+
 export type Whiteboard = Omit<Slide, 'theme' | 'turningMode' | 'sectionTag' | 'type'>;
 export type PresentationSurface = 'lesson' | 'simulation' | 'report';
 export type SharedSimulationStatus = 'attached' | 'running' | 'completed' | 'error';
@@ -64,6 +66,7 @@ export interface ClassroomSourceContext {
   pdfAttached: boolean;
   pdfName?: string;
   tavilyEnabled: boolean;
+  sourceMode?: ClassroomSourceMode;
   language: string;
   selectedModel: string;
   creationMode?: 'course' | 'game-arcade';

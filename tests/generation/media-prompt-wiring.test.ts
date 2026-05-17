@@ -4,6 +4,8 @@ import { buildPrompt, processConditionalBlocks } from '@/lib/generation/prompts'
 import { PROMPT_IDS } from '@/lib/generation/prompts';
 import {
   buildExperiencePresetPromptContext,
+  getAvailableExperiencePresetDefinitions,
+  getExperiencePresetDefinition,
   HISTORICAL_VLOGGER_PRESET,
 } from '@/lib/generation/experience-presets';
 import {
@@ -126,7 +128,20 @@ describe('media prompt wiring', () => {
 
     expect(regularPrompt?.user).not.toContain('Historical Vlogger Experience Preset');
     expect(presetPrompt?.user).toContain('Historical Vlogger Experience Preset');
+    expect(presetPrompt?.user).toContain('Do not invent citations');
     expect(presetPrompt?.user).toContain('source-literacy question');
+  });
+
+  it('exposes reusable metadata for the historical-vlogger preset', () => {
+    const definition = getExperiencePresetDefinition(HISTORICAL_VLOGGER_PRESET);
+
+    expect(definition).toMatchObject({
+      id: HISTORICAL_VLOGGER_PRESET,
+      labelKey: 'toolbar.historyVlogPreset',
+      hintKey: 'toolbar.historyVlogPresetHint',
+      sourceRequirement: 'source-context',
+    });
+    expect(getAvailableExperiencePresetDefinitions()).toContain(definition);
   });
 
   it('processes simple conditional blocks before variable interpolation', () => {

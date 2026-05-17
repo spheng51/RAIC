@@ -402,6 +402,12 @@
       "pdfMissing": "未上传 PDF",
       "webAvailable": "可用网络搜索",
       "webDisabled": "未启用网络搜索",
+      "sourceMode": {
+        "none": "来源：无",
+        "pdf": "来源：PDF",
+        "web": "来源：网络",
+        "pdf-web": "来源：PDF + 网络"
+      },
       "languageLabel": "语言：{{language}}",
       "modelLabel": "模型：{{model}}",
       "stages": {

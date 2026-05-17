@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   Circle,
+  FileSearch,
   FileText,
   Languages,
   Search,
@@ -87,6 +88,10 @@ export function LessonFlowPanel({
           </div>
 
           <div className="flex flex-wrap gap-1.5 lg:justify-end">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
+              {t(`classroom.lesson.sourceMode.${source.sourceMode}`)}
+            </span>
             <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
               <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate">

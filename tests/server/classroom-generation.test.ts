@@ -14,6 +14,10 @@ const persistClassroomMock = vi.fn();
 const resolveModelMock = vi.fn();
 const buildAdaptiveGenerationContextMock = vi.fn();
 const formatAdaptiveContextForPromptMock = vi.fn();
+const resolveGovernedProviderConfigMock = vi.fn();
+const buildSearchQueryMock = vi.fn();
+const searchWithTavilyMock = vi.fn();
+const formatSearchResultsAsContextMock = vi.fn();
 
 vi.mock('@/lib/generation/outline-generator', () => ({
   applyOutlineFallbacks: <T>(outline: T) => outline,
@@ -43,6 +47,10 @@ vi.mock('@/lib/server/classroom-intelligence', () => ({
   formatAdaptiveContextForPrompt: formatAdaptiveContextForPromptMock,
 }));
 
+vi.mock('@/lib/server/ai-governance', () => ({
+  resolveGovernedProviderConfig: resolveGovernedProviderConfigMock,
+}));
+
 vi.mock('@/lib/ai/llm', () => ({
   callLLM: vi.fn(),
 }));
@@ -67,12 +75,12 @@ vi.mock('@/lib/orchestration/registry/store', () => ({
 }));
 
 vi.mock('@/lib/server/search-query-builder', () => ({
-  buildSearchQuery: vi.fn(),
+  buildSearchQuery: buildSearchQueryMock,
 }));
 
 vi.mock('@/lib/web-search/tavily', () => ({
-  formatSearchResultsAsContext: vi.fn(),
-  searchWithTavily: vi.fn(),
+  formatSearchResultsAsContext: formatSearchResultsAsContextMock,
+  searchWithTavily: searchWithTavilyMock,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -95,6 +103,10 @@ describe('generateClassroom', () => {
     resolveModelMock.mockReset();
     buildAdaptiveGenerationContextMock.mockReset();
     formatAdaptiveContextForPromptMock.mockReset();
+    resolveGovernedProviderConfigMock.mockReset();
+    buildSearchQueryMock.mockReset();
+    searchWithTavilyMock.mockReset();
+    formatSearchResultsAsContextMock.mockReset();
 
     resolveModelMock.mockResolvedValue({
       model: 'model-stub',
@@ -109,6 +121,23 @@ describe('generateClassroom', () => {
     });
     buildAdaptiveGenerationContextMock.mockResolvedValue(null);
     formatAdaptiveContextForPromptMock.mockReturnValue('');
+    resolveGovernedProviderConfigMock.mockResolvedValue({
+      apiKey: 'tavily-test-key',
+      baseUrl: 'https://tavily.example.test',
+    });
+    buildSearchQueryMock.mockResolvedValue({
+      query: 'Titanic archival timeline',
+      hasPdfContext: true,
+      rawRequirementLength: 48,
+      rewriteAttempted: true,
+      finalQueryLength: 25,
+    });
+    searchWithTavilyMock.mockResolvedValue({
+      sources: [{ title: 'Archive source', url: 'https://example.test/archive' }],
+    });
+    formatSearchResultsAsContextMock.mockReturnValue(
+      'Source: Archive source\nURL: https://example.test/archive',
+    );
 
     generateSceneOutlinesFromRequirementsMock.mockResolvedValue({
       success: true,
@@ -296,6 +325,72 @@ describe('generateClassroom', () => {
 
     expect(generateSceneOutlinesFromRequirementsMock).not.toHaveBeenCalled();
     expect(executeScenesWithPolicyMock).not.toHaveBeenCalled();
+  });
+
+  it('allows historical-vlogger generation with PDF source context only', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    const result = await generateClassroom(
+      {
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        pdfContent: {
+          text: 'RMS Titanic archival timeline excerpt.',
+          images: [],
+        },
+        pdfFileName: 'titanic-archive.pdf',
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(result.stage.sourceContext).toMatchObject({
+      pdfAttached: true,
+      pdfName: 'titanic-archive.pdf',
+      tavilyEnabled: false,
+      sourceMode: 'pdf',
+      experiencePreset: 'historical-vlogger',
+    });
+    expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
+    expect(searchWithTavilyMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to PDF source context when historical-vlogger web search fails', async () => {
+    searchWithTavilyMock.mockRejectedValueOnce(new Error('web search unavailable'));
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    const result = await generateClassroom(
+      {
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        enableWebSearch: true,
+        pdfContent: {
+          text: 'RMS Titanic archival timeline excerpt.',
+          images: [],
+        },
+        pdfFileName: 'titanic-archive.pdf',
+      },
+      {
+        baseUrl: 'http://localhost:3000',
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+      },
+    );
+
+    expect(buildSearchQueryMock).toHaveBeenCalled();
+    expect(searchWithTavilyMock).toHaveBeenCalled();
+    expect(formatSearchResultsAsContextMock).not.toHaveBeenCalled();
+    expect(result.stage.sourceContext).toMatchObject({
+      pdfAttached: true,
+      pdfName: 'titanic-archive.pdf',
+      tavilyEnabled: true,
+      sourceMode: 'pdf',
+      experiencePreset: 'historical-vlogger',
+    });
+    expect(generateSceneOutlinesFromRequirementsMock).toHaveBeenCalled();
   });
 
   it('passes teacher repeated-session adaptive context into outline and scene generation', async () => {

@@ -13,6 +13,7 @@ function buildLessonState(overrides: Partial<ClassroomLessonState> = {}): Classr
     sourceContext: {
       pdfAttached: false,
       tavilyEnabled: false,
+      sourceMode: 'none',
       language: 'en-US',
       selectedModel: 'google:gemini-2.5-flash-lite',
     },

@@ -402,6 +402,12 @@
       "pdfMissing": "No PDF",
       "webAvailable": "Web search available",
       "webDisabled": "Web search off",
+      "sourceMode": {
+        "none": "Sources: None",
+        "pdf": "Sources: PDF",
+        "web": "Sources: Web",
+        "pdf-web": "Sources: PDF + Web"
+      },
       "languageLabel": "Language: {{language}}",
       "modelLabel": "Model: {{model}}",
       "stages": {

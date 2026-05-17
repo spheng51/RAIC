@@ -32,6 +32,7 @@ import {
   experiencePresetRequiresSource,
   HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE,
 } from '@/lib/generation/experience-presets';
+import { deriveClassroomSourceMode } from '@/lib/classroom/source-context';
 import type {
   GenerationCompletionStatus,
   GenerationWarning,
@@ -315,6 +316,7 @@ export async function generateClassroom(
     gameCreativeBrief: input.gameCreativeBrief,
   };
   const pdfText = pdfContent?.text || undefined;
+  const pdfAttached = Boolean(pdfText || input.pdfFileName);
 
   // Resolve agents based on agentMode
   let agents: AgentInfo[];
@@ -398,7 +400,7 @@ export async function generateClassroom(
 
   if (
     experiencePresetRequiresSource(requirements.experiencePreset) &&
-    !pdfText &&
+    !pdfAttached &&
     !researchContext
   ) {
     throw new Error(HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE);
@@ -451,9 +453,13 @@ export async function generateClassroom(
     language: lang,
     style: 'interactive',
     sourceContext: {
-      pdfAttached: Boolean(pdfText || input.pdfFileName),
+      pdfAttached,
       ...(input.pdfFileName ? { pdfName: input.pdfFileName } : {}),
       tavilyEnabled: Boolean(input.enableWebSearch),
+      sourceMode: deriveClassroomSourceMode({
+        pdfAttached,
+        tavilyEnabled: Boolean(researchContext?.trim()),
+      }),
       language: lang,
       selectedModel: input.selectedModel || modelString,
       creationMode: input.creationMode,

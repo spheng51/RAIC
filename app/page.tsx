@@ -76,6 +76,7 @@ import { ScheduleClassesBox } from '@/components/schedule/schedule-classes-box';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import {
   experiencePresetRequiresSource,
+  getExperiencePresetDefinition,
   HISTORICAL_VLOGGER_PRESET,
 } from '@/lib/generation/experience-presets';
 import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
@@ -149,6 +150,8 @@ const GAME_TEMPLATE_ICONS: Record<GameTemplateId, typeof Gamepad2> = {
   'code-quest': Code2,
   'boss-review': Trophy,
 };
+
+const HISTORY_VLOG_PRESET_DEFINITION = getExperiencePresetDefinition(HISTORICAL_VLOGGER_PRESET);
 
 function parseServerTimestamp(value: string) {
   const timestamp = Date.parse(value);
@@ -1051,11 +1054,16 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                         )}
                       >
                         <Landmark className="size-3" />
-                        {t('toolbar.historyVlogPreset')}
+                        {t(HISTORY_VLOG_PRESET_DEFINITION?.labelKey ?? 'toolbar.historyVlogPreset')}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={8}>
-                      <div className="max-w-64 text-xs">{t('toolbar.historyVlogPresetHint')}</div>
+                      <div className="max-w-64 text-xs">
+                        {t(
+                          HISTORY_VLOG_PRESET_DEFINITION?.hintKey ??
+                            'toolbar.historyVlogPresetHint',
+                        )}
+                      </div>
                     </TooltipContent>
                   </Tooltip>
                 ) : null}

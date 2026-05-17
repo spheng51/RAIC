@@ -94,7 +94,7 @@ describe('GET /api/health', () => {
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.version).toBe('0.2.1');
+    expect(body.version).toBe('0.5.0');
     expect(body.capabilities).toEqual({
       webSearch: true,
       imageGeneration: true,
