@@ -9,6 +9,7 @@ export class HomePage {
   readonly deepInteractiveState: Locator;
   readonly courseModeButton: Locator;
   readonly gameModeButton: Locator;
+  readonly historyVlogPresetButton: Locator;
   readonly gameTemplateSelector: Locator;
   readonly generationLanguageToggle: Locator;
 
@@ -23,6 +24,7 @@ export class HomePage {
     this.deepInteractiveState = page.getByTestId('deep-interactive-state');
     this.courseModeButton = page.getByTestId('creation-mode-course');
     this.gameModeButton = page.getByTestId('creation-mode-game');
+    this.historyVlogPresetButton = page.getByTestId('experience-preset-history-vlog');
     this.gameTemplateSelector = page.getByTestId('game-template-selector');
     this.generationLanguageToggle = page.getByTestId('generation-language-toggle');
   }

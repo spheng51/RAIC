@@ -44,6 +44,7 @@ import {
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 import { toast } from 'sonner';
 import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
+import { experiencePresetRequiresSource } from '@/lib/generation/experience-presets';
 
 const log = createLogger('GenerationPreview');
 
@@ -259,6 +260,7 @@ function GenerationPreviewContent() {
         language: currentSession.requirements.language,
         enableWebSearch: !!currentSession.requirements.webSearch,
         interactiveMode: !!currentSession.requirements.interactiveMode,
+        experiencePreset: currentSession.requirements.experiencePreset,
         creationMode: currentSession.requirements.creationMode,
         gameTemplateId: currentSession.requirements.gameTemplateId,
         gameCreativeBrief: currentSession.requirements.gameCreativeBrief,
@@ -602,6 +604,19 @@ function GenerationPreviewContent() {
         activeSteps = getActiveSteps(currentSession);
       }
 
+      const hasHistoricalVlogPdfSource = Boolean(
+        currentSession.pdfText?.trim() ||
+        currentSession.pdfFileName ||
+        currentSession.pdfStorageKey,
+      );
+      if (
+        experiencePresetRequiresSource(currentSession.requirements.experiencePreset) &&
+        !hasHistoricalVlogPdfSource &&
+        !currentSession.researchContext?.trim()
+      ) {
+        throw new Error(t('generation.historyVlogSourceUnavailable'));
+      }
+
       // Load imageMapping early (needed for both outline and scene generation)
       let imageMapping: ImageMapping = {};
       if (currentSession.imageStorageIds && currentSession.imageStorageIds.length > 0) {
@@ -644,6 +659,7 @@ function GenerationPreviewContent() {
           selectedModel: getCurrentModelConfig().modelString,
           creationMode: currentSession.requirements.creationMode,
           gameTemplateId: currentSession.requirements.gameTemplateId,
+          experiencePreset: currentSession.requirements.experiencePreset,
         },
         createdAt: Date.now(),
         updatedAt: Date.now(),

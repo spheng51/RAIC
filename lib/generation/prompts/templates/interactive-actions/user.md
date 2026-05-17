@@ -6,6 +6,10 @@ Key Points: {{keyPoints}}
 {{courseContext}}
 {{agents}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ## Language Directive
 
 {{languageDirective}}

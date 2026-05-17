@@ -6,6 +6,10 @@ Description: {{description}}
 {{agents}}
 {{userProfile}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ## Language Directive
 
 {{languageDirective}}

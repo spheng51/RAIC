@@ -49,6 +49,8 @@
     "interactiveModeOn": "Вкл",
     "interactiveModeOff": "Выкл",
     "interactiveModeHint": "Создавать интерактивные занятия с виджетами",
+    "historyVlogPreset": "History Vlog",
+    "historyVlogPresetHint": "Формат влогера-путешественника во времени с фактчекингом по источникам. Требуется веб-поиск или PDF.",
     "courseMode": "Курс",
     "gameMode": "Игра",
     "gameTemplateLabel": "Шаблон игры",
@@ -533,6 +535,7 @@
     "requirementPlaceholder": "Расскажите, что вы хотите изучить, например:\n\"Научи меня Python с нуля за 30 минут\"\n\"Объясни преобразование Фурье на доске\"\n\"Как играть в настольную игру Авалон\"",
     "gameRequirementPlaceholder": "Опишите учебную игру, например:\n\"Преврати орбитальную механику в физический челлендж\"\n\"Сделай пазл по клеточному дыханию\"",
     "requirementRequired": "Пожалуйста, укажите требования к курсу",
+    "historyVlogSourceRequired": "Для History Vlog нужен настроенный веб-поиск или загруженный PDF/документ-источник.",
     "fileTooLarge": "Файл слишком большой. Выберите PDF до 50 МБ"
   },
   "generation": {
@@ -577,7 +580,8 @@
     "outlineGenerateFailed": "Ошибка генерации структуры, попробуйте позже",
     "webSearching": "Поиск в интернете",
     "webSearchingDesc": "Поиск актуальной информации в сети",
-    "webSearchFailed": "Ошибка веб-поиска"
+    "webSearchFailed": "Ошибка веб-поиска",
+    "historyVlogSourceUnavailable": "Для History Vlog нужен доступный контекст источников. Включите рабочий веб-поиск или загрузите PDF/документ-источник перед генерацией."
   },
   "settings": {
     "title": "Настройки",

@@ -38,6 +38,10 @@ Return a clear `languageDirective` that downstream scene, quiz, and narration pr
 {{adaptivePrompt}}
 {{/if}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ---
 
 ## Output Requirements

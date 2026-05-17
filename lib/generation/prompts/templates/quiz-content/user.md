@@ -3,6 +3,10 @@ Description: {{description}}
 Test Points: {{keyPoints}}
 Question Count: {{questionCount}}, Difficulty: {{difficulty}}, Question Types: {{questionTypes}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ## Language Directive
 
 {{languageDirective}}

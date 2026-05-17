@@ -14,6 +14,10 @@ import {
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
 import { normalizeScheduledClassInput } from '@/lib/utils/scheduled-classes';
+import {
+  experiencePresetRequiresSource,
+  HISTORY_VLOG_SOURCE_REQUIRED_MESSAGE,
+} from '@/lib/generation/experience-presets';
 import type { ScheduledClassGenerationInput } from '@/lib/types/scheduled-classes';
 
 const log = createLogger('GenerateClassroom API');
@@ -97,6 +101,9 @@ export async function POST(req: NextRequest) {
       ...(rawBody.creationMode ? { creationMode: rawBody.creationMode } : {}),
       ...(rawBody.gameTemplateId ? { gameTemplateId: rawBody.gameTemplateId } : {}),
       ...(rawBody.gameCreativeBrief ? { gameCreativeBrief: rawBody.gameCreativeBrief } : {}),
+      ...(rawBody.creationMode !== 'game-arcade' && rawBody.experiencePreset
+        ? { experiencePreset: rawBody.experiencePreset }
+        : {}),
       ...(rawBody.selectedModel?.trim() ? { selectedModel: rawBody.selectedModel.trim() } : {}),
       ...(rawBody.enableImageGeneration != null
         ? { enableImageGeneration: rawBody.enableImageGeneration }
@@ -132,6 +139,20 @@ export async function POST(req: NextRequest) {
         'MISSING_REQUIRED_FIELD',
         400,
         'Missing required field: requirement',
+      );
+    }
+
+    const hasPdfSource = Boolean(rawBody.pdfFileName?.trim() || rawBody.pdfContent?.text?.trim());
+    if (
+      experiencePresetRequiresSource(body.experiencePreset) &&
+      !body.enableWebSearch &&
+      !hasPdfSource
+    ) {
+      return apiErrorWithRequestSession(
+        req,
+        'INVALID_REQUEST',
+        400,
+        HISTORY_VLOG_SOURCE_REQUIRED_MESSAGE,
       );
     }
 

@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildPrompt, processConditionalBlocks } from '@/lib/generation/prompts';
 import { PROMPT_IDS } from '@/lib/generation/prompts';
 import {
+  buildExperiencePresetPromptContext,
+  HISTORICAL_VLOGGER_PRESET,
+} from '@/lib/generation/experience-presets';
+import {
   noAdaptivePromptExpectation,
   repeatedSessionPromptExpectation,
   scorePromptReplay,
@@ -97,6 +101,32 @@ describe('media prompt wiring', () => {
       missing: [],
       unexpected: [],
     });
+  });
+
+  it('injects historical-vlogger context only when the preset is selected', () => {
+    const baseVariables = {
+      requirement: 'Teach the sinking of the Titanic',
+      language: 'en-US',
+      pdfContent: 'None',
+      availableImages: 'No images available',
+      userProfile: '',
+      hasSourceImages: false,
+      imageEnabled: false,
+      videoEnabled: false,
+      mediaEnabled: false,
+      researchContext: 'Source: Encyclopedia entry about RMS Titanic',
+      teacherContext: '',
+      adaptivePrompt: '',
+    };
+    const regularPrompt = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, baseVariables);
+    const presetPrompt = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
+      ...baseVariables,
+      experiencePresetContext: buildExperiencePresetPromptContext(HISTORICAL_VLOGGER_PRESET),
+    });
+
+    expect(regularPrompt?.user).not.toContain('Historical Vlogger Experience Preset');
+    expect(presetPrompt?.user).toContain('Historical Vlogger Experience Preset');
+    expect(presetPrompt?.user).toContain('source-literacy question');
   });
 
   it('processes simple conditional blocks before variable interpolation', () => {

@@ -28,6 +28,10 @@ import {
   replaceMediaPlaceholders,
   generateTTSForClassroom,
 } from '@/lib/server/classroom-media-generation';
+import {
+  experiencePresetRequiresSource,
+  HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE,
+} from '@/lib/generation/experience-presets';
 import type {
   GenerationCompletionStatus,
   GenerationWarning,
@@ -56,6 +60,7 @@ export interface GenerateClassroomInput {
   language?: string;
   enableWebSearch?: boolean;
   interactiveMode?: boolean;
+  experiencePreset?: UserRequirements['experiencePreset'];
   creationMode?: UserRequirements['creationMode'];
   gameTemplateId?: UserRequirements['gameTemplateId'];
   gameCreativeBrief?: string;
@@ -303,6 +308,8 @@ export async function generateClassroom(
     requirement,
     language: lang,
     interactiveMode: input.interactiveMode || undefined,
+    experiencePreset:
+      input.creationMode === 'game-arcade' ? undefined : input.experiencePreset || undefined,
     creationMode: input.creationMode,
     gameTemplateId: input.gameTemplateId,
     gameCreativeBrief: input.gameCreativeBrief,
@@ -389,6 +396,14 @@ export async function generateClassroom(
     }
   }
 
+  if (
+    experiencePresetRequiresSource(requirements.experiencePreset) &&
+    !pdfText &&
+    !researchContext
+  ) {
+    throw new Error(HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE);
+  }
+
   await options.onProgress?.({
     step: 'generating_outlines',
     progress: 15,
@@ -443,6 +458,7 @@ export async function generateClassroom(
       selectedModel: input.selectedModel || modelString,
       creationMode: input.creationMode,
       gameTemplateId: input.gameTemplateId,
+      experiencePreset: requirements.experiencePreset,
     },
     languageDirective,
     interactiveMode: input.interactiveMode || undefined,

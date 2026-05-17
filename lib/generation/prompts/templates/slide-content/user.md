@@ -9,6 +9,10 @@
 
 {{teacherContext}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ## Available Resources
 
 {{#if mediaElementEnabled}}

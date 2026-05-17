@@ -277,6 +277,27 @@ describe('generateClassroom', () => {
     );
   });
 
+  it('stops historical-vlogger generation when no source context is available', async () => {
+    const { generateClassroom } = await import('@/lib/server/classroom-generation');
+
+    await expect(
+      generateClassroom(
+        {
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+        },
+        {
+          baseUrl: 'http://localhost:3000',
+          organizationId: 'org-1',
+          userId: 'teacher-1',
+        },
+      ),
+    ).rejects.toThrow('History Vlog needs usable source context');
+
+    expect(generateSceneOutlinesFromRequirementsMock).not.toHaveBeenCalled();
+    expect(executeScenesWithPolicyMock).not.toHaveBeenCalled();
+  });
+
   it('passes teacher repeated-session adaptive context into outline and scene generation', async () => {
     const adaptivePrompt =
       '## Adaptive Session Context\n' +

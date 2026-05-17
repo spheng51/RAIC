@@ -19,6 +19,7 @@ import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline
 import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
 import { buildCourseLanguageDirective } from './language-directive';
 export { DEFAULT_LANGUAGE_DIRECTIVE, buildCourseLanguageDirective } from './language-directive';
+import { buildExperiencePresetPromptContext } from './experience-presets';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -32,6 +33,7 @@ export function enrichGeneratedOutline(
     id: outline.id || nanoid(),
     order: index + 1,
     language: requirements.language,
+    ...(requirements.experiencePreset ? { experiencePreset: requirements.experiencePreset } : {}),
   };
 
   if (requirements.creationMode !== 'game-arcade' || enriched.type !== 'interactive') {
@@ -153,6 +155,7 @@ export async function generateSceneOutlinesFromRequirements(
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
     adaptivePrompt: options?.adaptivePrompt || '',
+    experiencePresetContext: buildExperiencePresetPromptContext(requirements.experiencePreset),
     languageDirective,
     gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
     gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,

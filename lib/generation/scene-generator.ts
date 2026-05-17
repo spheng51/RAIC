@@ -61,6 +61,7 @@ import { executeScenesWithPolicy } from './scene-executor';
 import { promptGameWidgetAdapter } from '@/lib/game-arcade/adapter';
 import { buildFallbackGameWidget } from '@/lib/game-arcade/fallback';
 import { validateGameWidgetHtml } from '@/lib/game-arcade/qa';
+import { buildExperiencePresetPromptContext } from './experience-presets';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -988,6 +989,7 @@ async function generateSlideContent(
   const canvasHeight = 562.5;
 
   const teacherContext = formatTeacherPersonaForPrompt(agents);
+  const experiencePresetContext = buildExperiencePresetPromptContext(outline.experiencePreset);
 
   const prompts = buildPrompt(PROMPT_IDS.SLIDE_CONTENT, {
     title: outline.title,
@@ -998,6 +1000,7 @@ async function generateSlideContent(
     canvas_width: canvasWidth,
     canvas_height: canvasHeight,
     teacherContext,
+    experiencePresetContext,
     languageDirective: languageDirective || '',
     imageElementEnabled,
     generatedImageEnabled,
@@ -1073,6 +1076,7 @@ async function generateQuizContent(
     questionCount: quizConfig.questionCount,
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
+    experiencePresetContext: buildExperiencePresetPromptContext(outline.experiencePreset),
     languageDirective: languageDirective || '',
   });
 
@@ -1434,6 +1438,7 @@ async function generateInteractiveContent(
     keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
     scientificConstraints,
     designIdea: config.designIdea,
+    experiencePresetContext: buildExperiencePresetPromptContext(outline.experiencePreset),
     language: languageDirective ? `${language}\n${languageDirective}` : language,
   });
 
@@ -1604,6 +1609,7 @@ export async function generateSceneActions(
       courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
       userProfile: options.userProfile || '',
+      experiencePresetContext: buildExperiencePresetPromptContext(outline.experiencePreset),
       languageDirective: langText,
     });
 
@@ -1636,6 +1642,7 @@ export async function generateSceneActions(
       questions: questionsText,
       courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
+      experiencePresetContext: buildExperiencePresetPromptContext(outline.experiencePreset),
       languageDirective: langText,
     });
 
@@ -1667,6 +1674,7 @@ export async function generateSceneActions(
       designIdea: config?.designIdea || '',
       courseContext: buildCourseContext(options.ctx),
       agents: agentsText,
+      experiencePresetContext: buildExperiencePresetPromptContext(outline.experiencePreset),
       languageDirective: langText,
     });
 

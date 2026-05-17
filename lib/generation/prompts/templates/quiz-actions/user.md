@@ -5,6 +5,10 @@ Description: {{description}}
 {{courseContext}}
 {{agents}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ## Language Directive
 
 {{languageDirective}}

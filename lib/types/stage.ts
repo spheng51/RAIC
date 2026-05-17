@@ -3,6 +3,7 @@ import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
 import type {
+  ExperiencePreset,
   GameTemplateId,
   GenerationCompletionStatus,
   GenerationWarning,
@@ -67,6 +68,7 @@ export interface ClassroomSourceContext {
   selectedModel: string;
   creationMode?: 'course' | 'game-arcade';
   gameTemplateId?: GameTemplateId;
+  experiencePreset?: ExperiencePreset;
 }
 
 /**
