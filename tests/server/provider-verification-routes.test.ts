@@ -214,7 +214,23 @@ describe('provider and verification routes', () => {
       providerId: 'openai',
       apiKey: 'server-key',
     });
-    toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
+    toGovernedProviderApiErrorResponseMock.mockImplementation((error) =>
+      error instanceof MockGovernedProviderResolutionError
+        ? new Response(
+            JSON.stringify({
+              success: false,
+              errorCode: error.apiErrorCode,
+              error: error.message,
+            }),
+            {
+              status: error.status,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            },
+          )
+        : null,
+    );
     validateUrlForSSRFMock.mockResolvedValue(null);
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -516,13 +532,7 @@ describe('provider and verification routes', () => {
 
   it('verifies LM Studio models without requiring an API key', async () => {
     generateTextMock.mockResolvedValue({ text: 'OK' });
-    getProviderScenarioProfileMock.mockReturnValue({
-      id: 'teacher-differentiation-v1',
-      description: 'Scenario-managed verification.',
-      buckets: {
-        scene: [{ providerId: 'openai', modelId: 'gpt-4o' }],
-      },
-    });
+    getProviderScenarioProfileMock.mockReturnValue(null);
 
     const { POST } = await import('@/app/api/verify-model/route');
     const response = await POST(
@@ -550,6 +560,51 @@ describe('provider and verification routes', () => {
       response: 'OK',
     });
     expect(appendAuditLogMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when model verification requests a model outside the managed scene scenario', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        scene: [{ providerId: 'openai', modelId: 'gpt-4o' }],
+      },
+    });
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'lmstudio:qwen3.5-4b',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(resolveModelMock).not.toHaveBeenCalled();
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'verify-model',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'scene',
+          routeId: 'verify-model',
+          selectedProviderId: null,
+          selectedModelId: null,
+          fallbackReason: expect.stringContaining('lmstudio:qwen3.5-4b'),
+          validationStatus: 'failed_closed',
+          requestedProviderId: 'lmstudio',
+          requestedModelId: 'qwen3.5-4b',
+        }),
+      }),
+    );
   });
 
   it('includes the tested model id in verification failures', async () => {
@@ -809,6 +864,49 @@ describe('provider and verification routes', () => {
       success: true,
       message: 'Connection successful',
     });
+  });
+
+  it('fails closed when image verification requests a provider outside the managed scenario', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        image: [{ providerId: 'seedream', modelId: 'doubao-seedream-5-0-260128' }],
+      },
+    });
+
+    const { POST } = await import('@/app/api/verify-image-provider/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-image-provider', {
+        method: 'POST',
+        headers: {
+          'x-image-provider': 'qwen-image',
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(resolveGovernedProviderConfigMock).not.toHaveBeenCalled();
+    expect(testImageConnectivityMock).not.toHaveBeenCalled();
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'verify-image-provider',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'image',
+          routeId: 'verify-image-provider',
+          selectedProviderId: null,
+          selectedModelId: null,
+          fallbackReason: expect.stringContaining('qwen-image'),
+          validationStatus: 'failed_closed',
+          requestedProviderId: 'qwen-image',
+        }),
+      }),
+    );
   });
 
   it('fails closed for scenario-managed video verification when no validated candidate remains', async () => {
