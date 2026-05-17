@@ -3,6 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MiroFishPane } from '@/components/mirofish/mirofish-pane';
 
 interface MountedComponent<TProps> {
   readonly container: HTMLDivElement;
@@ -34,7 +35,6 @@ const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 async function mountMiroFishPane(
   initialOverrides: Partial<MiroFishPaneTestProps> = {},
 ): Promise<MountedComponent<MiroFishPaneTestProps>> {
-  const { MiroFishPane } = await import('@/components/mirofish/mirofish-pane');
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
