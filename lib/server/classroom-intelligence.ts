@@ -18,8 +18,10 @@ import {
   type AdaptivePacingPreference,
   type BenchmarkArtifactStatus,
   type BenchmarkMetricResult,
+  type ClassroomLearningAnalytics,
   type ClassroomRevisitIntent,
   CLASSROOM_REVISIT_INTENTS,
+  type LearningQualityBand,
 } from '@/lib/types/classroom-intelligence';
 import { writeJsonFileAtomic } from '@/lib/server/classroom-storage';
 import { getDataPath } from '@/lib/server/data-root';
@@ -859,6 +861,151 @@ export async function buildAdaptiveRuntimeContext(input: {
       }),
     reflectionSummary,
     confidenceScore,
+  };
+}
+
+function averageConfidenceScore(records: Array<{ confidenceScore: number | null }>): number | null {
+  const scores = records
+    .map((record) => clampConfidenceScore(record.confidenceScore))
+    .filter((score): score is number => score !== null);
+  if (scores.length === 0) {
+    return null;
+  }
+
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return Math.round((total / scores.length) * 10) / 10;
+}
+
+function countReflectionRevisitIntents(reflections: ClassroomReflectionRecord[]) {
+  const counts = Object.fromEntries(
+    CLASSROOM_REVISIT_INTENTS.map((intent) => [intent, 0]),
+  ) as Record<ClassroomRevisitIntent, number>;
+
+  for (const reflection of reflections) {
+    counts[reflection.revisitIntent] += 1;
+  }
+
+  return counts;
+}
+
+function rankChallengingAreas(reflections: ClassroomReflectionRecord[]) {
+  const counts = new Map<string, { label: string; count: number }>();
+
+  for (const area of reflections.flatMap((reflection) => reflection.challengingAreas)) {
+    const key = area.toLowerCase();
+    const existing = counts.get(key);
+    counts.set(key, {
+      label: existing?.label ?? area,
+      count: (existing?.count ?? 0) + 1,
+    });
+  }
+
+  return [...counts.values()]
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .map((entry) => entry.label)
+    .slice(0, 5);
+}
+
+function deriveLearningQualityBand(input: {
+  completionRatio: number | null;
+  averageConfidenceScore: number | null;
+  revisitIntentCounts: Record<ClassroomRevisitIntent, number>;
+  pacingPreference: AdaptivePacingPreference;
+}): LearningQualityBand {
+  if (
+    input.pacingPreference === 'remediate' ||
+    input.revisitIntentCounts.remediate > 0 ||
+    (input.averageConfidenceScore !== null && input.averageConfidenceScore <= 2)
+  ) {
+    return 'watch';
+  }
+
+  if (
+    input.completionRatio !== null &&
+    input.completionRatio >= 0.8 &&
+    input.averageConfidenceScore !== null &&
+    input.averageConfidenceScore >= 4
+  ) {
+    return 'strong';
+  }
+
+  if (input.completionRatio !== null && input.completionRatio > 0) {
+    return 'steady';
+  }
+
+  return 'limited';
+}
+
+export async function buildClassroomLearningAnalytics(input: {
+  classroomId: string;
+  userId?: string | null;
+}): Promise<ClassroomLearningAnalytics | null> {
+  if (!input.userId) {
+    return null;
+  }
+
+  const [context, reflections] = await Promise.all([
+    getClassroomSessionContext({
+      classroomId: input.classroomId,
+      userId: input.userId,
+    }),
+    listClassroomReflections({
+      classroomId: input.classroomId,
+      userId: input.userId,
+      limit: 20,
+    }),
+  ]);
+
+  if (!context && reflections.length === 0) {
+    return null;
+  }
+
+  const completedSceneCount = context?.completedSceneCount ?? 0;
+  const totalSceneCount = context?.totalSceneCount ?? 0;
+  const completionRatio =
+    totalSceneCount > 0 ? Math.round((completedSceneCount / totalSceneCount) * 100) / 100 : null;
+  const averageConfidence = averageConfidenceScore(
+    reflections.length > 0 ? reflections : context ? [context] : [],
+  );
+  const revisitIntentCounts = countReflectionRevisitIntents(reflections);
+  const topChallengingAreas = rankChallengingAreas(reflections);
+  const suggestedFocus = dedupeStrings([
+    ...topChallengingAreas,
+    ...(context?.masteryHints ?? []),
+  ]).slice(0, 5);
+  const pacingPreference = context?.pacingPreference ?? 'adaptive';
+  const qualityBand = deriveLearningQualityBand({
+    completionRatio,
+    averageConfidenceScore: averageConfidence,
+    revisitIntentCounts,
+    pacingPreference,
+  });
+
+  return {
+    classroomId: input.classroomId,
+    generatedAt: new Date().toISOString(),
+    source: 'teacher-internal',
+    progress: {
+      completedSceneCount,
+      totalSceneCount,
+      completionRatio,
+      pacingPreference,
+    },
+    reflections: {
+      count: reflections.length,
+      averageConfidenceScore: averageConfidence,
+      revisitIntentCounts,
+      topChallengingAreas,
+    },
+    qualitySignals: {
+      qualityBand,
+      needsAttention: qualityBand === 'watch',
+      suggestedFocus,
+    },
+    retention: {
+      derivedOnly: true,
+      sourceRecords: ['classroom_session_contexts', 'classroom_reflections'],
+    },
   };
 }
 

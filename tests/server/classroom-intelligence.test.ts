@@ -211,6 +211,97 @@ describe('classroom intelligence persistence', () => {
     expect(adaptiveContext).toBeNull();
   });
 
+  it('builds private aggregate learning analytics from teacher context and reflections', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    const {
+      buildClassroomLearningAnalytics,
+      createClassroomReflection,
+      upsertClassroomSessionContext,
+    } = await import('@/lib/server/classroom-intelligence');
+
+    await upsertClassroomSessionContext({
+      classroomId: 'class-analytics',
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      stageName: 'Orbital Mechanics',
+      language: 'en-US',
+      lastCompletedSceneId: 'scene-4',
+      lastCompletedSceneTitle: 'Transfer Windows',
+      completedSceneCount: 4,
+      totalSceneCount: 5,
+      masteryHints: ['burn timing'],
+      revisitIntent: 'revisit',
+    });
+
+    await createClassroomReflection({
+      classroomId: 'class-analytics',
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      summary: 'Students need a slower bridge into transfer windows.',
+      challengingAreas: ['transfer windows', 'burn timing'],
+      confidenceScore: 2,
+      revisitIntent: 'remediate',
+    });
+    await createClassroomReflection({
+      classroomId: 'class-analytics',
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      summary: 'They recovered after the guided practice.',
+      challengingAreas: ['transfer windows'],
+      confidenceScore: 4,
+      revisitIntent: 'continue',
+    });
+
+    const analytics = await buildClassroomLearningAnalytics({
+      classroomId: 'class-analytics',
+      userId: 'teacher-1',
+    });
+
+    expect(analytics).toMatchObject({
+      classroomId: 'class-analytics',
+      source: 'teacher-internal',
+      progress: {
+        completedSceneCount: 4,
+        totalSceneCount: 5,
+        completionRatio: 0.8,
+        pacingPreference: 'accelerate',
+      },
+      reflections: {
+        count: 2,
+        averageConfidenceScore: 3,
+        revisitIntentCounts: {
+          continue: 1,
+          revisit: 0,
+          remediate: 1,
+          deepen: 0,
+        },
+        topChallengingAreas: ['transfer windows', 'burn timing'],
+      },
+      qualitySignals: {
+        qualityBand: 'watch',
+        needsAttention: true,
+        suggestedFocus: ['transfer windows', 'burn timing'],
+      },
+      retention: {
+        derivedOnly: true,
+        sourceRecords: ['classroom_session_contexts', 'classroom_reflections'],
+      },
+    });
+    expect(analytics?.generatedAt).toEqual(expect.any(String));
+  });
+
+  it('keeps learning analytics off when no authenticated teacher user is present', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    const { buildClassroomLearningAnalytics } = await import('@/lib/server/classroom-intelligence');
+
+    await expect(
+      buildClassroomLearningAnalytics({
+        classroomId: 'class-analytics',
+        userId: null,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it('formats deterministic adaptive replay markers for Slice C scoring', async () => {
     const { formatAdaptiveContextForPrompt } = await import('@/lib/server/classroom-intelligence');
 
