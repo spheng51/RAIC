@@ -671,10 +671,12 @@ export default function ClassroomDetailPage() {
       fromSceneId,
       toSceneId,
       reason,
+      isCourseCompletion,
     }: {
       fromSceneId: string | null;
       toSceneId: string;
       reason: 'manual' | 'auto' | 'pending';
+      isCourseCompletion?: boolean;
     }) => {
       if (reason !== 'manual' || classroomSource !== 'teacher-server') {
         return;
@@ -687,6 +689,7 @@ export default function ClassroomDetailPage() {
         fromSceneId,
         toSceneId,
         reason,
+        isCourseCompletion,
       });
 
       if (!nextState.shouldPost) {

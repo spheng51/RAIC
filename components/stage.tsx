@@ -171,6 +171,7 @@ export function Stage({
     fromSceneId: string | null;
     toSceneId: string;
     reason: 'manual' | 'auto' | 'pending';
+    isCourseCompletion?: boolean;
   }) => void;
   onOpenClassroomShare?: () => void;
   onMakeShareable?: () => void;
@@ -1477,11 +1478,16 @@ export function Stage({
 
   const isTopicActive = playbackView.isTopicActive;
   const commitSceneSelection = useCallback(
-    (targetSceneId: string, reason: 'manual' | 'auto' | 'pending') => {
+    (
+      targetSceneId: string,
+      reason: 'manual' | 'auto' | 'pending',
+      options: { isCourseCompletion?: boolean } = {},
+    ) => {
       onSceneSelected?.({
         fromSceneId: currentSceneId,
         toSceneId: targetSceneId,
         reason,
+        isCourseCompletion: options.isCourseCompletion,
       });
       setCurrentSceneId(targetSceneId);
     },
@@ -1582,9 +1588,12 @@ export function Stage({
     const currentIndex = scenes.findIndex((s) => s.id === currentSceneId);
     if (currentIndex < scenes.length - 1) {
       gatedSceneSwitch(scenes[currentIndex + 1].id);
-    } else if (hasNextPending || isCourseComplete) {
-      // On last real scene -> advance to pending/completion page
+    } else if (hasNextPending) {
+      // On last generated scene -> wait for pending scenes.
       commitSceneSelection(PENDING_SCENE_ID, 'pending');
+    } else if (isCourseComplete) {
+      // On last real scene -> advance to the completion page.
+      commitSceneSelection(PENDING_SCENE_ID, 'manual', { isCourseCompletion: true });
     }
   }, [
     commitSceneSelection,
