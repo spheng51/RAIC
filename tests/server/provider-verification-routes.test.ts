@@ -660,6 +660,43 @@ describe('provider and verification routes', () => {
     );
   });
 
+  it('keeps legacy local-key verification best-effort outside managed scene scenarios', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed verification.',
+      buckets: {
+        scene: [{ providerId: 'openai', modelId: 'gpt-4o' }],
+      },
+    });
+    generateTextMock.mockResolvedValue({ text: 'OK' });
+
+    const { POST } = await import('@/app/api/verify-model/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/verify-model', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'openai:gpt-5.4-mini',
+          apiKey: 'legacy-secret',
+          baseUrl: 'http://127.0.0.1:4020/v1',
+          providerType: 'openai',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(resolveModelMock).toHaveBeenCalledWith({
+      modelString: 'openai:gpt-5.4-mini',
+      apiKey: 'legacy-secret',
+      baseUrl: 'http://127.0.0.1:4020/v1',
+      providerType: 'openai',
+      auth: authContext,
+    });
+    expect(generateTextMock).toHaveBeenCalled();
+    expect(appendAuditLogMock).not.toHaveBeenCalled();
+  });
+
   it('includes the tested model id in verification failures', async () => {
     resolveModelMock.mockResolvedValue({
       model: 'resolved-model',

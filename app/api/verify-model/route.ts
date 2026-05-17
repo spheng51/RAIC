@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     testedModel = model;
     requestedBaseUrl = baseUrl || undefined;
     const auth = await getRequestAuth(req);
+    const usesLegacyLocalConfig = Boolean(apiKey || baseUrl);
 
     if (!model) {
       return apiErrorWithRequestSession(
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
           apiKey: apiKey || '',
           baseUrl: baseUrl || undefined,
           providerType,
-          strictUnmatchedCandidate: true,
+          strictUnmatchedCandidate: !usesLegacyLocalConfig,
         })) ||
         (await resolveModel({
           modelString: model,
