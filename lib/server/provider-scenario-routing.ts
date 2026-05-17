@@ -41,6 +41,10 @@ export type ScenarioRouteId =
 type ScenarioManagedFamily = 'asr' | 'image' | 'tts' | 'video' | 'webSearch';
 type ScenarioSelectionMode = 'authoritative' | 'requested_provider';
 type ScenarioValidationStatus = 'selected' | 'fallback_selected' | 'failed_closed';
+type SceneGenerationScenarioRouteId = Extract<
+  ScenarioRouteId,
+  'scene-outlines-stream' | 'scene-content' | 'scene-actions'
+>;
 
 interface ScenarioAttemptRecord {
   providerId: string;
@@ -91,6 +95,15 @@ interface ResolveVerificationModelScenarioInput {
   routeId: VerificationScenarioRouteId;
   taskBucket: ProviderScenarioTaskBucket;
   requestedModelString: string;
+  apiKey?: string;
+  baseUrl?: string;
+  providerType?: ProviderType;
+}
+
+interface ResolveSceneGenerationScenarioInput {
+  auth: AuthContext | null;
+  routeId: SceneGenerationScenarioRouteId;
+  requestedModelString?: string;
   apiKey?: string;
   baseUrl?: string;
   providerType?: ProviderType;
@@ -372,6 +385,7 @@ function validateResolvedProviderCandidate(
 function getSceneCapabilityValidationError(
   result: ResolvedModel,
   expectedModelString: string,
+  routeId: ScenarioRouteId,
 ): string | null {
   if (result.modelString !== expectedModelString) {
     return `resolved model "${result.modelString}" does not match scenario candidate "${expectedModelString}"`;
@@ -385,7 +399,11 @@ function getSceneCapabilityValidationError(
     return `resolved model "${expectedModelString}" lacks streaming capability`;
   }
 
-  if (!result.modelInfo.capabilities?.tools) {
+  if (!result.modelInfo.outputWindow || result.modelInfo.outputWindow <= 0) {
+    return `resolved model "${expectedModelString}" is missing an output window`;
+  }
+
+  if (routeId === 'verify-model' && !result.modelInfo.capabilities?.tools) {
     return `resolved model "${expectedModelString}" lacks tool capability`;
   }
 
@@ -394,6 +412,7 @@ function getSceneCapabilityValidationError(
 
 async function tryResolveScenarioModelCandidate(input: {
   auth: AuthContext | null;
+  routeId: ScenarioRouteId;
   candidate: ProviderScenarioCandidate;
   apiKey?: string;
   baseUrl?: string;
@@ -430,7 +449,7 @@ async function tryResolveScenarioModelCandidate(input: {
       providerType: input.providerType,
       auth: input.auth,
     });
-    const validationError = getSceneCapabilityValidationError(resolved, modelString);
+    const validationError = getSceneCapabilityValidationError(resolved, modelString, input.routeId);
     if (validationError) {
       return {
         ok: false,
@@ -582,6 +601,7 @@ export async function resolveVerificationModelScenario(
     const candidate = managed.candidates[index];
     const attempt = await tryResolveScenarioModelCandidate({
       auth: input.auth,
+      routeId: input.routeId,
       candidate,
       apiKey: input.apiKey,
       baseUrl: input.baseUrl,
@@ -643,6 +663,94 @@ export async function resolveVerificationModelScenario(
 
   throw createScenarioResolutionError(
     `No validated ${input.taskBucket} scenario candidate is available for route "${input.routeId}".`,
+  );
+}
+
+export async function resolveSceneGenerationScenario(
+  input: ResolveSceneGenerationScenarioInput,
+): Promise<ResolvedModel | null> {
+  const profile = getProviderScenarioProfile();
+  if (!profile) {
+    return null;
+  }
+
+  const candidates = profile.buckets.scene;
+  if (!candidates?.length) {
+    return null;
+  }
+
+  const requested = input.requestedModelString
+    ? parseModelString(input.requestedModelString)
+    : { providerId: null, modelId: null };
+  const attempts: ScenarioAttemptRecord[] = [];
+  let lastError: unknown = null;
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const attempt = await tryResolveScenarioModelCandidate({
+      auth: input.auth,
+      routeId: input.routeId,
+      candidate,
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
+      providerType: input.providerType,
+    });
+
+    if (attempt.ok) {
+      const metadata = createAuditMetadata({
+        profileId: profile.id,
+        taskBucket: 'scene',
+        routeId: input.routeId,
+        selectedProviderId: candidate.providerId,
+        selectedModelId: attempt.modelId,
+        fallbackProviderId: index > 0 ? candidate.providerId : null,
+        fallbackModelId: index > 0 ? attempt.modelId : null,
+        validationStatus: index > 0 ? 'fallback_selected' : 'selected',
+        attempts: [
+          ...attempts,
+          {
+            providerId: candidate.providerId,
+            modelId: attempt.modelId,
+            status: 'selected',
+          },
+        ],
+        requestedProviderId: requested.providerId,
+        requestedModelId: requested.modelId,
+      });
+      await appendScenarioAuditLog(input.auth, 'provider_scenario.route_selected', metadata);
+      return attempt.result;
+    }
+
+    attempts.push({
+      providerId: candidate.providerId,
+      modelId: attempt.modelId,
+      status: 'rejected',
+      reason: attempt.reason,
+    });
+    lastError = attempt.error ?? lastError;
+  }
+
+  const failureMetadata = createAuditMetadata({
+    profileId: profile.id,
+    taskBucket: 'scene',
+    routeId: input.routeId,
+    selectedProviderId: null,
+    selectedModelId: null,
+    fallbackProviderId: null,
+    fallbackModelId: null,
+    validationStatus: 'failed_closed',
+    attempts,
+    requestedProviderId: requested.providerId,
+    requestedModelId: requested.modelId,
+  });
+  await appendScenarioAuditLog(input.auth, 'provider_scenario.route_denied', failureMetadata);
+
+  if (lastError && isGovernedProviderResolutionError(lastError)) {
+    throw lastError;
+  }
+
+  throw createScenarioResolutionError(
+    `No validated scene scenario candidate is available for route "${input.routeId}".`,
   );
 }
 

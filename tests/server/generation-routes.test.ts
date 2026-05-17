@@ -16,9 +16,13 @@ const formatImagePlaceholderMock = vi.fn();
 const formatTeacherPersonaForPromptMock = vi.fn();
 const generateSceneActionsMock = vi.fn();
 const generateSceneContentMock = vi.fn();
+const getRequestAuthMock = vi.fn();
 const loadTeacherAdaptivePromptMock = vi.fn();
 const resolveModelFromHeadersMock = vi.fn();
+const resolveModelFromHeadersWithScopeMock = vi.fn();
+const resolveSceneGenerationScenarioMock = vi.fn();
 const streamLLMMock = vi.fn();
+const toGovernedProviderApiErrorResponseMock = vi.fn();
 const uniquifyMediaElementIdsMock = vi.fn();
 
 vi.mock('@/lib/ai/llm', () => ({
@@ -28,6 +32,19 @@ vi.mock('@/lib/ai/llm', () => ({
 
 vi.mock('@/lib/server/resolve-model', () => ({
   resolveModelFromHeaders: resolveModelFromHeadersMock,
+  resolveModelFromHeadersWithScope: resolveModelFromHeadersWithScopeMock,
+}));
+
+vi.mock('@/lib/auth/current-user', () => ({
+  getRequestAuth: getRequestAuthMock,
+}));
+
+vi.mock('@/lib/server/ai-governance', () => ({
+  toGovernedProviderApiErrorResponse: toGovernedProviderApiErrorResponseMock,
+}));
+
+vi.mock('@/lib/server/provider-scenario-routing', () => ({
+  resolveSceneGenerationScenario: resolveSceneGenerationScenarioMock,
 }));
 
 vi.mock('@/lib/server/adaptive-runtime-prompt', () => ({
@@ -93,9 +110,13 @@ describe('generation routes', () => {
     formatTeacherPersonaForPromptMock.mockReset();
     generateSceneActionsMock.mockReset();
     generateSceneContentMock.mockReset();
+    getRequestAuthMock.mockReset();
     loadTeacherAdaptivePromptMock.mockReset();
     resolveModelFromHeadersMock.mockReset();
+    resolveModelFromHeadersWithScopeMock.mockReset();
+    resolveSceneGenerationScenarioMock.mockReset();
     streamLLMMock.mockReset();
+    toGovernedProviderApiErrorResponseMock.mockReset();
     uniquifyMediaElementIdsMock.mockReset();
 
     buildPromptMock.mockReturnValue({ system: 'system prompt', user: 'user prompt' });
@@ -103,12 +124,24 @@ describe('generation routes', () => {
     formatImageDescriptionMock.mockReturnValue('image-description');
     formatImagePlaceholderMock.mockReturnValue('image-placeholder');
     formatTeacherPersonaForPromptMock.mockReturnValue('');
+    getRequestAuthMock.mockResolvedValue({
+      organization: { id: 'org-1' },
+      session: { role: 'teacher' },
+      user: { id: 'teacher-1' },
+    });
     loadTeacherAdaptivePromptMock.mockResolvedValue('');
     resolveModelFromHeadersMock.mockResolvedValue({
       model: 'resolved-model',
       modelInfo: { capabilities: {} },
       modelString: 'resolved-model',
     });
+    resolveModelFromHeadersWithScopeMock.mockResolvedValue({
+      model: 'resolved-model',
+      modelInfo: { capabilities: {} },
+      modelString: 'resolved-model',
+    });
+    resolveSceneGenerationScenarioMock.mockResolvedValue(null);
+    toGovernedProviderApiErrorResponseMock.mockReturnValue(null);
     uniquifyMediaElementIdsMock.mockImplementation((outlines) => outlines);
   });
 
@@ -284,6 +317,79 @@ describe('generation routes', () => {
     });
   });
 
+  it('routes scene content generation through the scene scenario profile before header fallback', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
+    applyOutlineFallbacksMock.mockReturnValue(outline);
+    generateSceneContentMock.mockResolvedValue({ slideTitle: 'Scenario Welcome' });
+    resolveSceneGenerationScenarioMock.mockResolvedValue({
+      model: 'scenario-model',
+      modelInfo: { outputWindow: 8192, capabilities: { streaming: true, vision: true } },
+      modelString: 'openai:gpt-4o',
+    });
+
+    const { POST } = await import('@/app/api/generate/scene-content/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-content', {
+        method: 'POST',
+        headers: {
+          'x-model': 'anthropic:claude-sonnet-4-5',
+          'x-api-key': 'client-key',
+          'x-base-url': 'https://client.example.com/v1',
+          'x-provider-type': 'openai',
+        },
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          stageId: 'stage-1',
+          stageInfo: { name: 'Physics 101', language: 'en-US' },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveSceneGenerationScenarioMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'scene-content',
+        requestedModelString: 'anthropic:claude-sonnet-4-5',
+        apiKey: 'client-key',
+        baseUrl: 'https://client.example.com/v1',
+        providerType: 'openai',
+      }),
+    );
+    expect(resolveModelFromHeadersWithScopeMock).not.toHaveBeenCalled();
+    expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to header model resolution for scene content when no scene scenario is configured', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
+    applyOutlineFallbacksMock.mockReturnValue(outline);
+    generateSceneContentMock.mockResolvedValue({ slideTitle: 'Welcome' });
+    resolveSceneGenerationScenarioMock.mockResolvedValue(null);
+
+    const { POST } = await import('@/app/api/generate/scene-content/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-content', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          stageId: 'stage-1',
+          stageInfo: { name: 'Physics 101', language: 'en-US' },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveModelFromHeadersWithScopeMock).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          user: { id: 'teacher-1' },
+        }),
+      }),
+    );
+  });
+
   it('passes teacher adaptive context into scene content generation', async () => {
     const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide', language: 'en-US' };
     applyOutlineFallbacksMock.mockReturnValue(outline);
@@ -414,6 +520,44 @@ describe('generation routes', () => {
     expect(response.status).toBe(200);
     expect(body.scene.id).toBe('scene-1');
     expect(body.previousSpeeches).toEqual(['Welcome aboard.']);
+  });
+
+  it('routes scene action generation through the scene scenario profile', async () => {
+    const outline = { id: 'outline-1', order: 1, title: 'Intro', type: 'slide' };
+    resolveSceneGenerationScenarioMock.mockResolvedValue({
+      model: 'scenario-actions-model',
+      modelInfo: { outputWindow: 8192, capabilities: { streaming: true } },
+      modelString: 'openai:gpt-4o-mini',
+    });
+    generateSceneActionsMock.mockResolvedValue([{ type: 'speech', text: 'Welcome aboard.' }]);
+    buildCompleteSceneMock.mockReturnValue({
+      id: 'scene-1',
+      order: 1,
+      type: 'slide',
+      actions: [{ type: 'speech', text: 'Welcome aboard.' }],
+      content: { slideTitle: 'Welcome' },
+    });
+
+    const { POST } = await import('@/app/api/generate/scene-actions/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          outline,
+          allOutlines: [outline],
+          content: { slideTitle: 'Welcome' },
+          stageId: 'stage-1',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveSceneGenerationScenarioMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'scene-actions',
+      }),
+    );
+    expect(resolveModelFromHeadersWithScopeMock).not.toHaveBeenCalled();
   });
 
   it('injects teacher adaptive context into scene action prompts', async () => {
@@ -547,6 +691,84 @@ describe('generation routes', () => {
     const bodyText = await readResponseBody(response);
     expect(bodyText).toContain('"type":"outline"');
     expect(bodyText).toContain('"type":"done"');
+  });
+
+  it('routes outline streaming through the scene scenario profile', async () => {
+    resolveSceneGenerationScenarioMock.mockResolvedValue({
+      model: 'scenario-outline-model',
+      modelInfo: { outputWindow: 8192, capabilities: { streaming: true } },
+      modelString: 'openai:gpt-4o',
+    });
+    streamLLMMock.mockReturnValue({
+      textStream: (async function* () {
+        yield '[{"title":"Scenario Intro","type":"slide","order":1}]';
+      })(),
+    });
+
+    const { POST } = await import('@/app/api/generate/scene-outlines-stream/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-outlines-stream', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirements: {
+            requirement: 'Teach renewable energy',
+            language: 'en-US',
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await readResponseBody(response);
+    expect(resolveSceneGenerationScenarioMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'scene-outlines-stream',
+      }),
+    );
+    expect(resolveModelFromHeadersWithScopeMock).not.toHaveBeenCalled();
+    expect(streamLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'scenario-outline-model',
+        maxOutputTokens: 8192,
+      }),
+      'scene-outlines-stream',
+    );
+  });
+
+  it('returns governed provider errors when scene scenario validation fails closed', async () => {
+    const governedResponse = new Response(
+      JSON.stringify({
+        success: false,
+        errorCode: 'INVALID_REQUEST',
+        error: 'No validated scene scenario candidate is available.',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+    const governedError = new Error('No validated scene scenario candidate is available.');
+    resolveSceneGenerationScenarioMock.mockRejectedValue(governedError);
+    toGovernedProviderApiErrorResponseMock.mockReturnValue(governedResponse);
+
+    const { POST } = await import('@/app/api/generate/scene-outlines-stream/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate/scene-outlines-stream', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirements: {
+            requirement: 'Teach renewable energy',
+            language: 'en-US',
+          },
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(resolveModelFromHeadersWithScopeMock).not.toHaveBeenCalled();
+    expect(streamLLMMock).not.toHaveBeenCalled();
   });
 
   it('rejects quiz grades with invalid point totals', async () => {
