@@ -204,6 +204,7 @@ describe('provider and verification routes', () => {
       modelInfo: {
         id: 'gpt-4o',
         name: 'GPT-4o',
+        outputWindow: 8192,
         capabilities: {
           streaming: true,
           tools: true,
@@ -377,6 +378,140 @@ describe('provider and verification routes', () => {
       message: 'Connection successful',
       response: 'OK',
     });
+  });
+
+  it('selects a scene-generation scenario candidate authoritatively and records fallback telemetry', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed scene generation.',
+      buckets: {
+        scene: [
+          { providerId: 'openai', modelId: 'gpt-4o' },
+          { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' },
+        ],
+      },
+    });
+    resolveModelMock
+      .mockResolvedValueOnce({
+        model: 'first-model',
+        modelInfo: {
+          id: 'gpt-4o',
+          name: 'GPT-4o',
+          outputWindow: 0,
+          capabilities: { streaming: true },
+        },
+        modelString: 'openai:gpt-4o',
+        providerId: 'openai',
+        apiKey: 'server-key',
+      })
+      .mockResolvedValueOnce({
+        model: 'fallback-model',
+        modelInfo: {
+          id: 'claude-sonnet-4-5',
+          name: 'Claude Sonnet 4.5',
+          outputWindow: 8192,
+          capabilities: { streaming: true },
+        },
+        modelString: 'anthropic:claude-sonnet-4-5',
+        providerId: 'anthropic',
+        apiKey: 'server-key',
+      });
+
+    const { resolveSceneGenerationScenario } =
+      await import('@/lib/server/provider-scenario-routing');
+    const result = await resolveSceneGenerationScenario({
+      auth: authContext,
+      routeId: 'scene-content',
+      requestedModelString: 'google:gemini-2.5-pro',
+    });
+
+    expect(result?.modelString).toBe('anthropic:claude-sonnet-4-5');
+    expect(resolveModelMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        modelString: 'openai:gpt-4o',
+        auth: authContext,
+      }),
+    );
+    expect(resolveModelMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        modelString: 'anthropic:claude-sonnet-4-5',
+        auth: authContext,
+      }),
+    );
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_selected',
+        resourceType: 'provider_scenario',
+        resourceId: 'scene-content',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'scene',
+          routeId: 'scene-content',
+          selectedProviderId: 'anthropic',
+          selectedModelId: 'claude-sonnet-4-5',
+          fallbackProviderId: 'anthropic',
+          fallbackModelId: 'claude-sonnet-4-5',
+          fallbackReason: expect.stringContaining('missing an output window'),
+          validationStatus: 'fallback_selected',
+          requestedProviderId: 'google',
+          requestedModelId: 'gemini-2.5-pro',
+        }),
+      }),
+    );
+  });
+
+  it('fails closed for scene-generation scenarios when no validated text candidate remains', async () => {
+    getProviderScenarioProfileMock.mockReturnValue({
+      id: 'teacher-differentiation-v1',
+      description: 'Scenario-managed scene generation.',
+      buckets: {
+        scene: [{ providerId: 'openai', modelId: 'gpt-4o' }],
+      },
+    });
+    resolveModelMock.mockResolvedValue({
+      model: 'invalid-model',
+      modelInfo: {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        outputWindow: 8192,
+        capabilities: { streaming: false },
+      },
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'server-key',
+    });
+
+    const { resolveSceneGenerationScenario } =
+      await import('@/lib/server/provider-scenario-routing');
+
+    await expect(
+      resolveSceneGenerationScenario({
+        auth: authContext,
+        routeId: 'scene-actions',
+        requestedModelString: 'openai:gpt-4o',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      apiErrorCode: 'INVALID_REQUEST',
+    });
+    expect(appendAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider_scenario.route_denied',
+        resourceType: 'provider_scenario',
+        resourceId: 'scene-actions',
+        metadata: expect.objectContaining({
+          scenarioProfileId: 'teacher-differentiation-v1',
+          taskBucket: 'scene',
+          routeId: 'scene-actions',
+          selectedProviderId: null,
+          selectedModelId: null,
+          fallbackReason: expect.stringContaining('lacks streaming capability'),
+          validationStatus: 'failed_closed',
+        }),
+      }),
+    );
   });
 
   it('verifies LM Studio models without requiring an API key', async () => {

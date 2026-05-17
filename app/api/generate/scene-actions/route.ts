@@ -23,10 +23,14 @@ import type {
   GeneratedPBLContent,
 } from '@/lib/types/generation';
 import type { SpeechAction } from '@/lib/types/action';
+import type { ProviderType } from '@/lib/types/provider';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { loadTeacherAdaptivePrompt } from '@/lib/server/adaptive-runtime-prompt';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
+import { resolveSceneGenerationScenario } from '@/lib/server/provider-scenario-routing';
+import { resolveModelFromHeadersWithScope } from '@/lib/server/resolve-model';
 
 const log = createLogger('Scene Actions API');
 
@@ -87,8 +91,21 @@ export async function POST(req: NextRequest) {
         log.warn(`Adaptive scene-actions context unavailable for ${body.classroomId}:`, error),
     });
 
-    // ── Model resolution from request headers ──
-    const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
+    // ── Model resolution from scene scenario profile, falling back to request headers ──
+    const auth = await getRequestAuth(req);
+    const scenarioResolvedModel = await resolveSceneGenerationScenario({
+      auth,
+      routeId: 'scene-actions',
+      requestedModelString: req.headers.get('x-model') || undefined,
+      apiKey: req.headers.get('x-api-key') || undefined,
+      baseUrl: req.headers.get('x-base-url') || undefined,
+      providerType: (req.headers.get('x-provider-type') || undefined) as ProviderType | undefined,
+    });
+    const {
+      model: languageModel,
+      modelInfo,
+      modelString,
+    } = scenarioResolvedModel ?? (await resolveModelFromHeadersWithScope(req, { auth }));
     outlineTitle = outline?.title;
     resolvedModelString = modelString;
 
@@ -175,6 +192,11 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({ scene, previousSpeeches: outputPreviousSpeeches });
   } catch (error) {
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return governanceError;
+    }
+
     log.error(
       `Scene actions generation failed [scene="${outlineTitle ?? 'unknown'}", model=${resolvedModelString ?? 'unknown'}]:`,
       error,

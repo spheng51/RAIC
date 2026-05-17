@@ -29,9 +29,13 @@ import type {
   SceneOutline,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { ProviderType } from '@/lib/types/provider';
+import { getRequestAuth } from '@/lib/auth/current-user';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
+import { resolveSceneGenerationScenario } from '@/lib/server/provider-scenario-routing';
+import { resolveModelFromHeadersWithScope } from '@/lib/server/resolve-model';
 import {
   buildCourseLanguageDirective,
   enrichGeneratedOutline,
@@ -106,10 +110,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Get API configuration from request headers
-    const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
-    resolvedModelString = modelString;
-
     if (!body.requirements) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Requirements are required');
     }
@@ -123,6 +123,23 @@ export async function POST(req: NextRequest) {
       agents?: AgentInfo[];
     };
     requirementSnippet = requirements?.requirement?.substring(0, 60);
+
+    // Get API configuration from the scenario profile, falling back to request headers
+    const auth = await getRequestAuth(req);
+    const scenarioResolvedModel = await resolveSceneGenerationScenario({
+      auth,
+      routeId: 'scene-outlines-stream',
+      requestedModelString: req.headers.get('x-model') || undefined,
+      apiKey: req.headers.get('x-api-key') || undefined,
+      baseUrl: req.headers.get('x-base-url') || undefined,
+      providerType: (req.headers.get('x-provider-type') || undefined) as ProviderType | undefined,
+    });
+    const {
+      model: languageModel,
+      modelInfo,
+      modelString,
+    } = scenarioResolvedModel ?? (await resolveModelFromHeadersWithScope(req, { auth }));
+    resolvedModelString = modelString;
 
     // Detect vision capability
     const hasVision = !!modelInfo?.capabilities?.vision;
@@ -367,6 +384,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    const governanceError = toGovernedProviderApiErrorResponse(error);
+    if (governanceError) {
+      return governanceError;
+    }
+
     log.error(
       `Outline streaming failed [requirement="${requirementSnippet ?? 'unknown'}...", model=${resolvedModelString ?? 'unknown'}]:`,
       error,
