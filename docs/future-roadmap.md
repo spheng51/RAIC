@@ -1,8 +1,8 @@
-# Future Roadmap: Release Recovery + Originality + Reliability
+# Future Roadmap: Reliable Adaptive Learning Platform
 
 This roadmap translates the current single-branch model into a dated execution sequence with one validated slice landing at a time.
 
-The active cycle plan for this window is documented in [Execution Plan: Release Recovery + Next Two Milestones (2026-04-17)](./execution-plans/2026-04-17-release-recovery-and-next-milestones.md).
+The active cycle plan for this window is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md).
 
 ## 1) Operating baseline
 
@@ -17,20 +17,28 @@ The active cycle plan for this window is documented in [Execution Plan: Release 
 
 ## 2) Active milestone sequence
 
-- Milestone 0: Release Recovery and Slice Decomposition
-  - Goal: decompose parked intelligence/provider work into promotable slices and clear the current MiroFish and benchmark-evidence blockers.
-  - Focus: reviewed correctness fixes, MiroFish reclaim-control E2E recovery, live benchmark snapshot capture, and clean merge-lane hygiene.
+- Completed milestone: Adaptive Classroom Intelligence v1 (`v0.3.0`)
+  - Result: teacher-only repeated-session adaptation is live on `main` with unchanged public/student flows and production smoke evidence.
 
-- Milestone 1: Adaptive Classroom Intelligence v1 (`v0.3.0`)
-  - Goal: activate teacher-only repeated-session intelligence using session-context and reflection as the source of truth.
-  - Acceptance: deterministic adaptation replay coverage, unchanged public/student flows, and no regression against classroom runtime budgets.
+- Prep patch: Release Hygiene
+  - Goal: align public docs with `v0.3.0`, Node 24, and the current `v0.4.0` plan.
+  - Acceptance: no runtime code changes, clean branch, docs links resolve, and release verification remains green.
 
-- Milestone 2: Experimentation & Provider Composer v1 (`v0.3.1`)
-  - Goal: complete provider-scenario routing with explicit capability validation, fallback telemetry, and rollback-ready internal routing coverage.
-  - Acceptance: fail-closed behavior, unchanged public provider contracts, and benchmark-backed routing stability.
+- Milestone A: Provider Composer completion
+  - Goal: bring scenario-managed provider routing to scene outline, scene content, and scene action generation.
+  - Acceptance: public request/response payloads stay stable, scenario telemetry is emitted, and managed routes validate capability before provider use.
 
-- Queued next milestone: Learning Analytics + Reflection activation
-  - Goal: turn the already-landed teacher-only reflection foundation into internal experimentation signals after Provider Composer stabilizes.
+- Milestone B: Fail-closed provider hardening
+  - Goal: remove unmanaged fallback from strict scenario-managed paths.
+  - Acceptance: invalid managed candidates return governed 4xx responses, and tests prove no unmanaged fallback call is made.
+
+- Milestone C: Learning Analytics + Reflection
+  - Goal: turn teacher-only session context and reflection records into private aggregate quality signals.
+  - Acceptance: anonymous, public, and student analytics remain off by default; retention policy covers reflection-derived artifacts.
+
+- Milestone D: Adaptive Student Beta
+  - Goal: introduce opt-in student-facing adaptation only after explicit privacy, consent, retention, and public API review.
+  - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests.
 
 ## 3) Performance and ops overlap
 
@@ -59,4 +67,4 @@ The active cycle plan for this window is documented in [Execution Plan: Release 
 - No public API changes unless explicitly scoped and reviewed as such.
 - No mixed "cleanup + feature + reliability" slices.
 - Each slice must define rollback conditions before merge.
-- Reflection and session-context behavior remain teacher-only until the later analytics milestone explicitly expands scope.
+- Reflection and session-context behavior remain teacher-only until the analytics or student beta milestones explicitly expand scope.

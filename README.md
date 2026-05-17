@@ -38,21 +38,22 @@
 
 ## 🗞️ News
 
-- **2026-05-16** — v0.2.0 is the public classroom release milestone, with durable hosted publishing, public example classrooms, auto-paced multiplayer game classes, and benchmark-backed release gates. See the [changelog](CHANGELOG.md).
+- **2026-05-16** — v0.3.0 activates teacher-only Adaptive Classroom Intelligence for repeated classroom sessions. See the [changelog](CHANGELOG.md).
+- **2026-05-16** — v0.2.0 shipped the public classroom release milestone, with durable hosted publishing, public example classrooms, auto-paced multiplayer game classes, and benchmark-backed release gates. See the [changelog](CHANGELOG.md).
 - **2026-03-26** — v0.1.0 introduced discussion TTS, immersive mode, keyboard shortcuts, whiteboard enhancements, new providers, and more. See the [changelog](CHANGELOG.md).
 
-## 📌 What's New in v0.2.0
+## 📌 What's New in v0.3.0
 
-Open-RAIC's public classroom release milestone introduces:
+Open-RAIC's Adaptive Classroom Intelligence milestone introduces:
 
-- **Durable public classroom publishing** with hosted share links, Blob-backed direct uploads for larger local media, and teacher-visible publish warnings
-- **Public example classroom flow** for the open-raic.com cutover path
-- **Auto-paced multiplayer game classes** with arming, live play, completion, and teacher review states
-- **Benchmark-backed release gates** through `pnpm benchmark:milestone` and `pnpm ops:verify`
+- **Teacher-only repeated-session adaptation** using persisted session progress and latest teacher reflections
+- **Adaptive generation context** for outlines, scene content, scene actions, and runtime chat without public API shape changes
+- **Fail-open public/student behavior** so first-run, anonymous, public demo, and classroom-cookie flows remain unchanged
+- **Release-stable ops gates** across `pnpm benchmark:milestone`, `pnpm ops:verify`, and production smokes
 
 See the full release notes in [CHANGELOG.md](CHANGELOG.md).
 
-For the teacher-facing public classroom sharing flow, see
+For the durable classroom sharing work introduced in v0.2.0, see
 [Public Classroom Release Notes](docs/public-classroom-release.md).
 
 ---
@@ -97,7 +98,7 @@ https://github.com/user-attachments/assets/b4ab35ac-f994-46b1-8957-e82fe87ff0e9
 
 ### Prerequisites
 
-- **Node.js** >= 20
+- **Node.js** 24.x
 - **pnpm** >= 10
 
 ### 1. Clone & Install
@@ -183,7 +184,7 @@ Operator rollout notes, smoke checks, and release-gate steps are maintained as d
 For the enforced one-branch operating model, post-merge verification contract, and branch hygiene checks, see [OPS.md](./OPS.md) (`pnpm run ops:drift`, `pnpm run ops:verify`).
 For feature decomposition and next-cycle originality work, see:
 
-- [Execution Plan: Release Recovery + Next Two Milestones](./docs/execution-plans/2026-04-17-release-recovery-and-next-milestones.md)
+- [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform](./docs/execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md)
 - [Adaptive Classroom Intelligence](./docs/feature-briefs/adaptive-classroom-intelligence.md)
 - [Experimentation & Provider Composer](./docs/feature-briefs/experimentation-provider-composer.md)
 - [Learning Analytics + Reflection](./docs/feature-briefs/learning-analytics-reflection.md)
