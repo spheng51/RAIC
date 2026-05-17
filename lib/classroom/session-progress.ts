@@ -192,6 +192,10 @@ export function applySceneSelectionSignal(input: {
       ? null
       : (orderedScenes.find((scene) => scene.id === input.fromSceneId) ?? null);
   const targetScene = orderedScenes.find((scene) => scene.id === input.toSceneId) ?? null;
+  const completionSourceScene =
+    input.isCourseCompletion && !fromScene
+      ? (orderedScenes[orderedScenes.length - 1] ?? null)
+      : fromScene;
 
   if (!targetScene && !input.isCourseCompletion) {
     return {
@@ -202,16 +206,17 @@ export function applySceneSelectionSignal(input: {
   }
 
   if (
-    fromScene &&
-    (input.isCourseCompletion || (targetScene && targetScene.order > fromScene.order)) &&
-    !nextCompletedSceneIds.has(fromScene.id)
+    completionSourceScene &&
+    (input.isCourseCompletion ||
+      (targetScene && targetScene.order > completionSourceScene.order)) &&
+    !nextCompletedSceneIds.has(completionSourceScene.id)
   ) {
-    nextCompletedSceneIds.add(fromScene.id);
+    nextCompletedSceneIds.add(completionSourceScene.id);
   }
 
   if (!targetScene) {
     return {
-      shouldPost: fromScene != null,
+      shouldPost: completionSourceScene != null,
       completedSceneIds: nextCompletedSceneIds,
       revisitIntent: input.revisitIntent,
     };

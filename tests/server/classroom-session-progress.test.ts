@@ -91,6 +91,22 @@ describe('classroom session progress signals', () => {
     expect(result.revisitIntent).toBe('continue');
   });
 
+  it('uses the final ordered scene when course completion starts from a sentinel scene id', () => {
+    const result = applySceneSelectionSignal({
+      scenes: [...scenes],
+      completedSceneIds: new Set<string>(['scene-1', 'scene-2']),
+      revisitIntent: 'continue',
+      fromSceneId: '__pending__',
+      toSceneId: '__completion__',
+      reason: 'manual',
+      isCourseCompletion: true,
+    });
+
+    expect(result.shouldPost).toBe(true);
+    expect([...result.completedSceneIds]).toEqual(['scene-1', 'scene-2', 'scene-3']);
+    expect(result.revisitIntent).toBe('continue');
+  });
+
   it('switches the revisit intent when the teacher manually returns to a completed scene', () => {
     const result = applySceneSelectionSignal({
       scenes: [...scenes],
