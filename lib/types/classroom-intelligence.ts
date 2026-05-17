@@ -45,6 +45,37 @@ export interface AdaptiveGenerationContext {
   confidenceScore: number | null;
 }
 
+export const LEARNING_QUALITY_BANDS = ['limited', 'watch', 'steady', 'strong'] as const;
+
+export type LearningQualityBand = (typeof LEARNING_QUALITY_BANDS)[number];
+
+export interface ClassroomLearningAnalytics {
+  classroomId: string;
+  generatedAt: string;
+  source: 'teacher-internal';
+  progress: {
+    completedSceneCount: number;
+    totalSceneCount: number;
+    completionRatio: number | null;
+    pacingPreference: AdaptivePacingPreference;
+  };
+  reflections: {
+    count: number;
+    averageConfidenceScore: number | null;
+    revisitIntentCounts: Record<ClassroomRevisitIntent, number>;
+    topChallengingAreas: string[];
+  };
+  qualitySignals: {
+    qualityBand: LearningQualityBand;
+    needsAttention: boolean;
+    suggestedFocus: string[];
+  };
+  retention: {
+    derivedOnly: true;
+    sourceRecords: ['classroom_session_contexts', 'classroom_reflections'];
+  };
+}
+
 export const BENCHMARK_ARTIFACT_STATUSES = ['pass', 'warn', 'missing'] as const;
 
 export type BenchmarkArtifactStatus = (typeof BENCHMARK_ARTIFACT_STATUSES)[number];

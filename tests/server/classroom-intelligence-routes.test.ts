@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
 const requireClassroomAccessMock = vi.fn();
+const buildClassroomLearningAnalyticsMock = vi.fn();
 const createClassroomReflectionMock = vi.fn();
 const getClassroomSessionContextMock = vi.fn();
 const listClassroomReflectionsMock = vi.fn();
@@ -15,6 +16,7 @@ vi.mock('@/lib/server/classroom-intelligence', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/server/classroom-intelligence')>();
   return {
     ...actual,
+    buildClassroomLearningAnalytics: buildClassroomLearningAnalyticsMock,
     createClassroomReflection: createClassroomReflectionMock,
     getClassroomSessionContext: getClassroomSessionContextMock,
     listClassroomReflections: listClassroomReflectionsMock,
@@ -53,6 +55,7 @@ describe('classroom intelligence routes', () => {
   beforeEach(() => {
     vi.resetModules();
     requireClassroomAccessMock.mockReset();
+    buildClassroomLearningAnalyticsMock.mockReset();
     createClassroomReflectionMock.mockReset();
     getClassroomSessionContextMock.mockReset();
     listClassroomReflectionsMock.mockReset();
@@ -83,6 +86,37 @@ describe('classroom intelligence routes', () => {
       confidenceScore: 2,
       revisitIntent: 'remediate',
       createdAt: '2026-04-17T00:00:00.000Z',
+    });
+    buildClassroomLearningAnalyticsMock.mockResolvedValue({
+      classroomId: 'room-1',
+      generatedAt: '2026-04-17T00:00:00.000Z',
+      source: 'teacher-internal',
+      progress: {
+        completedSceneCount: 2,
+        totalSceneCount: 3,
+        completionRatio: 0.67,
+        pacingPreference: 'balance',
+      },
+      reflections: {
+        count: 1,
+        averageConfidenceScore: 2,
+        revisitIntentCounts: {
+          continue: 0,
+          revisit: 0,
+          remediate: 1,
+          deepen: 0,
+        },
+        topChallengingAreas: ['vector decomposition'],
+      },
+      qualitySignals: {
+        qualityBand: 'watch',
+        needsAttention: true,
+        suggestedFocus: ['vector decomposition'],
+      },
+      retention: {
+        derivedOnly: true,
+        sourceRecords: ['classroom_session_contexts', 'classroom_reflections'],
+      },
     });
   });
 
@@ -252,6 +286,50 @@ describe('classroom intelligence routes', () => {
 
     expect(response.status).toBe(403);
     expect(createClassroomReflectionMock).not.toHaveBeenCalled();
+  });
+
+  it('returns teacher-only aggregate learning analytics', async () => {
+    const { GET } = await import('@/app/api/classroom/[id]/analytics/route');
+    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/analytics'), {
+      params: Promise.resolve({ id: 'room-1' }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.analytics).toMatchObject({
+      classroomId: 'room-1',
+      source: 'teacher-internal',
+      qualitySignals: {
+        qualityBand: 'watch',
+        needsAttention: true,
+      },
+      retention: {
+        derivedOnly: true,
+      },
+    });
+    expect(buildClassroomLearningAnalyticsMock).toHaveBeenCalledWith({
+      classroomId: 'room-1',
+      userId: 'teacher-1',
+    });
+  });
+
+  it('rejects student access to teacher learning analytics', async () => {
+    requireClassroomAccessMock.mockResolvedValue(
+      buildWebAccess({
+        auth: {
+          session: { role: 'student', kind: 'web', organizationId: 'org-1' },
+          user: { id: 'student-1' },
+        },
+      }),
+    );
+
+    const { GET } = await import('@/app/api/classroom/[id]/analytics/route');
+    const response = await GET(new NextRequest('http://localhost/api/classroom/room-1/analytics'), {
+      params: Promise.resolve({ id: 'room-1' }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(buildClassroomLearningAnalyticsMock).not.toHaveBeenCalled();
   });
 
   it('passes through classroom-access denials unchanged', async () => {
