@@ -65,7 +65,7 @@ export function sanitizeSlideHtml(html: string): string {
     allowedSchemes: ['http', 'https', 'mailto'],
     allowedSchemesAppliedToAttributes: ['href'],
     disallowedTagsMode: 'discard',
-    nonTextTags: ['script', 'style', 'textarea', 'option', 'noscript'],
+    nonTextTags: ['script', 'style', 'textarea', 'option', 'noscript', 'xmp'],
     parseStyleAttributes: true,
     transformTags: {
       b: 'strong',

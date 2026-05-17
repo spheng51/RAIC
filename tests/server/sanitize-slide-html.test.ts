@@ -23,6 +23,18 @@ describe('sanitizeSlideHtml', () => {
     expect(sanitized).not.toContain('background-image');
   });
 
+  it('drops xmp raw-text contents instead of rehydrating executable markup', () => {
+    const sanitized = sanitizeSlideHtml(
+      '<xmp><img src=x onerror=alert(1)><svg onload=alert(1)></xmp><p>Safe</p>',
+    );
+
+    expect(sanitized).toBe('<p>Safe</p>');
+    expect(sanitized).not.toContain('<img');
+    expect(sanitized).not.toContain('<svg');
+    expect(sanitized).not.toContain('onerror');
+    expect(sanitized).not.toContain('onload');
+  });
+
   it('renders table cell text as escaped plain text instead of executable HTML', () => {
     const markup = renderToStaticMarkup(
       React.createElement(StaticTable, {
