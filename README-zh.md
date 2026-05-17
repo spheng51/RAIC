@@ -38,6 +38,7 @@
 
 ## 🗞️ 动态
 
+- **2026-05-17** — v0.4.0 完成 Reliable Adaptive Learning Platform 里程碑，加入 Provider Composer 场景路由、fail-closed provider 加固和教师私有分析。查看[更新日志](CHANGELOG.md)。
 - **2026-05-16** — v0.3.0 启用面向教师的重复课堂自适应智能。查看[更新日志](CHANGELOG.md)。
 - **2026-05-16** — v0.2.0 发布公共课堂里程碑，包含持久化分享、公开示例课堂、自动节奏多人游戏课堂和基准验证门禁。查看[更新日志](CHANGELOG.md)。
 - **2026-03-26** — v0.1.0 引入了讨论语音、沉浸模式、键盘快捷键、白板增强、新 provider 等能力。查看[更新日志](CHANGELOG.md)。

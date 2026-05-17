@@ -2,7 +2,7 @@
 
 This roadmap translates the current single-branch model into a dated execution sequence with one validated slice landing at a time.
 
-The active cycle plan for this window is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md).
+The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md).
 
 ## 1) Operating baseline
 
@@ -20,25 +20,17 @@ The active cycle plan for this window is documented in [Execution Plan: v0.4.0 R
 - Completed milestone: Adaptive Classroom Intelligence v1 (`v0.3.0`)
   - Result: teacher-only repeated-session adaptation is live on `main` with unchanged public/student flows and production smoke evidence.
 
-- Prep patch: Release Hygiene
-  - Goal: align public docs with `v0.3.0`, Node 24, and the current `v0.4.0` plan.
-  - Acceptance: no runtime code changes, clean branch, docs links resolve, and release verification remains green.
+- Completed milestone: Reliable Adaptive Learning Platform (`v0.4.0`)
+  - Result: Provider Composer scene routing, fail-closed provider hardening, and private teacher/internal learning analytics are live on `main`.
+  - Public/student request and response payloads remain stable; Adaptive Student Beta is deferred.
 
-- Milestone A: Provider Composer completion
-  - Goal: bring scenario-managed provider routing to scene outline, scene content, and scene action generation.
-  - Acceptance: public request/response payloads stay stable, scenario telemetry is emitted, and managed routes validate capability before provider use.
+- Next patch: `v0.4.1` Release Hardening
+  - Goal: monitor provider scenario denials, legacy fallback usage, analytics access logs, smoke coverage, and release-doc clarity.
+  - Acceptance: only bug fixes, docs, smoke-test coverage, and telemetry clarity changes.
 
-- Milestone B: Fail-closed provider hardening
-  - Goal: remove unmanaged fallback from strict scenario-managed paths.
-  - Acceptance: invalid managed candidates return governed 4xx responses, and tests prove no unmanaged fallback call is made.
-
-- Milestone C: Learning Analytics + Reflection
-  - Goal: turn teacher-only session context and reflection records into private aggregate quality signals.
-  - Acceptance: anonymous, public, and student analytics remain off by default; retention policy covers reflection-derived artifacts.
-
-- Milestone D: Adaptive Student Beta
-  - Goal: introduce opt-in student-facing adaptation only after explicit privacy, consent, retention, and public API review.
-  - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests.
+- Next feature milestone: `v0.5.0` Adaptive Student Beta Readiness
+  - Goal: write privacy, consent, retention, and public API review before adding student-facing adaptation.
+  - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests before release.
 
 ## 3) Performance and ops overlap
 
@@ -67,4 +59,4 @@ The active cycle plan for this window is documented in [Execution Plan: v0.4.0 R
 - No public API changes unless explicitly scoped and reviewed as such.
 - No mixed "cleanup + feature + reliability" slices.
 - Each slice must define rollback conditions before merge.
-- Reflection and session-context behavior remain teacher-only until the analytics or student beta milestones explicitly expand scope.
+- Reflection, session-context, and analytics behavior remain teacher/internal until the student beta milestone explicitly expands scope.
