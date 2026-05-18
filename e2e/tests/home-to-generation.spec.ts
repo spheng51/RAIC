@@ -139,11 +139,15 @@ test.describe('Home → Generation', () => {
     await home.goto();
 
     await expect(home.courseModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.historyVlogPresetButton).toBeVisible();
+    await home.historyVlogPresetButton.click();
+    await expect(home.historyVlogPresetButton).toHaveAttribute('aria-pressed', 'true');
     await expect(home.gameTemplateSelector).toBeHidden();
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
 
     await home.gameModeButton.click();
     await expect(home.gameModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.historyVlogPresetButton).toBeHidden();
     await expect(home.gameTemplateSelector).toBeVisible();
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'true');
     await expect(home.deepInteractiveState).toHaveText('On');
@@ -168,6 +172,8 @@ test.describe('Home → Generation', () => {
     await home.goto();
     await home.courseModeButton.click();
     await expect(home.courseModeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(home.historyVlogPresetButton).toBeVisible();
+    await expect(home.historyVlogPresetButton).toHaveAttribute('aria-pressed', 'false');
     await expect(home.gameTemplateSelector).toBeHidden();
     await expect(home.deepInteractiveSwitch).toHaveAttribute('aria-checked', 'false');
 
@@ -180,6 +186,56 @@ test.describe('Home → Generation', () => {
     expect(courseSession.requirements.gameTemplateId).toBeUndefined();
     expect(courseSession.requirements.gameCreativeBrief).toBeUndefined();
     expect(courseSession.requirements.interactiveMode).toBeUndefined();
+  });
+
+  test('History Vlog preset requires source context and stores the preset', async ({ page }) => {
+    await page.route('**/api/web-search', (route) => {
+      route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          answer: 'Historical source summary',
+          sources: [{ title: 'Library Titanic Archive', url: 'https://example.test/titanic' }],
+          context:
+            'Source: Library Titanic Archive (https://example.test/titanic) - timeline facts',
+          query: 'Titanic classroom sources',
+          responseTime: 1,
+        }),
+      });
+    });
+    await page.route('**/api/generate/scene-outlines-stream', (route) => {
+      route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: 'Generation intentionally stopped by e2e history preset test',
+        }),
+      });
+    });
+
+    const home = new HomePage(page);
+    await home.goto();
+    await home.historyVlogPresetButton.click();
+    await expect(home.historyVlogPresetButton).toHaveAttribute('aria-pressed', 'true');
+    await home.fillRequirement('Make a source-backed History Vlog lesson about the Titanic');
+    await home.submit();
+    await expect(page.getByText(/History Vlog requires configured web search/i)).toBeVisible();
+
+    await page.evaluate(() => localStorage.setItem('webSearchEnabled', 'true'));
+    await page.reload();
+    await home.historyVlogPresetButton.click();
+    await expect(home.historyVlogPresetButton).toHaveAttribute('aria-pressed', 'true');
+    await home.fillRequirement('Make a source-backed History Vlog lesson about the Titanic');
+    await clearCapturedGenerationSession(page);
+    await home.submit();
+    await page.waitForURL(/\/generation-preview/);
+
+    const session = await readCapturedGenerationSession(page);
+    expect(session.requirements).toMatchObject({
+      experiencePreset: 'historical-vlogger',
+      webSearch: true,
+    });
   });
 
   test('public demo schedule creates a class and keeps it after refresh', async ({

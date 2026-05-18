@@ -68,4 +68,31 @@ describe('scene generator language directive', () => {
     expect(result.data?.languageDirective).toBe(buildCourseLanguageDirective('en-US'));
     expect(result.data?.outlines).toHaveLength(1);
   });
+
+  it('stamps the historical-vlogger preset onto generated outlines', async () => {
+    const result = await generateSceneOutlinesFromRequirements(
+      {
+        requirement: 'Teach the Titanic sinking through source-backed vlogging',
+        language: 'en-US',
+        experiencePreset: 'historical-vlogger',
+      },
+      undefined,
+      undefined,
+      async () =>
+        JSON.stringify({
+          languageDirective: 'Teach in English.',
+          outlines: [
+            {
+              type: 'slide',
+              title: 'On Deck',
+              description: 'Introduce the source-backed scene',
+              keyPoints: ['Verified timeline', 'Reconstruction caveat'],
+            },
+          ],
+        }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data?.outlines[0]?.experiencePreset).toBe('historical-vlogger');
+  });
 });

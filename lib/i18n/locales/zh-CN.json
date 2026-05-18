@@ -49,6 +49,8 @@
     "interactiveModeOn": "开启",
     "interactiveModeOff": "关闭",
     "interactiveModeHint": "生成更多可操作的互动组件课堂",
+    "historyVlogPreset": "历史 Vlog",
+    "historyVlogPresetHint": "以时间旅行者 Vlogger 的形式呈现，并加入基于来源的事实核查。需要网络搜索或 PDF。",
     "courseMode": "课程",
     "gameMode": "游戏",
     "gameTemplateLabel": "街机模板",
@@ -400,6 +402,12 @@
       "pdfMissing": "未上传 PDF",
       "webAvailable": "可用网络搜索",
       "webDisabled": "未启用网络搜索",
+      "sourceMode": {
+        "none": "来源：无",
+        "pdf": "来源：PDF",
+        "web": "来源：网络",
+        "pdf-web": "来源：PDF + 网络"
+      },
       "languageLabel": "语言：{{language}}",
       "modelLabel": "模型：{{model}}",
       "stages": {
@@ -533,6 +541,7 @@
     "requirementPlaceholder": "输入你想学的任何内容，例如：\n「从零学 Python，30 分钟写出第一个程序」\n「用白板给我讲解傅里叶变换」\n「阿瓦隆桌游怎么玩」",
     "gameRequirementPlaceholder": "描述你想创建的课堂游戏，例如：\n「把轨道力学做成物理挑战」\n「为细胞呼吸做一个拼图游戏」",
     "requirementRequired": "请输入课程需求",
+    "historyVlogSourceRequired": "历史 Vlog 需要已配置的网络搜索或上传的 PDF/来源文档。",
     "fileTooLarge": "文件过大，请选择小于50MB的PDF文件"
   },
   "generation": {
@@ -577,7 +586,8 @@
     "outlineGenerateFailed": "大纲生成失败，请稍后重试",
     "webSearching": "网络搜索",
     "webSearchingDesc": "正在搜索网络获取最新资料",
-    "webSearchFailed": "网络搜索失败"
+    "webSearchFailed": "网络搜索失败",
+    "historyVlogSourceUnavailable": "历史 Vlog 需要可用的来源上下文。请启用可用的网络搜索，或先上传 PDF/来源文档。"
   },
   "settings": {
     "title": "设置",

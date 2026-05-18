@@ -1,4 +1,5 @@
-import type { Scene, Stage } from '@/lib/types/stage';
+import { deriveClassroomSourceMode } from '@/lib/classroom/source-context';
+import type { ClassroomSourceMode, Scene, Stage } from '@/lib/types/stage';
 
 export const LESSON_STAGE_IDS = [
   'intro',
@@ -16,6 +17,7 @@ export interface ClassroomLessonSourceContext {
   pdfAttached: boolean;
   pdfName?: string;
   tavilyEnabled: boolean;
+  sourceMode: ClassroomSourceMode;
   language: string;
   selectedModel: string;
 }
@@ -110,6 +112,8 @@ export function buildClassroomLessonState(input: {
   const stageIndex = LESSON_STAGE_IDS.indexOf(currentStage);
   const sourceContext = input.stage?.sourceContext;
   const pdfName = sourceContext?.pdfName?.trim();
+  const pdfAttached = Boolean(sourceContext?.pdfAttached || pdfName);
+  const tavilyEnabled = Boolean(sourceContext?.tavilyEnabled);
 
   return {
     goal: normalizeGoal(input.stage),
@@ -117,14 +121,23 @@ export function buildClassroomLessonState(input: {
     completedStages: LESSON_STAGE_IDS.slice(0, Math.max(stageIndex, 0)),
     learnerLevel: 'unknown',
     sourceContext: {
-      pdfAttached: Boolean(sourceContext?.pdfAttached || pdfName),
+      pdfAttached,
       ...(pdfName ? { pdfName } : {}),
-      tavilyEnabled: Boolean(sourceContext?.tavilyEnabled),
+      tavilyEnabled,
+      sourceMode:
+        sourceContext?.sourceMode ?? deriveClassroomSourceMode({ pdfAttached, tavilyEnabled }),
       language: sourceContext?.language || input.stage?.language || DEFAULT_LANGUAGE,
       selectedModel: sourceContext?.selectedModel || input.selectedModelFallback || DEFAULT_MODEL,
     },
   };
 }
+
+const SOURCE_MODE_LABELS: Record<ClassroomSourceMode, string> = {
+  none: 'none',
+  pdf: 'PDF',
+  web: 'web search',
+  'pdf-web': 'PDF and web search',
+};
 
 export function buildClassroomTutorSystemPrompt(lessonState: ClassroomLessonState): string {
   const { goal, currentStage, sourceContext } = lessonState;
@@ -142,6 +155,7 @@ Language: ${sourceContext.language}
 Model context: ${sourceContext.selectedModel}
 
 Source boundaries:
+- Source mode: ${SOURCE_MODE_LABELS[sourceContext.sourceMode]}.
 ${pdfLine}
 ${webLine}
 

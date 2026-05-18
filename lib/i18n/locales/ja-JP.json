@@ -49,6 +49,8 @@
     "interactiveModeOn": "オン",
     "interactiveModeOff": "オフ",
     "interactiveModeHint": "操作できるウィジェット中心の教室を生成します",
+    "historyVlogPreset": "History Vlog",
+    "historyVlogPresetHint": "タイムトラベラーVlogger形式で、出典に基づくファクトチェックを含めます。ウェブ検索またはPDFが必要です。",
     "courseMode": "コース",
     "gameMode": "ゲーム",
     "gameTemplateLabel": "ゲームテンプレート",
@@ -400,6 +402,12 @@
       "pdfMissing": "No PDF",
       "webAvailable": "Web search available",
       "webDisabled": "Web search off",
+      "sourceMode": {
+        "none": "Sources: None",
+        "pdf": "Sources: PDF",
+        "web": "Sources: Web",
+        "pdf-web": "Sources: PDF + Web"
+      },
       "languageLabel": "Language: {{language}}",
       "modelLabel": "Model: {{model}}",
       "stages": {
@@ -533,6 +541,7 @@
     "requirementPlaceholder": "学びたいことを自由に入力してください。例えば：\n「Pythonをゼロから30分で教えて」\n「フーリエ変換をホワイトボードで解説して」\n「ボードゲーム『アバロン』の遊び方」",
     "gameRequirementPlaceholder": "作りたい教室ゲームを説明してください。例：\n「軌道力学を物理チャレンジにする」\n「細胞呼吸のパズルゲームを作る」",
     "requirementRequired": "コースの要件を入力してください",
+    "historyVlogSourceRequired": "History Vlogには、設定済みのウェブ検索またはアップロード済みのPDF/出典文書が必要です。",
     "fileTooLarge": "ファイルが大きすぎます。50MB以下のPDFファイルを選択してください"
   },
   "generation": {
@@ -577,7 +586,8 @@
     "outlineGenerateFailed": "アウトラインの生成に失敗しました。しばらくしてからお試しください",
     "webSearching": "ウェブ検索",
     "webSearchingDesc": "ウェブで最新情報を検索しています",
-    "webSearchFailed": "ウェブ検索に失敗しました"
+    "webSearchFailed": "ウェブ検索に失敗しました",
+    "historyVlogSourceUnavailable": "History Vlogには利用可能な出典コンテキストが必要です。動作するウェブ検索を有効にするか、PDF/出典文書をアップロードしてから生成してください。"
   },
   "settings": {
     "title": "設定",

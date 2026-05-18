@@ -28,6 +28,11 @@ import {
   replaceMediaPlaceholders,
   generateTTSForClassroom,
 } from '@/lib/server/classroom-media-generation';
+import {
+  experiencePresetRequiresSource,
+  HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE,
+} from '@/lib/generation/experience-presets';
+import { deriveClassroomSourceMode } from '@/lib/classroom/source-context';
 import type {
   GenerationCompletionStatus,
   GenerationWarning,
@@ -56,6 +61,7 @@ export interface GenerateClassroomInput {
   language?: string;
   enableWebSearch?: boolean;
   interactiveMode?: boolean;
+  experiencePreset?: UserRequirements['experiencePreset'];
   creationMode?: UserRequirements['creationMode'];
   gameTemplateId?: UserRequirements['gameTemplateId'];
   gameCreativeBrief?: string;
@@ -303,11 +309,15 @@ export async function generateClassroom(
     requirement,
     language: lang,
     interactiveMode: input.interactiveMode || undefined,
+    experiencePreset:
+      input.creationMode === 'game-arcade' ? undefined : input.experiencePreset || undefined,
     creationMode: input.creationMode,
     gameTemplateId: input.gameTemplateId,
     gameCreativeBrief: input.gameCreativeBrief,
   };
-  const pdfText = pdfContent?.text || undefined;
+  const pdfText = pdfContent?.text?.trim() ? pdfContent.text : undefined;
+  const hasPdfSourceContext = Boolean(pdfText?.trim());
+  const pdfAttached = Boolean(hasPdfSourceContext || input.pdfFileName);
 
   // Resolve agents based on agentMode
   let agents: AgentInfo[];
@@ -389,6 +399,14 @@ export async function generateClassroom(
     }
   }
 
+  if (
+    experiencePresetRequiresSource(requirements.experiencePreset) &&
+    !hasPdfSourceContext &&
+    !researchContext
+  ) {
+    throw new Error(HISTORY_VLOG_SOURCE_UNAVAILABLE_MESSAGE);
+  }
+
   await options.onProgress?.({
     step: 'generating_outlines',
     progress: 15,
@@ -436,13 +454,18 @@ export async function generateClassroom(
     language: lang,
     style: 'interactive',
     sourceContext: {
-      pdfAttached: Boolean(pdfText || input.pdfFileName),
+      pdfAttached,
       ...(input.pdfFileName ? { pdfName: input.pdfFileName } : {}),
       tavilyEnabled: Boolean(input.enableWebSearch),
+      sourceMode: deriveClassroomSourceMode({
+        pdfAttached: hasPdfSourceContext,
+        tavilyEnabled: Boolean(researchContext?.trim()),
+      }),
       language: lang,
       selectedModel: input.selectedModel || modelString,
       creationMode: input.creationMode,
       gameTemplateId: input.gameTemplateId,
+      experiencePreset: requirements.experiencePreset,
     },
     languageDirective,
     interactiveMode: input.interactiveMode || undefined,

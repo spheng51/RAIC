@@ -49,6 +49,8 @@
     "interactiveModeOn": "On",
     "interactiveModeOff": "Off",
     "interactiveModeHint": "Generate hands-on widget-based classrooms",
+    "historyVlogPreset": "History Vlog",
+    "historyVlogPresetHint": "Time-traveler vlogger format with source-backed fact checks. Requires web search or a PDF.",
     "courseMode": "Course",
     "gameMode": "Game",
     "gameTemplateLabel": "Arcade template",
@@ -400,6 +402,12 @@
       "pdfMissing": "No PDF",
       "webAvailable": "Web search available",
       "webDisabled": "Web search off",
+      "sourceMode": {
+        "none": "Sources: None",
+        "pdf": "Sources: PDF",
+        "web": "Sources: Web",
+        "pdf-web": "Sources: PDF + Web"
+      },
       "languageLabel": "Language: {{language}}",
       "modelLabel": "Model: {{model}}",
       "stages": {
@@ -533,6 +541,7 @@
     "requirementPlaceholder": "Tell me anything you want to learn, e.g.\n\"Teach me Python from scratch in 30 minutes\"\n\"Explain Fourier Transform on the whiteboard\"\n\"How to play the board game Avalon\"",
     "gameRequirementPlaceholder": "Describe the classroom game you want, e.g.\n\"Turn orbital mechanics into a physics challenge\"\n\"Make a puzzle game for cellular respiration\"",
     "requirementRequired": "Please enter course requirements",
+    "historyVlogSourceRequired": "History Vlog requires configured web search or an uploaded PDF/source document.",
     "fileTooLarge": "File too large. Please select a PDF file smaller than 50MB"
   },
   "generation": {
@@ -577,7 +586,8 @@
     "outlineGenerateFailed": "Outline generation failed, please try again later",
     "webSearching": "Web Search",
     "webSearchingDesc": "Searching the web for up-to-date information",
-    "webSearchFailed": "Web search failed"
+    "webSearchFailed": "Web search failed",
+    "historyVlogSourceUnavailable": "History Vlog needs usable source context. Enable working web search or upload a PDF/source document before generating."
   },
   "settings": {
     "title": "Settings",

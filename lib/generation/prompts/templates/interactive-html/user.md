@@ -23,6 +23,10 @@ The following constraints must be strictly obeyed in all JavaScript logic and vi
 
 {{designIdea}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ---
 
 ## Language

@@ -54,6 +54,7 @@ describe('classroom lesson state', () => {
           pdfAttached: true,
           pdfName: 'forces.pdf',
           tavilyEnabled: true,
+          sourceMode: 'pdf-web',
           language: 'en-US',
           selectedModel: 'openai:gpt-5.1',
         },
@@ -69,6 +70,7 @@ describe('classroom lesson state', () => {
       pdfAttached: true,
       pdfName: 'forces.pdf',
       tavilyEnabled: true,
+      sourceMode: 'pdf-web',
       language: 'en-US',
       selectedModel: 'openai:gpt-5.1',
     });
@@ -84,6 +86,7 @@ describe('classroom lesson state', () => {
 
     expect(state.goal).toBe('Untitled lesson');
     expect(state.currentStage).toBe('intro');
+    expect(state.sourceContext.sourceMode).toBe('none');
     expect(state.sourceContext.selectedModel).toBe('anthropic:claude-sonnet-4.5');
   });
 
@@ -106,6 +109,7 @@ describe('classroom lesson state', () => {
         sourceContext: {
           pdfAttached: false,
           tavilyEnabled: false,
+          sourceMode: 'none',
           language: 'en-US',
           selectedModel: 'openai:gpt-5.1',
         },
@@ -121,6 +125,24 @@ describe('classroom lesson state', () => {
     expect(prompt).toContain('"I don\'t get it" means simplify');
     expect(prompt).toContain('No learner PDF is attached');
     expect(prompt).toContain('Web search is disabled');
+    expect(prompt).toContain('Source mode: none');
     expect(prompt).toContain('Use the whiteboard for key terms');
+  });
+
+  it('derives source visibility for legacy stages without explicit source mode', () => {
+    const state = buildClassroomLessonState({
+      stage: buildStage({
+        sourceContext: {
+          pdfAttached: true,
+          tavilyEnabled: false,
+          language: 'en-US',
+          selectedModel: 'openai:gpt-5.1',
+        },
+      }),
+      scenes: [buildScene('intro', 0, 'Introduction')],
+      currentSceneId: 'intro',
+    });
+
+    expect(state.sourceContext.sourceMode).toBe('pdf');
   });
 });

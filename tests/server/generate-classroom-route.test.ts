@@ -106,6 +106,47 @@ describe('POST /api/generate-classroom', () => {
     expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
   });
 
+  it('rejects historical-vlogger requests without web search or PDF context', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(body.error).toContain('History Vlog requires');
+    expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects historical-vlogger requests with only a PDF filename and no web search', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          pdfFileName: 'titanic-archive.pdf',
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.errorCode).toBe('INVALID_REQUEST');
+    expect(body.error).toContain('History Vlog requires');
+    expect(createClassroomGenerationJobMock).not.toHaveBeenCalled();
+    expect(runClassroomGenerationJobMock).not.toHaveBeenCalled();
+  });
+
   it('creates a classroom-generation job and schedules the async runner', async () => {
     const { POST } = await import('@/app/api/generate-classroom/route');
     const response = await POST(
@@ -160,6 +201,84 @@ describe('POST /api/generate-classroom', () => {
         organizationId: 'org-1',
         userId: 'teacher-1',
       },
+    );
+  });
+
+  it('accepts and forwards sourced historical-vlogger requests', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          enableWebSearch: true,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(createClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        enableWebSearch: true,
+      }),
+      expect.any(Object),
+    );
+    expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        enableWebSearch: true,
+      }),
+      'http://localhost:3000',
+      expect.any(Object),
+    );
+  });
+
+  it('accepts and forwards PDF-only historical-vlogger requests', async () => {
+    const { POST } = await import('@/app/api/generate-classroom/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/generate-classroom', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirement: 'Create a History Vlog lesson about the Titanic',
+          experiencePreset: 'historical-vlogger',
+          pdfFileName: 'titanic-archive.pdf',
+          pdfContent: {
+            text: 'RMS Titanic archival timeline excerpt.',
+            images: [],
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(createClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        pdfFileName: 'titanic-archive.pdf',
+        pdfContent: {
+          text: 'RMS Titanic archival timeline excerpt.',
+          images: [],
+        },
+      }),
+      expect.any(Object),
+    );
+    expect(runClassroomGenerationJobMock).toHaveBeenCalledWith(
+      'job-123456',
+      expect.objectContaining({
+        requirement: 'Create a History Vlog lesson about the Titanic',
+        experiencePreset: 'historical-vlogger',
+        pdfFileName: 'titanic-archive.pdf',
+      }),
+      'http://localhost:3000',
+      expect.any(Object),
     );
   });
 

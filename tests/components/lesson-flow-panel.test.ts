@@ -18,6 +18,7 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
         'classroom.lesson.pdfMissing': 'No PDF',
         'classroom.lesson.webAvailable': 'Web search available',
         'classroom.lesson.webDisabled': 'Web search off',
+        'classroom.lesson.sourceMode.pdf-web': 'Sources: PDF + Web',
         'classroom.lesson.languageLabel': `Language: ${options?.language}`,
         'classroom.lesson.modelLabel': `Model: ${options?.model}`,
         'classroom.lesson.stages.intro': 'Introduction',
@@ -44,6 +45,7 @@ function buildLessonState(overrides: Partial<ClassroomLessonState> = {}): Classr
       pdfAttached: true,
       pdfName: 'energy-notes.pdf',
       tavilyEnabled: true,
+      sourceMode: 'pdf-web',
       language: 'en-US',
       selectedModel: 'openai:gpt-5.1',
     },
@@ -95,6 +97,7 @@ describe('LessonFlowPanel', () => {
     const container = await mountPanel();
 
     expect(container.textContent).toContain('Learn conservation of energy');
+    expect(container.textContent).toContain('Sources: PDF + Web');
     expect(container.textContent).toContain('PDF: energy-notes.pdf');
     expect(container.textContent).toContain('Web search available');
     expect(container.textContent).toContain('Language: English');

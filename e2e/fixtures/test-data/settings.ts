@@ -7,6 +7,11 @@ export function createSettingsStorage(overrides: Record<string, unknown> = {}) {
       providersConfig: {
         openai: { apiKey: 'test-key' },
       },
+      webSearchProviderId: 'tavily',
+      webSearchProvidersConfig: {
+        tavily: { apiKey: 'test-search-key', baseUrl: '', enabled: true },
+        bocha: { apiKey: '', baseUrl: '', enabled: false },
+      },
       agentMode: 'preset',
       selectedAgentIds: [],
       ttsEnabled: false,

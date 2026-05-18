@@ -20,6 +20,7 @@ import {
   BotOff,
   ChevronUp,
   Share2,
+  Landmark,
   Atom,
   BookOpen,
   Brain,
@@ -44,7 +45,7 @@ import { AgentBar } from '@/components/agent/agent-bar';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { nanoid } from 'nanoid';
 import { storePdfBlob } from '@/lib/utils/image-storage';
-import type { GameTemplateId, UserRequirements } from '@/lib/types/generation';
+import type { ExperiencePreset, GameTemplateId, UserRequirements } from '@/lib/types/generation';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
 import {
@@ -72,6 +73,12 @@ import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
 import { ScheduleClassesBox } from '@/components/schedule/schedule-classes-box';
+import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
+import {
+  experiencePresetRequiresSource,
+  getExperiencePresetDefinition,
+  HISTORICAL_VLOGGER_PRESET,
+} from '@/lib/generation/experience-presets';
 import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
 import {
   createLocalScheduledClassEvent,
@@ -102,6 +109,7 @@ interface FormState {
   language: 'zh-CN' | 'en-US';
   webSearch: boolean;
   interactiveMode: boolean;
+  experiencePreset?: ExperiencePreset;
   creationMode: 'course' | 'game-arcade';
   gameTemplateId: GameTemplateId;
 }
@@ -142,6 +150,8 @@ const GAME_TEMPLATE_ICONS: Record<GameTemplateId, typeof Gamepad2> = {
   'code-quest': Code2,
   'boss-review': Trophy,
 };
+
+const HISTORY_VLOG_PRESET_DEFINITION = getExperiencePresetDefinition(HISTORICAL_VLOGGER_PRESET);
 
 function parseServerTimestamp(value: string) {
   const timestamp = Date.parse(value);
@@ -339,6 +349,13 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       throw new Error(browserLocalGuardMessage);
     }
 
+    if (
+      experiencePresetRequiresSource(form.experiencePreset) &&
+      !hasHistoricalVlogSourcePath(false)
+    ) {
+      throw new Error(t('upload.historyVlogSourceRequired'));
+    }
+
     clearClassroomLaunchContext();
 
     const requirements = buildRequirements(normalized.value.title);
@@ -512,14 +529,57 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     }
   };
 
+  const hasConfiguredWebSearchSource = useCallback(() => {
+    if (!form.webSearch) {
+      return false;
+    }
+
+    const settings = useSettingsStore.getState();
+    const provider = WEB_SEARCH_PROVIDERS[settings.webSearchProviderId];
+    const config = settings.webSearchProvidersConfig?.[settings.webSearchProviderId];
+    if (!provider) {
+      return false;
+    }
+
+    return Boolean(
+      !provider.requiresApiKey ||
+      config?.apiKey?.trim() ||
+      config?.isServerConfigured ||
+      config?.serverEnabled ||
+      config?.hasOrganizationConfig ||
+      config?.hasPersonalOverride,
+    );
+  }, [form.webSearch]);
+
+  const hasHistoricalVlogSourcePath = useCallback(
+    (allowPdf: boolean) => Boolean((allowPdf && form.pdfFile) || hasConfiguredWebSearchSource()),
+    [form.pdfFile, hasConfiguredWebSearchSource],
+  );
+
   const updateCreationMode = (creationMode: FormState['creationMode']) => {
     const interactiveMode = creationMode === 'game-arcade';
-    setForm((prev) => ({ ...prev, creationMode, interactiveMode }));
+    setForm((prev) => ({
+      ...prev,
+      creationMode,
+      interactiveMode,
+      experiencePreset: creationMode === 'game-arcade' ? undefined : prev.experiencePreset,
+    }));
     try {
       localStorage.setItem(INTERACTIVE_MODE_STORAGE_KEY, String(interactiveMode));
     } catch {
       /* ignore */
     }
+  };
+
+  const updateExperiencePreset = (experiencePreset: ExperiencePreset) => {
+    setForm((prev) => {
+      const nextPreset = prev.experiencePreset === experiencePreset ? undefined : experiencePreset;
+      return {
+        ...prev,
+        creationMode: 'course',
+        experiencePreset: nextPreset,
+      };
+    });
   };
 
   const buildRequirements = useCallback(
@@ -533,6 +593,8 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
         interactiveMode: form.interactiveMode || undefined,
+        experiencePreset:
+          form.creationMode === 'course' ? form.experiencePreset || undefined : undefined,
         creationMode: form.creationMode === 'game-arcade' ? 'game-arcade' : undefined,
         gameTemplateId: form.creationMode === 'game-arcade' ? selectedTemplate.id : undefined,
         gameCreativeBrief:
@@ -541,7 +603,14 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
             : undefined,
       };
     },
-    [form.creationMode, form.gameTemplateId, form.interactiveMode, form.language, form.webSearch],
+    [
+      form.creationMode,
+      form.experiencePreset,
+      form.gameTemplateId,
+      form.interactiveMode,
+      form.language,
+      form.webSearch,
+    ],
   );
 
   const showSetupToast = (icon: React.ReactNode, title: string, desc: string) => {
@@ -590,6 +659,14 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
     if (!form.requirement.trim()) {
       setError(t('upload.requirementRequired'));
+      return;
+    }
+
+    if (
+      experiencePresetRequiresSource(form.experiencePreset) &&
+      !hasHistoricalVlogSourcePath(true)
+    ) {
+      setError(t('upload.historyVlogSourceRequired'));
       return;
     }
 
@@ -960,6 +1037,36 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                     {t('toolbar.gameMode')}
                   </button>
                 </div>
+
+                {form.creationMode === 'course' ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        data-testid="experience-preset-history-vlog"
+                        aria-pressed={form.experiencePreset === HISTORICAL_VLOGGER_PRESET}
+                        onClick={() => updateExperiencePreset(HISTORICAL_VLOGGER_PRESET)}
+                        className={cn(
+                          'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-colors',
+                          form.experiencePreset === HISTORICAL_VLOGGER_PRESET
+                            ? 'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-200'
+                            : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        <Landmark className="size-3" />
+                        {t(HISTORY_VLOG_PRESET_DEFINITION?.labelKey ?? 'toolbar.historyVlogPreset')}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8}>
+                      <div className="max-w-64 text-xs">
+                        {t(
+                          HISTORY_VLOG_PRESET_DEFINITION?.hintKey ??
+                            'toolbar.historyVlogPresetHint',
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
 
                 {form.creationMode === 'game-arcade' ? (
                   <div className="flex min-w-0 flex-1 items-center gap-2">

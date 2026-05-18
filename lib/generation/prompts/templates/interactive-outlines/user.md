@@ -39,6 +39,10 @@ Infer the course language directive by applying the decision rules from the syst
 {{adaptivePrompt}}
 {{/if}}
 
+{{#if experiencePresetContext}}
+{{experiencePresetContext}}
+{{/if}}
+
 ---
 
 ## Distribution Target

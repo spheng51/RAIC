@@ -3,6 +3,7 @@ import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
 import type {
+  ExperiencePreset,
   GameTemplateId,
   GenerationCompletionStatus,
   GenerationWarning,
@@ -12,6 +13,8 @@ import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widget
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
 export type StageMode = 'autonomous' | 'playback';
+
+export type ClassroomSourceMode = 'none' | 'pdf' | 'web' | 'pdf-web';
 
 export type Whiteboard = Omit<Slide, 'theme' | 'turningMode' | 'sectionTag' | 'type'>;
 export type PresentationSurface = 'lesson' | 'simulation' | 'report';
@@ -63,10 +66,12 @@ export interface ClassroomSourceContext {
   pdfAttached: boolean;
   pdfName?: string;
   tavilyEnabled: boolean;
+  sourceMode?: ClassroomSourceMode;
   language: string;
   selectedModel: string;
   creationMode?: 'course' | 'game-arcade';
   gameTemplateId?: GameTemplateId;
+  experiencePreset?: ExperiencePreset;
 }
 
 /**

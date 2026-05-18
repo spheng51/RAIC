@@ -41,6 +41,7 @@ import {
   enrichGeneratedOutline,
 } from '@/lib/generation/outline-generator';
 import { formatGameTemplateForPrompt } from '@/lib/game-arcade/templates';
+import { buildExperiencePresetPromptContext } from '@/lib/generation/experience-presets';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -211,6 +212,7 @@ export async function POST(req: NextRequest) {
       mediaEnabled,
       teacherContext,
       userProfile: '',
+      experiencePresetContext: buildExperiencePresetPromptContext(requirements.experiencePreset),
       languageDirective,
       gameTemplateContext: formatGameTemplateForPrompt(requirements.gameTemplateId),
       gameCreativeBrief: requirements.gameCreativeBrief || requirements.requirement,

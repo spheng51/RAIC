@@ -9,6 +9,8 @@ import type { ActionType } from './action';
 import type { MediaGenerationRequest } from '@/lib/media/types';
 import type { WidgetConfig, TeacherAction, WidgetType } from './widgets';
 
+export type ExperiencePreset = 'historical-vlogger';
+
 // ==================== PDF Image Types ====================
 
 /**
@@ -68,6 +70,7 @@ export interface UserRequirements {
   language: 'zh-CN' | 'en-US'; // Course language - critical for generation
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
+  experiencePreset?: ExperiencePreset; // Optional course experience preset
   webSearch?: boolean; // Enable web search for richer context
   interactiveMode?: boolean; // Enable widget-first Deep Interactive generation
   creationMode?: 'course' | 'game-arcade'; // Course generation mode
@@ -137,6 +140,7 @@ export interface SceneOutline {
   order: number;
   language?: 'zh-CN' | 'en-US'; // Generation language (inherited from requirements)
   languageNote?: string; // Optional per-scene language nuance from outline generation
+  experiencePreset?: ExperiencePreset; // Optional course experience preset
   // Suggested image IDs (from PDF-extracted images)
   suggestedImageIds?: string[]; // e.g., ["img_1", "img_3"]
   // AI-generated media requests (when PDF images are insufficient)
