@@ -2,7 +2,7 @@
 
 This roadmap translates the current single-branch model into a dated execution sequence with one validated slice landing at a time.
 
-The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md).
+The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md). The v0.5.0 release evidence is captured in [Release Evidence: v0.5.0 Source-Grounded Experience Presets (2026-05-18)](./release-evidence-v0.5.0.md).
 
 ## 1) Operating baseline
 
@@ -24,11 +24,15 @@ The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliabl
   - Result: Provider Composer scene routing, fail-closed provider hardening, and private teacher/internal learning analytics are live on `main`.
   - Public/student request and response payloads remain stable; Adaptive Student Beta is deferred.
 
-- Next patch: `v0.4.1` Release Hardening
-  - Goal: monitor provider scenario denials, legacy fallback usage, analytics access logs, smoke coverage, and release-doc clarity.
-  - Acceptance: only bug fixes, docs, smoke-test coverage, and telemetry clarity changes.
+- Completed milestone: Source-Grounded Experience Presets (`v0.5.0`)
+  - Result: History Vlog is available as a source-required preset with source-mode metadata, source-backed prompt guardrails, and PDF/web fallback behavior.
+  - Release note: no separate `v0.4.0` tag was published before `v0.5.0`; the `v0.5.0` tag/release is the next public release after `v0.3.0` and includes the completed v0.4.0 platform work plus Source-Grounded Experience Presets.
 
-- Next feature milestone: `v0.5.0` Adaptive Student Beta Readiness
+- Next patch: `v0.5.1` Source-Grounded Hardening
+  - Goal: monitor History Vlog source failures, web-search fallback behavior, source-mode metadata, and teacher-facing source-required UX.
+  - Acceptance: only bug fixes, docs, smoke-test coverage, telemetry clarity, and small source-required UX improvements.
+
+- Next feature milestone: `v0.6.0` Adaptive Student Beta Readiness
   - Goal: write privacy, consent, retention, and public API review before adding student-facing adaptation.
   - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests before release.
 
@@ -59,4 +63,4 @@ The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliabl
 - No public API changes unless explicitly scoped and reviewed as such.
 - No mixed "cleanup + feature + reliability" slices.
 - Each slice must define rollback conditions before merge.
-- Reflection, session-context, and analytics behavior remain teacher/internal until the student beta milestone explicitly expands scope.
+- Reflection, session-context, and analytics behavior remain teacher/internal until the v0.6.0 student beta milestone explicitly expands scope.
