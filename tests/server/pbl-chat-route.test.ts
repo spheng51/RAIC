@@ -44,6 +44,7 @@ vi.mock('@/lib/logger', () => ({
 describe('POST /api/pbl/chat', () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllEnvs();
     requireClassroomAccessMock.mockReset();
     resolveModelFromHeadersWithScopeMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
@@ -319,15 +320,17 @@ describe('POST /api/pbl/chat', () => {
     });
   });
 
-  it('keeps classroom-cookie access on the non-adaptive PBL path', async () => {
-    requireClassroomAccessMock.mockResolvedValue({
+  it('keeps classroom-cookie access on the non-adaptive PBL path when the beta flag is on', async () => {
+    vi.stubEnv('RAIC_STUDENT_ADAPTATION_BETA', 'true');
+    const access = {
       auth: {
         user: { id: 'student-1' },
         organization: { id: 'org-1' },
         session: { role: 'student' },
       },
       source: 'classroom',
-    });
+    };
+    requireClassroomAccessMock.mockResolvedValue(access);
     resolveModelFromHeadersWithScopeMock.mockResolvedValue({
       model: { id: 'mock-model' },
     });
@@ -360,7 +363,12 @@ describe('POST /api/pbl/chat', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalled();
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        access,
+      }),
+    );
     expect(callLLMMock).toHaveBeenCalledTimes(1);
 
     const llmRequest = callLLMMock.mock.calls[0]?.[0];

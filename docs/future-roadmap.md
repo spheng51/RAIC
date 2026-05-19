@@ -35,6 +35,7 @@ The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliabl
 - Next feature milestone: `v0.6.0` Adaptive Student Beta Readiness
   - Goal: write privacy, consent, retention, and public API review before adding student-facing adaptation.
   - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests before release.
+  - Execution plan: [v0.6.0 Adaptive Student Beta Readiness (2026-05-18)](./execution-plans/2026-05-18-v0.6.0-adaptive-student-beta-readiness.md).
 
 ## 3) Performance and ops overlap
 

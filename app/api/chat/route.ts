@@ -23,6 +23,7 @@ import { createLogger } from '@/lib/logger';
 import { toGovernedProviderApiErrorResponse } from '@/lib/server/ai-governance';
 import { buildAdaptiveRuntimeContext } from '@/lib/server/classroom-intelligence';
 import { resolveModel } from '@/lib/server/resolve-model';
+import { shouldLoadAdaptiveRuntimeContext } from '@/lib/server/student-adaptation-beta';
 const log = createLogger('Chat API');
 
 // Allow streaming responses up to 60 seconds
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
     }
 
     let adaptiveContext = null;
-    if (access?.source === 'web' && access.auth.session.role === 'teacher') {
+    if (access && shouldLoadAdaptiveRuntimeContext({ access })) {
       try {
         adaptiveContext = await buildAdaptiveRuntimeContext({
           classroomId,
