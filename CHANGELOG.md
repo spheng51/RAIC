@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-05-19
+
+`v0.6.0` prepares Adaptive Student Beta with a reversible server-side readiness gate and non-leakage coverage while keeping student-facing adaptation disabled by default.
+
+### Added
+
+- `RAIC_STUDENT_ADAPTATION_BETA` readiness flag, documented as unset/false for production until consent, retention, and non-leakage review is complete.
+- Shared adaptive runtime access gate requiring authenticated teacher web access or a future explicit student consent path.
+- v0.6.0 execution plan and release evidence covering branch, clean-main, deployment, smoke, and benchmark validation.
+
+### Changed
+
+- Chat and runtime adaptive prompt loading now use the shared gate while preserving existing teacher-only behavior.
+- Public, anonymous, classroom-cookie, and signed-in student flows remain non-adaptive without reviewed consent.
+
+### Testing
+
+- Added direct gate, chat, PBL, scene content, and scene action non-leakage coverage.
+- Clean-main release gates passed with fresh benchmark evidence and production smoke checks.
+
 ## [0.5.0] - 2026-05-17
 
 `v0.5.0` introduces Source-Grounded Experience Presets, starting with History Vlog, and hardens source visibility and source-backed generation guardrails.
