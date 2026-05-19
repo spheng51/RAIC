@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import packageJson from '@/package.json';
 
 const getPersistenceModeMock = vi.fn();
 const runPostgresQueryMock = vi.fn();
@@ -94,7 +95,7 @@ describe('GET /api/health', () => {
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.version).toBe('0.5.0');
+    expect(body.version).toBe(packageJson.version);
     expect(body.capabilities).toEqual({
       webSearch: true,
       imageGeneration: true,
