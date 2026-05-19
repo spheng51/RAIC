@@ -298,13 +298,15 @@ export async function DELETE(request: NextRequest) {
 
     return apiSuccessWithRequestSession(request, { event: null });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isDiscordCleanupFailure = message.startsWith('Failed to delete Discord scheduled event.');
     log.error('Failed to delete scheduled class:', error);
     return apiErrorWithRequestSession(
       request,
-      API_ERROR_CODES.INTERNAL_ERROR,
-      500,
+      isDiscordCleanupFailure ? API_ERROR_CODES.INVALID_REQUEST : API_ERROR_CODES.INTERNAL_ERROR,
+      isDiscordCleanupFailure ? 409 : 500,
       'Failed to delete scheduled class',
-      error instanceof Error ? error.message : String(error),
+      message,
     );
   }
 }

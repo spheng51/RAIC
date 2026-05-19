@@ -60,6 +60,9 @@ function normalizePlatformStore(value: unknown): PlatformStore {
   const scheduledClassEvents = Array.isArray(value.scheduledClassEvents)
     ? value.scheduledClassEvents
     : [];
+  const discordConnections = Array.isArray(value.discordConnections)
+    ? value.discordConnections
+    : [];
 
   return {
     users,
@@ -75,6 +78,7 @@ function normalizePlatformStore(value: unknown): PlatformStore {
     classroomReflections,
     benchmarkArtifacts,
     scheduledClassEvents,
+    discordConnections,
   } as PlatformStore;
 }
 

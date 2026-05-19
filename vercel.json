@@ -7,5 +7,11 @@
     "app/api/**/*.ts": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/discord-scheduled-class-reminders",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
