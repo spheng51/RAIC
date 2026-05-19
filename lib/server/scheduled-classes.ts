@@ -23,6 +23,8 @@ import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/
 import { readClassroom } from '@/lib/server/classroom-storage';
 import {
   createDiscordScheduledEvent,
+  deleteDiscordScheduledEvent,
+  DiscordApiError,
   normalizeDiscordError,
   sendDiscordChannelMessage,
   updateDiscordScheduledEvent,
@@ -275,18 +277,47 @@ export async function deleteScheduledClassForAccess(
     if (!existing || !canAccessEvent(existing, scope)) {
       return false;
     }
+    await deleteDiscordScheduledEventIfPresent(existing);
     return deleteScheduledClassEventRecord(id);
   }
 
-  return updatePlatformStore((store) => {
-    const index = store.scheduledClassEvents.findIndex((event) => event.id === id);
-    const existing = index >= 0 ? store.scheduledClassEvents[index] : null;
-    if (!existing || !canAccessEvent(existing, scope)) {
+  const store = await readPlatformStore();
+  const existing = store.scheduledClassEvents.find((event) => event.id === id) ?? null;
+  if (!existing || !canAccessEvent(existing, scope)) {
+    return false;
+  }
+  await deleteDiscordScheduledEventIfPresent(existing);
+
+  return updatePlatformStore((nextStore) => {
+    const index = nextStore.scheduledClassEvents.findIndex((event) => event.id === id);
+    if (index < 0 || !canAccessEvent(nextStore.scheduledClassEvents[index], scope)) {
       return false;
     }
-    store.scheduledClassEvents.splice(index, 1);
+    nextStore.scheduledClassEvents.splice(index, 1);
     return true;
   });
+}
+
+function isDiscordScheduledEventAlreadyDeleted(error: unknown) {
+  return (
+    error instanceof DiscordApiError &&
+    (error.status === 404 || /unknown scheduled event/i.test(error.responseText ?? ''))
+  );
+}
+
+async function deleteDiscordScheduledEventIfPresent(event: ScheduledClassEventRecord) {
+  const guildId = event.discordSync?.guildId;
+  const scheduledEventId = event.discordSync?.scheduledEventId;
+  if (!guildId || !scheduledEventId) return;
+
+  try {
+    await deleteDiscordScheduledEvent(guildId, scheduledEventId);
+  } catch (error) {
+    if (isDiscordScheduledEventAlreadyDeleted(error)) {
+      return;
+    }
+    throw new Error(`Failed to delete Discord scheduled event. ${normalizeDiscordError(error)}`);
+  }
 }
 
 async function updateScheduledClassRecord(

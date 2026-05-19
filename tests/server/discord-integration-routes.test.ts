@@ -212,6 +212,35 @@ describe('Discord integration routes', () => {
     expect(json).toMatchObject({ checked: 1, sent: 1, failed: 0 });
   });
 
+  it('allows local reminder cron execution without CRON_SECRET outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    mocks.sendDueDiscordScheduledClassReminders.mockResolvedValue({
+      checked: 0,
+      sent: 0,
+      failed: 0,
+    });
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.sendDueDiscordScheduledClassReminders).toHaveBeenCalled();
+  });
+
+  it('requires CRON_SECRET before running the reminder cron in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.sendDueDiscordScheduledClassReminders).not.toHaveBeenCalled();
+  });
+
   it('syncs a scheduled class with Discord for the current teacher', async () => {
     mocks.syncScheduledClassDiscordForAccess.mockResolvedValue({
       id: 'event-1',
@@ -254,5 +283,28 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.listDiscordConnectionsForUser).not.toHaveBeenCalled();
+  });
+
+  it('requires teacher access for OAuth start and scheduled-class sync routes', async () => {
+    mocks.requireRequestRole.mockResolvedValue(
+      NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 }),
+    );
+
+    const oauthStart = await import('@/app/api/integrations/discord/oauth/start/route');
+    const discordSync = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const oauthResponse = await oauthStart.GET(
+      new NextRequest('http://localhost/api/integrations/discord/oauth/start'),
+    );
+    const syncResponse = await discordSync.POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+
+    expect(oauthResponse.status).toBe(403);
+    expect(syncResponse.status).toBe(403);
+    expect(mocks.buildDiscordOAuthUrl).not.toHaveBeenCalled();
+    expect(mocks.syncScheduledClassDiscordForAccess).not.toHaveBeenCalled();
   });
 });

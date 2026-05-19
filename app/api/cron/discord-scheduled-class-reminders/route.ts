@@ -7,7 +7,7 @@ const log = createLogger('DiscordScheduledClassRemindersCron');
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return true;
+  if (!secret) return process.env.NODE_ENV !== 'production';
   return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 
