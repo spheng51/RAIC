@@ -187,6 +187,18 @@ export interface ScheduledClassEventRecord extends ScheduledClassEvent {
   organizationId: string | null;
 }
 
+export interface DiscordConnectionRecord {
+  id: string;
+  ownerUserId: string;
+  organizationId: string | null;
+  guildId: string;
+  guildName: string;
+  channelId: string | null;
+  channelName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlatformStore {
   users: UserRecord[];
   organizations: OrganizationRecord[];
@@ -201,6 +213,7 @@ export interface PlatformStore {
   classroomReflections: ClassroomReflectionRecord[];
   benchmarkArtifacts: BenchmarkArtifactRecord[];
   scheduledClassEvents: ScheduledClassEventRecord[];
+  discordConnections: DiscordConnectionRecord[];
 }
 
 export const EMPTY_PLATFORM_STORE: PlatformStore = {
@@ -217,6 +230,7 @@ export const EMPTY_PLATFORM_STORE: PlatformStore = {
   classroomReflections: [],
   benchmarkArtifacts: [],
   scheduledClassEvents: [],
+  discordConnections: [],
 };
 
 export const PLATFORM_SCHEMA_SQL = [
@@ -390,10 +404,24 @@ export const PLATFORM_SCHEMA_SQL = [
     duration_minutes INTEGER,
     classroom_id TEXT,
     multiplayer_game JSONB,
+    discord_sync JSONB,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
   )`,
   `ALTER TABLE scheduled_class_events ADD COLUMN IF NOT EXISTS multiplayer_game JSONB`,
+  `ALTER TABLE scheduled_class_events ADD COLUMN IF NOT EXISTS discord_sync JSONB`,
+  `CREATE TABLE IF NOT EXISTS discord_connections (
+    id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+    guild_id TEXT NOT NULL,
+    guild_name TEXT NOT NULL,
+    channel_id TEXT,
+    channel_name TEXT,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (owner_user_id, guild_id)
+  )`,
   `CREATE TABLE IF NOT EXISTS classroom_generation_jobs (
     id TEXT PRIMARY KEY,
     request_key TEXT,
@@ -438,6 +466,8 @@ export const PLATFORM_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_benchmark_artifacts_scope_created ON benchmark_artifacts (scope, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_owner_start ON scheduled_class_events (owner_user_id, starts_at ASC)`,
   `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_org_start ON scheduled_class_events (organization_id, starts_at ASC)`,
+  `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_discord_start ON scheduled_class_events (starts_at ASC) WHERE discord_sync IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_discord_connections_owner ON discord_connections (owner_user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_classroom_generation_jobs_owner_updated ON classroom_generation_jobs (owner_user_id, owner_organization_id, updated_at DESC)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_generation_jobs_active_request_key ON classroom_generation_jobs (
     request_key,

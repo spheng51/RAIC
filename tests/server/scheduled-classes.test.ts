@@ -34,6 +34,7 @@ function createStore(): PlatformStore {
     classroomReflections: [],
     benchmarkArtifacts: [],
     scheduledClassEvents: [],
+    discordConnections: [],
   };
 }
 

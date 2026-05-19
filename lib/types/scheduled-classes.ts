@@ -19,6 +19,23 @@ export interface ScheduledClassMultiplayerGameInput {
   inviteUrl?: string | null;
 }
 
+export interface ScheduledClassDiscordSync {
+  enabled: boolean;
+  connectionId?: string;
+  guildId?: string;
+  guildName?: string;
+  channelId?: string;
+  channelName?: string;
+  joinTokenId?: string;
+  inviteUrl?: string;
+  scheduledEventId?: string;
+  scheduledEventUrl?: string;
+  lastSyncedAt?: string;
+  syncWarning?: string;
+  reminderSentAt?: string;
+  reminderMessageId?: string;
+}
+
 export interface ScheduledClassEvent {
   id: string;
   title: string;
@@ -26,6 +43,7 @@ export interface ScheduledClassEvent {
   durationMinutes?: number;
   classroomId?: string;
   multiplayerGame?: ScheduledClassMultiplayerGame;
+  discordSync?: ScheduledClassDiscordSync;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,4 +61,17 @@ export interface ScheduledClassGenerationInput {
   startsAt: string;
   durationMinutes?: number;
   multiplayerGame?: ScheduledClassMultiplayerGameInput | null;
+}
+
+export interface DiscordConnectionSummary {
+  id: string;
+  guildId: string;
+  guildName: string;
+  channelId: string | null;
+  channelName: string | null;
+}
+
+export interface DiscordChannelSummary {
+  id: string;
+  name: string;
 }

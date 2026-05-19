@@ -2,7 +2,10 @@ import 'server-only';
 
 import { runPostgresQuery } from '@/lib/db/client';
 import type { PlatformRole, ScheduledClassEventRecord } from '@/lib/db/schema';
-import type { ScheduledClassMultiplayerGame } from '@/lib/types/scheduled-classes';
+import type {
+  ScheduledClassDiscordSync,
+  ScheduledClassMultiplayerGame,
+} from '@/lib/types/scheduled-classes';
 
 interface ScheduledClassEventRow {
   id: string;
@@ -13,6 +16,7 @@ interface ScheduledClassEventRow {
   duration_minutes: number | null;
   classroom_id: string | null;
   multiplayer_game: ScheduledClassMultiplayerGame | null;
+  discord_sync: ScheduledClassDiscordSync | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -26,6 +30,7 @@ const SCHEDULED_CLASS_COLUMNS = `
   duration_minutes,
   classroom_id,
   multiplayer_game,
+  discord_sync,
   created_at,
   updated_at
 `;
@@ -44,6 +49,7 @@ function mapScheduledClassEventRow(row: ScheduledClassEventRow): ScheduledClassE
     ...(row.duration_minutes ? { durationMinutes: row.duration_minutes } : {}),
     ...(row.classroom_id ? { classroomId: row.classroom_id } : {}),
     ...(row.multiplayer_game ? { multiplayerGame: row.multiplayer_game } : {}),
+    ...(row.discord_sync ? { discordSync: row.discord_sync } : {}),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -109,16 +115,18 @@ export async function upsertScheduledClassEventRecord(
         duration_minutes,
         classroom_id,
         multiplayer_game,
+        discord_sync,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
         starts_at = EXCLUDED.starts_at,
         duration_minutes = EXCLUDED.duration_minutes,
         classroom_id = EXCLUDED.classroom_id,
         multiplayer_game = EXCLUDED.multiplayer_game,
+        discord_sync = EXCLUDED.discord_sync,
         updated_at = EXCLUDED.updated_at
       RETURNING ${SCHEDULED_CLASS_COLUMNS}`,
     [
@@ -130,6 +138,7 @@ export async function upsertScheduledClassEventRecord(
       event.durationMinutes ?? null,
       event.classroomId ?? null,
       event.multiplayerGame ?? null,
+      event.discordSync ?? null,
       event.createdAt,
       event.updatedAt,
     ],
@@ -148,4 +157,18 @@ export async function deleteScheduledClassEventRecord(id: string): Promise<boole
   );
 
   return Boolean(rows?.[0]);
+}
+
+export async function listDiscordSyncedScheduledClassEventRecords(): Promise<
+  ScheduledClassEventRecord[]
+> {
+  const rows = await runPostgresQuery<ScheduledClassEventRow>(
+    `SELECT ${SCHEDULED_CLASS_COLUMNS}
+     FROM scheduled_class_events
+     WHERE discord_sync IS NOT NULL
+       AND discord_sync->>'enabled' = 'true'
+     ORDER BY starts_at ASC, title ASC`,
+  );
+
+  return rows?.map(mapScheduledClassEventRow) ?? [];
 }
