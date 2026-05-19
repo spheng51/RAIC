@@ -33,7 +33,28 @@
       "delete": "Delete",
       "linkFailed": "Classroom created, but schedule linking failed.",
       "saveFailed": "Failed to save scheduled class",
-      "deleteFailed": "Failed to delete scheduled class"
+      "deleteFailed": "Failed to delete scheduled class",
+      "discord": {
+        "title": "Discord",
+        "notConfigured": "Discord is not configured",
+        "notConnected": "Not connected",
+        "connect": "Connect Discord",
+        "connected": "Discord connected",
+        "connectionFailed": "Discord connection failed",
+        "invalidState": "Discord connection expired. Try again.",
+        "missingGuild": "Choose a Discord server to connect.",
+        "noChannel": "No channel",
+        "saveChannel": "Save channel",
+        "channelSaved": "Discord channel saved",
+        "disconnect": "Disconnect Discord",
+        "disconnected": "Discord disconnected",
+        "syncClass": "Sync with Discord",
+        "openEvent": "Open Discord event",
+        "synced": "Discord synced",
+        "reminderSent": "Discord reminder sent",
+        "warning": "Discord warning",
+        "actionFailed": "Discord action failed"
+      }
     }
   },
   "toolbar": {

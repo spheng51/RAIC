@@ -75,3 +75,9 @@ export interface DiscordChannelSummary {
   id: string;
   name: string;
 }
+
+export interface DiscordIntegrationSnapshot {
+  configured: boolean;
+  connection: DiscordConnectionSummary | null;
+  channels: DiscordChannelSummary[];
+}

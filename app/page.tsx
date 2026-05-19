@@ -79,7 +79,11 @@ import {
   getExperiencePresetDefinition,
   HISTORICAL_VLOGGER_PRESET,
 } from '@/lib/generation/experience-presets';
-import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
+import type {
+  DiscordIntegrationSnapshot,
+  ScheduledClassEvent,
+  ScheduledClassEventInput,
+} from '@/lib/types/scheduled-classes';
 import {
   createLocalScheduledClassEvent,
   deleteLocalScheduledClassEvent,
@@ -132,6 +136,11 @@ interface ScheduledClassesApiBody {
   details?: string;
 }
 
+interface DiscordIntegrationApiBody extends Partial<DiscordIntegrationSnapshot> {
+  error?: string;
+  details?: string;
+}
+
 const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
@@ -156,6 +165,14 @@ const HISTORY_VLOG_PRESET_DEFINITION = getExperiencePresetDefinition(HISTORICAL_
 function parseServerTimestamp(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const body = (await response.json().catch(() => null)) as {
+    error?: string;
+    details?: string;
+  } | null;
+  return body?.details || body?.error || fallback;
 }
 
 interface HomePageProps {
@@ -234,6 +251,15 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const [error, setError] = useState<string | null>(null);
   const [classrooms, setClassrooms] = useState<StageListItem[]>([]);
   const [scheduledClassEvents, setScheduledClassEvents] = useState<ScheduledClassEvent[]>([]);
+  const [discordIntegration, setDiscordIntegration] = useState<DiscordIntegrationSnapshot>({
+    configured: false,
+    connection: null,
+    channels: [],
+  });
+  const [discordIntegrationLoading, setDiscordIntegrationLoading] = useState(false);
+  const [discordIntegrationBusy, setDiscordIntegrationBusy] = useState(false);
+  const [discordIntegrationError, setDiscordIntegrationError] = useState<string | null>(null);
+  const [discordSyncingEventId, setDiscordSyncingEventId] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<Record<string, Slide>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [shareClassroom, setShareClassroom] = useState<StageListItem | null>(null);
@@ -309,6 +335,33 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     }
   }, [launchMode]);
 
+  const loadDiscordIntegration = useCallback(async () => {
+    if (launchMode !== 'teacher-server') {
+      return;
+    }
+
+    setDiscordIntegrationLoading(true);
+    setDiscordIntegrationError(null);
+    try {
+      const response = await fetch('/api/integrations/discord/connection', { cache: 'no-store' });
+      const body = (await response.json().catch(() => null)) as DiscordIntegrationApiBody | null;
+      if (!response.ok) {
+        throw new Error(body?.details || body?.error || 'Failed to load Discord integration');
+      }
+      setDiscordIntegration({
+        configured: Boolean(body?.configured),
+        connection: body?.connection ?? null,
+        channels: body?.channels ?? [],
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Discord integration';
+      setDiscordIntegrationError(message);
+      log.error('Failed to load Discord integration:', err);
+    } finally {
+      setDiscordIntegrationLoading(false);
+    }
+  }, [launchMode]);
+
   useEffect(() => {
     // Clear stale media store to prevent cross-course thumbnail contamination.
     // The store may hold tasks from a previously visited classroom whose elementIds
@@ -318,7 +371,34 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
 
     loadClassrooms();
     loadScheduledClassEvents();
-  }, [loadClassrooms, loadScheduledClassEvents]);
+    loadDiscordIntegration();
+  }, [loadClassrooms, loadDiscordIntegration, loadScheduledClassEvents]);
+
+  useEffect(() => {
+    if (launchMode !== 'teacher-server') {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const discordCallbackStatus = url.searchParams.get('discord');
+    if (!discordCallbackStatus) {
+      return;
+    }
+
+    if (discordCallbackStatus === 'connected') {
+      toast.success(t('home.schedule.discord.connected'));
+      void loadDiscordIntegration();
+    } else if (discordCallbackStatus === 'invalid_state') {
+      toast.error(t('home.schedule.discord.invalidState'));
+    } else if (discordCallbackStatus === 'missing_guild') {
+      toast.error(t('home.schedule.discord.missingGuild'));
+    } else {
+      toast.error(t('home.schedule.discord.connectionFailed'));
+    }
+
+    url.searchParams.delete('discord');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [launchMode, loadDiscordIntegration, t]);
 
   const handleScheduleRequestFailure = async (response: Response) => {
     const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
@@ -459,6 +539,96 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     await deleteLocalScheduledClassEvent(id);
     setScheduledClassEvents((prev) => prev.filter((event) => event.id !== id));
   };
+
+  const handleDiscordConnect = useCallback(() => {
+    window.location.assign('/api/integrations/discord/oauth/start');
+  }, []);
+
+  const handleDiscordSaveChannel = useCallback(
+    async (connectionId: string, channelId: string) => {
+      setDiscordIntegrationBusy(true);
+      setDiscordIntegrationError(null);
+      try {
+        const response = await fetch('/api/integrations/discord/connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ connectionId, channelId }),
+        });
+        if (!response.ok) {
+          throw new Error(await readApiError(response, 'Failed to save Discord channel'));
+        }
+        const body = (await response.json()) as DiscordIntegrationSnapshot;
+        setDiscordIntegration(body);
+        toast.success(t('home.schedule.discord.channelSaved'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to save Discord channel';
+        setDiscordIntegrationError(message);
+        throw err;
+      } finally {
+        setDiscordIntegrationBusy(false);
+      }
+    },
+    [t],
+  );
+
+  const handleDiscordDisconnect = useCallback(
+    async (connectionId: string) => {
+      setDiscordIntegrationBusy(true);
+      setDiscordIntegrationError(null);
+      try {
+        const response = await fetch('/api/integrations/discord/connection', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: connectionId }),
+        });
+        if (!response.ok) {
+          throw new Error(await readApiError(response, 'Failed to disconnect Discord'));
+        }
+        const body = (await response.json()) as DiscordIntegrationSnapshot;
+        setDiscordIntegration(body);
+        toast.success(t('home.schedule.discord.disconnected'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to disconnect Discord';
+        setDiscordIntegrationError(message);
+        throw err;
+      } finally {
+        setDiscordIntegrationBusy(false);
+      }
+    },
+    [t],
+  );
+
+  const handleDiscordSyncScheduledClass = useCallback(
+    async (eventId: string) => {
+      setDiscordSyncingEventId(eventId);
+      setDiscordIntegrationError(null);
+      try {
+        const response = await fetch(`/api/scheduled-classes/${eventId}/discord-sync`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          throw new Error(await readApiError(response, 'Failed to sync scheduled class'));
+        }
+        const body = (await response.json()) as ScheduledClassesApiBody;
+        if (!body.event) {
+          throw new Error('Failed to sync scheduled class');
+        }
+        setScheduledClassEvents((prev) =>
+          sortScheduledClassEvents(
+            prev.map((event) => (event.id === eventId ? body.event! : event)),
+          ),
+        );
+        toast.success(t('home.schedule.discord.synced'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to sync scheduled class';
+        setDiscordIntegrationError(message);
+        throw err;
+      } finally {
+        setDiscordSyncingEventId(null);
+      }
+    },
+    [t],
+  );
 
   const openClassroom = useCallback(
     (classroomId: string) => {
@@ -975,6 +1145,21 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
           onUpdate={handleUpdateScheduledClass}
           onDelete={handleDeleteScheduledClass}
           onOpenClassroom={openClassroom}
+          discordIntegration={
+            launchMode === 'teacher-server'
+              ? {
+                  ...discordIntegration,
+                  loading: discordIntegrationLoading,
+                  busy: discordIntegrationBusy,
+                  error: discordIntegrationError,
+                  syncingEventId: discordSyncingEventId,
+                  onConnect: handleDiscordConnect,
+                  onSaveChannel: handleDiscordSaveChannel,
+                  onDisconnect: handleDiscordDisconnect,
+                  onSyncEvent: handleDiscordSyncScheduledClass,
+                }
+              : undefined
+          }
         />
 
         {/* ── Slogan ── */}

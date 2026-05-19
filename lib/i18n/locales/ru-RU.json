@@ -33,7 +33,28 @@
       "delete": "Удалить",
       "linkFailed": "Класс создан, но связать его с расписанием не удалось.",
       "saveFailed": "Не удалось сохранить занятие",
-      "deleteFailed": "Не удалось удалить занятие"
+      "deleteFailed": "Не удалось удалить занятие",
+      "discord": {
+        "title": "Discord",
+        "notConfigured": "Discord не настроен",
+        "notConnected": "Не подключено",
+        "connect": "Подключить Discord",
+        "connected": "Discord подключен",
+        "connectionFailed": "Не удалось подключить Discord",
+        "invalidState": "Подключение Discord истекло. Повторите попытку.",
+        "missingGuild": "Выберите сервер Discord для подключения.",
+        "noChannel": "Нет канала",
+        "saveChannel": "Сохранить канал",
+        "channelSaved": "Канал Discord сохранен",
+        "disconnect": "Отключить Discord",
+        "disconnected": "Discord отключен",
+        "syncClass": "Синхронизировать с Discord",
+        "openEvent": "Открыть событие Discord",
+        "synced": "Discord синхронизирован",
+        "reminderSent": "Напоминание Discord отправлено",
+        "warning": "Предупреждение Discord",
+        "actionFailed": "Не удалось выполнить действие Discord"
+      }
     }
   },
   "toolbar": {

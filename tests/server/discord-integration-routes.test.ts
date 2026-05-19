@@ -66,6 +66,11 @@ describe('Discord integration routes', () => {
     vi.unstubAllEnvs();
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.requireRequestRole.mockResolvedValue(authContext);
+    mocks.getDiscordConfig.mockReturnValue({
+      clientId: 'client',
+      clientSecret: 'secret',
+      botToken: 'bot',
+    });
     mocks.listDiscordGuildChannels.mockResolvedValue([
       { id: 'channel-1', name: 'announcements', type: 0 },
       { id: 'channel-2', name: 'study-hall', type: 0 },
@@ -94,11 +99,27 @@ describe('Discord integration routes', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(json.configured).toBe(true);
     expect(json.connection).toMatchObject({ id: 'connection-1', guildId: 'guild-1' });
     expect(json.channels).toEqual([
       { id: 'channel-1', name: 'announcements' },
       { id: 'channel-2', name: 'study-hall' },
     ]);
+  });
+
+  it('reports when Discord is not configured', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ configured: false, connection: null, channels: [] });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
   });
 
   it('updates and deletes a Discord announcement channel', async () => {

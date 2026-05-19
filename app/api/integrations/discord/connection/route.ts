@@ -11,10 +11,11 @@ import {
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
-import { listDiscordGuildChannels } from '@/lib/server/discord';
+import { getDiscordConfig, listDiscordGuildChannels } from '@/lib/server/discord';
 import type {
   DiscordChannelSummary,
   DiscordConnectionSummary,
+  DiscordIntegrationSnapshot,
 } from '@/lib/types/scheduled-classes';
 
 interface ConnectionBody {
@@ -39,14 +40,16 @@ function toSummary(connection: {
   };
 }
 
-async function readConnectionSnapshot(ownerUserId: string) {
+async function readConnectionSnapshot(ownerUserId: string): Promise<DiscordIntegrationSnapshot> {
+  const configured = Boolean(getDiscordConfig());
   const connections = await listDiscordConnectionsForUser(ownerUserId);
   const connection = connections[0] ?? null;
   let channels: DiscordChannelSummary[] = [];
-  if (connection) {
+  if (configured && connection) {
     channels = await listDiscordGuildChannels(connection.guildId).catch(() => []);
   }
   return {
+    configured,
     connection: connection ? toSummary(connection) : null,
     channels: channels.map((channel) => ({ id: channel.id, name: channel.name })),
   };
