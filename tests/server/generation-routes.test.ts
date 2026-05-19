@@ -100,6 +100,7 @@ async function readResponseBody(response: Response) {
 describe('generation routes', () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllEnvs();
     applyOutlineFallbacksMock.mockReset();
     buildCompleteSceneMock.mockReset();
     buildPromptMock.mockReset();
@@ -445,20 +446,25 @@ describe('generation routes', () => {
     generateSceneContentMock.mockResolvedValue({ slideTitle: 'Welcome' });
 
     const { POST } = await import('@/app/api/generate/scene-content/route');
-    const response = await POST(
-      new NextRequest('http://localhost/api/generate/scene-content', {
-        method: 'POST',
-        body: JSON.stringify({
-          outline,
-          allOutlines: [outline],
-          stageId: 'stage-1',
-          classroomId: 'room-1',
-          stageInfo: { name: 'Physics 101', language: 'en-US' },
-        }),
+    const request = new NextRequest('http://localhost/api/generate/scene-content', {
+      method: 'POST',
+      body: JSON.stringify({
+        outline,
+        allOutlines: [outline],
+        stageId: 'stage-1',
+        classroomId: 'room-1',
+        stageInfo: { name: 'Physics 101', language: 'en-US' },
       }),
-    );
+    });
+    const response = await POST(request);
 
     expect(response.status).toBe(200);
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        request,
+      }),
+    );
     expect(generateSceneContentMock).toHaveBeenCalledTimes(1);
 
     const generationOptions = generateSceneContentMock.mock.calls[0]?.[2] as
@@ -627,20 +633,25 @@ describe('generation routes', () => {
     });
 
     const { POST } = await import('@/app/api/generate/scene-actions/route');
-    const response = await POST(
-      new NextRequest('http://localhost/api/generate/scene-actions', {
-        method: 'POST',
-        body: JSON.stringify({
-          outline,
-          allOutlines: [outline],
-          content: { slideTitle: 'Welcome' },
-          classroomId: 'room-1',
-          stageId: 'stage-1',
-        }),
+    const request = new NextRequest('http://localhost/api/generate/scene-actions', {
+      method: 'POST',
+      body: JSON.stringify({
+        outline,
+        allOutlines: [outline],
+        content: { slideTitle: 'Welcome' },
+        classroomId: 'room-1',
+        stageId: 'stage-1',
       }),
-    );
+    });
+    const response = await POST(request);
 
     expect(response.status).toBe(200);
+    expect(loadTeacherAdaptivePromptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classroomId: 'room-1',
+        request,
+      }),
+    );
     expect(callLLMMock).toHaveBeenCalledTimes(1);
 
     const llmRequest = callLLMMock.mock.calls[0]?.[0];

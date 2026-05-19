@@ -6,10 +6,7 @@ import {
   buildAdaptiveRuntimeContext,
   formatAdaptiveContextForPrompt,
 } from '@/lib/server/classroom-intelligence';
-
-function isTeacherWebAccess(access: ClassroomAccessContext): boolean {
-  return access.source === 'web' && access.auth.session.role === 'teacher';
-}
+import { shouldLoadAdaptiveRuntimeContext } from '@/lib/server/student-adaptation-beta';
 
 export async function loadTeacherAdaptivePrompt(input: {
   classroomId?: string | null;
@@ -30,7 +27,7 @@ export async function loadTeacherAdaptivePrompt(input: {
     }
   }
 
-  if (!access || !isTeacherWebAccess(access)) {
+  if (!access || !shouldLoadAdaptiveRuntimeContext({ access })) {
     return '';
   }
 

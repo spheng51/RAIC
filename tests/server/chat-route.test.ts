@@ -43,6 +43,7 @@ vi.mock('@/lib/logger', () => ({
 describe('POST /api/chat', () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllEnvs();
     requireClassroomAccessMock.mockReset();
     resolveModelMock.mockReset();
     toGovernedProviderApiErrorResponseMock.mockReset();
@@ -458,6 +459,116 @@ describe('POST /api/chat', () => {
     expect(response.status).toBe(200);
     expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
     expect(statelessGenerateMock).toHaveBeenCalledTimes(1);
+
+    const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
+    expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'absent')).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('keeps signed-in student web sessions non-adaptive without reviewed consent', async () => {
+    vi.stubEnv('RAIC_STUDENT_ADAPTATION_BETA', 'true');
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'student-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'student' },
+      },
+      source: 'web',
+    });
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'resolved-key',
+    });
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'room-1' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
+
+    const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
+    expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'absent')).toEqual({
+      pass: true,
+      missing: [],
+      unexpected: [],
+    });
+  });
+
+  it('does not treat the student beta flag alone as adaptive runtime consent', async () => {
+    vi.stubEnv('RAIC_STUDENT_ADAPTATION_BETA', 'true');
+    requireClassroomAccessMock.mockResolvedValue({
+      auth: {
+        user: { id: 'student-1' },
+        organization: { id: 'org-1' },
+        session: { role: 'student' },
+      },
+      source: 'classroom',
+    });
+    resolveModelMock.mockResolvedValue({
+      model: { id: 'mock-model' },
+      modelInfo: undefined,
+      modelString: 'openai:gpt-4o',
+      providerId: 'openai',
+      apiKey: 'resolved-key',
+    });
+    statelessGenerateMock.mockReturnValue(
+      (async function* () {
+        return;
+      })(),
+    );
+
+    const { POST } = await import('@/app/api/chat/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+          storeState: {
+            stage: { id: 'room-1' },
+            scenes: [],
+            currentSceneId: null,
+            mode: 'playback',
+            whiteboardOpen: false,
+          },
+          config: {
+            agentIds: ['agent-1'],
+          },
+          apiKey: '',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(buildAdaptiveRuntimeContextMock).not.toHaveBeenCalled();
 
     const generationRequest = statelessGenerateMock.mock.calls[0]?.[0];
     expect(scoreAdaptiveContextReplay(generationRequest?.adaptiveContext, 'absent')).toEqual({
