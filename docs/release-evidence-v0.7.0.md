@@ -51,10 +51,18 @@ Passed focused gates:
 - `corepack pnpm exec prettier lib/server/scheduled-classes.ts tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
+- `corepack pnpm exec prettier .github/workflows/ci.yml --check`
+- `git diff --check`
+  - Result: no whitespace errors.
 
 Current-slice typecheck note:
 
 - `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24. Re-run the canonical `corepack pnpm exec tsc --noEmit` on CI or clean local `main` before marking `v0.7.0` ready.
+
+Current-slice CI note:
+
+- Latest PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
+- E2E was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started. The follow-up CI-only hardening adds a 45-minute E2E job timeout, 15-minute browser install timeout, 30-minute test timeout, and Playwright browser cache.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
