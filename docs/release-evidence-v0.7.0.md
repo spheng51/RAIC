@@ -20,7 +20,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
 - Current branch commits:
   - `303e30d` `feat: add discord schedule teacher UI`
   - `aade99c` `test: add discord beta smoke gate`
-  - Current evidence, smoke hardening, and regression-test slice pending commit.
+  - Latest PR `#54` commit: evidence, smoke hardening, and regression-test slice.
 
 ## Branch Evidence
 
