@@ -40,9 +40,11 @@ Passed focused gates:
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
   - Result: 3 files passed, 28 tests passed.
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 6 files passed, 47 tests passed.
+  - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 6 files passed, 47 tests passed.
+  - Result: 6 files passed, 52 tests passed.
+- `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
+  - Result: completed in 55.38s.
 - `node --check scripts/discord-beta-smoke.mjs`
 - `node scripts/discord-beta-smoke.mjs --help`
 - `corepack pnpm exec prettier package.json scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
@@ -52,7 +54,7 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. Re-run `corepack pnpm exec tsc --noEmit` on CI or clean local `main` before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24. Re-run the canonical `corepack pnpm exec tsc --noEmit` on CI or clean local `main` before marking `v0.7.0` ready.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
@@ -69,6 +71,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 ## Coverage Notes
 
 - `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, channel update/delete, OAuth start, OAuth callback success and negative paths, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
+- `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, and smoke-specific cron secret precedence.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, and no-classroom disabled state.
