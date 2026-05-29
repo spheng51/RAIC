@@ -438,11 +438,19 @@ export async function syncScheduledClassDiscordForAccess(
   const event = await readScheduledClassForAccess(scope, id);
   if (!event) return null;
 
-  const connection = options.connectionId
-    ? await readDiscordConnectionForUser(scope.userId, options.connectionId)
-    : event.discordSync?.connectionId
-      ? await readDiscordConnectionForUser(scope.userId, event.discordSync.connectionId)
-      : ((await listDiscordConnectionsForUser(scope.userId))[0] ?? null);
+  let connection: Awaited<ReturnType<typeof readDiscordConnectionForUser>> = null;
+  if (options.connectionId) {
+    connection = await readDiscordConnectionForUser(scope.userId, options.connectionId);
+  } else if (event.discordSync?.connectionId) {
+    connection = await readDiscordConnectionForUser(scope.userId, event.discordSync.connectionId);
+    if (!connection) {
+      throw new Error('Reconnect Discord before syncing this scheduled class.');
+    }
+  } else if (event.discordSync?.enabled) {
+    throw new Error('Reconnect Discord before syncing this scheduled class.');
+  } else {
+    connection = (await listDiscordConnectionsForUser(scope.userId))[0] ?? null;
+  }
   if (!connection) {
     throw new Error('Connect Discord before syncing this scheduled class.');
   }

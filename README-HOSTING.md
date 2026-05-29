@@ -117,6 +117,7 @@ Public launch on `open-raic.com`:
    - One classroom flow still works end to end
    - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
+   - For the Discord scheduled-class beta, run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before credentials are available, then rerun `corepack pnpm run smoke:discord-beta` with a signed-in teacher cookie, Discord test server, scheduled class id, and cron secret before production sign-off.
    - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke.
 9. Roll back with Vercel if production is unhealthy.
 
@@ -186,6 +187,15 @@ Optional production features:
 - `MIROFISH_EMBED_SECRET`
 - `MIROFISH_AUTHORING_ENABLED` (teacher-server AI-guided creation inside the classroom MiroFish dialog)
 - `MIROFISH_MULTI_USER_ENABLED`
+- `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` for Discord scheduled-class sync and reminders
+
+Discord beta smoke inputs are operator-only local values:
+
+- `RAIC_DISCORD_SMOKE_BASE_URL` chooses the preview or production origin.
+- `RAIC_DISCORD_SMOKE_COOKIE` is the full signed-in teacher `Cookie` header used only for the smoke run.
+- `RAIC_DISCORD_SMOKE_CONNECTION_ID` and `RAIC_DISCORD_SMOKE_CHANNEL_ID` automate channel save.
+- `RAIC_DISCORD_SMOKE_EVENT_ID` automates syncing one future teacher-owned scheduled class with a linked classroom.
+- `RAIC_DISCORD_SMOKE_CRON_SECRET` is preferred over `CRON_SECRET` for smoke cron invocation.
 
 If you enable `MIROFISH_AUTHORING_ENABLED`, the MiroFish wrapper also needs to expose:
 

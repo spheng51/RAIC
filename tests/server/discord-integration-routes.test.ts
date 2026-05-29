@@ -209,6 +209,80 @@ describe('Discord integration routes', () => {
     );
   });
 
+  it('rejects Discord OAuth callbacks with invalid state before exchanging codes', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=wrong-state&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=invalid_state');
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.getDiscordGuild).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects Discord OAuth callbacks missing required install metadata', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=missing_guild');
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns a recoverable Studio status when Discord OAuth exchange fails', async () => {
+    mocks.exchangeDiscordOAuthCode.mockRejectedValue(new Error('Discord exchange failed'));
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=error');
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('redirects unauthenticated Discord OAuth callbacks to teacher sign-in', async () => {
+    mocks.requireRequestRole.mockResolvedValue(
+      NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 }),
+    );
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/sign-in?redirectTo=/studio');
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
   it('runs the reminder cron behind CRON_SECRET when configured', async () => {
     vi.stubEnv('CRON_SECRET', 'cron-secret');
     mocks.sendDueDiscordScheduledClassReminders.mockResolvedValue({
@@ -290,6 +364,48 @@ describe('Discord integration routes', () => {
       { baseUrl: 'http://localhost' },
     );
     expect(json.event.discordSync.scheduledEventId).toBe('discord-event-1');
+  });
+
+  it('returns not found when a Discord sync target is unavailable', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockResolvedValue(null);
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/missing-event/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'missing-event' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Scheduled class not found',
+    });
+  });
+
+  it('returns a recoverable validation error when Discord sync cannot proceed', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(
+      new Error('Connect Discord before syncing this scheduled class.'),
+    );
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Connect Discord before syncing this scheduled class.',
+    });
   });
 
   it('requires teacher access for connection routes', async () => {

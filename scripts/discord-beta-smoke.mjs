@@ -3,20 +3,34 @@
 import process from 'node:process';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
+const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h');
+const allowBlockers = process.argv.includes('--allow-blockers');
 
-const baseUrl = normalizeBaseUrl(
+if (wantsHelp) {
+  printUsage();
+  process.exit(0);
+}
+
+const results = [];
+const rawBaseUrl =
   process.env.RAIC_DISCORD_SMOKE_BASE_URL ||
-    process.env.RAIC_PRODUCTION_BASE_URL ||
-    DEFAULT_BASE_URL,
-);
+  process.env.RAIC_PRODUCTION_BASE_URL ||
+  DEFAULT_BASE_URL;
+const baseUrl = resolveBaseUrl(rawBaseUrl);
 const teacherCookie = process.env.RAIC_DISCORD_SMOKE_COOKIE || '';
 const eventId = process.env.RAIC_DISCORD_SMOKE_EVENT_ID || '';
 const connectionId = process.env.RAIC_DISCORD_SMOKE_CONNECTION_ID || '';
 const channelId = process.env.RAIC_DISCORD_SMOKE_CHANNEL_ID || '';
-const cronSecret = process.env.CRON_SECRET || process.env.RAIC_DISCORD_SMOKE_CRON_SECRET || '';
-const allowBlockers = process.argv.includes('--allow-blockers');
-
-const results = [];
+const cronSecretSource = process.env.RAIC_DISCORD_SMOKE_CRON_SECRET
+  ? 'RAIC_DISCORD_SMOKE_CRON_SECRET'
+  : process.env.CRON_SECRET
+    ? 'CRON_SECRET'
+    : '';
+const cronSecret = (
+  process.env.RAIC_DISCORD_SMOKE_CRON_SECRET ||
+  process.env.CRON_SECRET ||
+  ''
+).trim();
 
 function normalizeBaseUrl(rawValue) {
   const parsed = new URL(rawValue);
@@ -24,6 +38,20 @@ function normalizeBaseUrl(rawValue) {
   parsed.search = '';
   parsed.pathname = parsed.pathname.replace(/\/+$/, '');
   return parsed.toString();
+}
+
+function resolveBaseUrl(rawValue) {
+  try {
+    return normalizeBaseUrl(rawValue);
+  } catch (error) {
+    fail(
+      'Discord beta smoke base URL',
+      `invalid RAIC_DISCORD_SMOKE_BASE_URL/RAIC_PRODUCTION_BASE_URL: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
 }
 
 function record(status, label, detail) {
@@ -48,16 +76,49 @@ function manual(label, detail) {
   record('manual', label, detail);
 }
 
+function printUsage() {
+  console.log(`Discord beta smoke gate
+
+Usage:
+  pnpm run smoke:discord-beta
+  pnpm run smoke:discord-beta -- --allow-blockers
+
+Environment:
+  RAIC_DISCORD_SMOKE_BASE_URL       Preview or production base URL. Defaults to RAIC_PRODUCTION_BASE_URL, then https://open-raic.com.
+  RAIC_DISCORD_SMOKE_COOKIE         Full Cookie header for a signed-in teacher session, for example "session=...".
+  RAIC_DISCORD_SMOKE_CONNECTION_ID  Optional Discord connection id for automated channel save.
+  RAIC_DISCORD_SMOKE_CHANNEL_ID     Optional Discord channel id for automated channel save.
+  RAIC_DISCORD_SMOKE_EVENT_ID       Optional scheduled class id for automated Discord sync.
+  RAIC_DISCORD_SMOKE_CRON_SECRET    Preferred cron bearer token for this smoke. Falls back to CRON_SECRET.
+
+Exit behavior:
+  Fails on automated failures or missing live-smoke prerequisites.
+  Use --allow-blockers to record blocked live-smoke prerequisites without failing.`);
+}
+
 async function fetchJson(path, init = {}) {
-  const response = await fetch(new URL(path, baseUrl), {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(teacherCookie ? { Cookie: teacherCookie } : {}),
-      ...init.headers,
-    },
-  });
+  if (!baseUrl) {
+    throw new Error('base URL is invalid');
+  }
+
+  let response;
+
+  try {
+    response = await fetch(new URL(path, baseUrl), {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(teacherCookie ? { Cookie: teacherCookie } : {}),
+        ...init.headers,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      `request to ${path} failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   const text = await response.text();
   let body = null;
 
@@ -70,6 +131,18 @@ async function fetchJson(path, init = {}) {
   }
 
   return { response, body };
+}
+
+function describeApiResponse(response, body) {
+  const contentType = response.headers.get('content-type') || 'unknown content-type';
+  const parts = [`HTTP ${response.status}`, contentType];
+  if (response.redirected) {
+    parts.push(`redirected to ${response.url}`);
+  }
+  if (body?.errorCode) {
+    parts.push(`errorCode=${body.errorCode}`);
+  }
+  return parts.join(', ');
 }
 
 async function checkHealth() {
@@ -91,7 +164,10 @@ async function checkUnauthenticatedGuards() {
   } else {
     fail(
       '/api/integrations/discord/connection unauth guard',
-      `expected HTTP 401 UNAUTHORIZED, got HTTP ${connectionResponse.status}`,
+      `expected HTTP 401 UNAUTHORIZED JSON, got ${describeApiResponse(
+        connectionResponse,
+        connectionBody,
+      )}`,
     );
   }
 
@@ -104,7 +180,7 @@ async function checkUnauthenticatedGuards() {
   } else {
     fail(
       '/api/scheduled-classes/[id]/discord-sync unauth guard',
-      `expected HTTP 401 UNAUTHORIZED, got HTTP ${syncResponse.status}`,
+      `expected HTTP 401 UNAUTHORIZED JSON, got ${describeApiResponse(syncResponse, syncBody)}`,
     );
   }
 }
@@ -218,12 +294,15 @@ async function runReminderCron() {
   ) {
     pass(
       'Discord reminder cron',
-      `checked=${body.checked} sent=${body.sent} failed=${body.failed}`,
+      `checked=${body.checked} sent=${body.sent} failed=${body.failed} source=${cronSecretSource}`,
     );
     return;
   }
 
-  fail('Discord reminder cron', `expected cron result counts, got HTTP ${response.status}`);
+  fail(
+    'Discord reminder cron',
+    `expected cron result counts, got ${describeApiResponse(response, body)}`,
+  );
 }
 
 function printManualChecklist() {
@@ -251,16 +330,7 @@ function printManualChecklist() {
   );
 }
 
-async function main() {
-  console.log(`[discord-beta-smoke] Base URL: ${baseUrl}`);
-  await checkHealth();
-  await checkUnauthenticatedGuards();
-  const snapshot = await checkConnectionSnapshot();
-  await saveChannelIfRequested(snapshot);
-  await syncScheduledClassIfRequested();
-  await runReminderCron();
-  printManualChecklist();
-
+function summarizeResults() {
   const failures = results.filter((result) => result.status === 'fail');
   const blockers = results.filter((result) => result.status === 'block');
   const manualSteps = results.filter((result) => result.status === 'manual');
@@ -279,4 +349,26 @@ async function main() {
   }
 }
 
-await main();
+async function main() {
+  console.log(`[discord-beta-smoke] Base URL: ${baseUrl || '(invalid)'}`);
+  if (!baseUrl) {
+    summarizeResults();
+    return;
+  }
+
+  await checkHealth();
+  await checkUnauthenticatedGuards();
+  const snapshot = await checkConnectionSnapshot();
+  await saveChannelIfRequested(snapshot);
+  await syncScheduledClassIfRequested();
+  await runReminderCron();
+  printManualChecklist();
+  summarizeResults();
+}
+
+try {
+  await main();
+} catch (error) {
+  fail('Discord beta smoke runtime', error instanceof Error ? error.message : String(error));
+  summarizeResults();
+}
