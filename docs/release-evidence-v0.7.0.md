@@ -45,6 +45,10 @@ Passed focused gates:
   - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
   - Result: completed in 55.38s.
+- `node ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
+  - Result after CI system-Chrome config update: completed in 13.29s.
+- `PLAYWRIGHT_USE_SYSTEM_CHROME=true corepack pnpm exec playwright test --list`
+  - Result: Playwright loaded config and listed 33 tests in 10 files.
 - `node --check scripts/discord-beta-smoke.mjs`
 - `node scripts/discord-beta-smoke.mjs --help`
 - `corepack pnpm exec prettier package.json scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
@@ -62,7 +66,8 @@ Current-slice typecheck note:
 Current-slice CI note:
 
 - Latest PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
-- E2E was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started. The follow-up CI-only hardening adds a 45-minute E2E job timeout, 15-minute browser install timeout, 30-minute test timeout, and Playwright browser cache.
+- E2E on `48db290` was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started.
+- E2E on `a706168` proved the browser download reached 100% quickly, then the Playwright install process hung until the new 15-minute step timeout failed it. The follow-up CI-only hardening removes the browser install step in CI, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true` while retaining a 45-minute job timeout and 30-minute test timeout.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 

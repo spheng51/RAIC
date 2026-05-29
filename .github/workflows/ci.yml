@@ -107,18 +107,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright browsers
-        timeout-minutes: 15
-        run: pnpm exec playwright install chromium
+      - name: Verify system Chrome
+        run: google-chrome --version
 
       - name: Run e2e tests
         timeout-minutes: 30
+        env:
+          PLAYWRIGHT_USE_SYSTEM_CHROME: 'true'
         run: pnpm exec playwright test
 
       - uses: actions/upload-artifact@v4
