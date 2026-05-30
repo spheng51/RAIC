@@ -24,7 +24,9 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `48db290` scheduled-class route regression tests.
   - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
   - `d651003` release evidence for the green `f49bebc` PR checks.
-  - `42cba11` latest fully checked implementation head before this evidence-only update; includes protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
+  - `42cba11` first fully checked implementation head after protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
+  - `786e241` one-time Discord OAuth state-cookie cleanup on every callback redirect path.
+  - `639a6fb` recoverable `UPSTREAM_ERROR` response when Discord channel loading fails while saving the announcement channel.
 
 ## Branch Evidence
 
