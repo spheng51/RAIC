@@ -69,6 +69,7 @@ import {
   type ClassroomLaunchMode,
   writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
+import { getDiscordStudioCallbackFeedback } from '@/lib/utils/discord-studio-callback';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
@@ -387,15 +388,19 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       return;
     }
 
-    if (discordCallbackStatus === 'connected') {
-      toast.success(t('home.schedule.discord.connected'));
-      void loadDiscordIntegration();
-    } else if (discordCallbackStatus === 'invalid_state') {
-      toast.error(t('home.schedule.discord.invalidState'));
-    } else if (discordCallbackStatus === 'missing_guild') {
-      toast.error(t('home.schedule.discord.missingGuild'));
+    const feedback = getDiscordStudioCallbackFeedback(discordCallbackStatus);
+    if (!feedback) {
+      return;
+    }
+
+    if (feedback.toastKind === 'success') {
+      toast.success(t(feedback.messageKey));
     } else {
-      toast.error(t('home.schedule.discord.connectionFailed'));
+      toast.error(t(feedback.messageKey));
+    }
+
+    if (feedback.shouldRefreshConnection) {
+      void loadDiscordIntegration();
     }
 
     url.searchParams.delete('discord');

@@ -31,7 +31,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
   - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
   - `5d7048a` TypeScript-safe PR-local drift policy fixture; GitHub CI and Vercel preview checks were green for this code snapshot.
-  - Current hardening slice: recoverable Discord connection snapshot channel-load warnings and explicit OAuth denial routing back to Studio.
+  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, and tested Studio callback feedback/refresh behavior for every Discord callback status.
 
 ## Branch Evidence
 
@@ -46,6 +46,8 @@ Passed focused gates:
 
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 20 tests passed, including OAuth callback state-cookie cleanup, explicit OAuth denial routing, recoverable connection snapshot channel-load warnings, and recoverable channel-save error coverage.
+- `corepack pnpm test tests/lib/discord-studio-callback.test.ts`
+  - Result: 6 tests passed, covering `connected`, `invalid_state`, `missing_guild`, `error`, unknown statuses, and the connection-snapshot refresh flag used by `/studio`.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 18 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
@@ -99,7 +101,7 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.91s after the Discord connection warning slice. PR `#54` previously passed the canonical Lint, Typecheck & Unit Tests CI job on `5d7048a`; re-run CI on the new head and run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 11.46s after the Studio callback refresh slice. PR `#54` previously passed the canonical Lint, Typecheck & Unit Tests CI job on `0a36c8c`; re-run CI on the new head and run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
 Recent completed code CI snapshot:
 
@@ -132,6 +134,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.
 - `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow and keeps the final clean-main drift mode distinct from explicit PR-local drift evidence.
 - `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, unknown feature names failing closed, manual fallback feature-key output, and non-leakage of secret values in audit results.
+- `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, and no-classroom disabled state.
 
 ## Pending Release Gates
