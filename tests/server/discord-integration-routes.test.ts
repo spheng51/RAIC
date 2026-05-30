@@ -531,13 +531,31 @@ describe('Discord integration routes', () => {
       NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 }),
     );
 
-    const { GET } = await import('@/app/api/integrations/discord/connection/route');
-    const response = await GET(
+    const { DELETE, GET, POST } = await import('@/app/api/integrations/discord/connection/route');
+    const getResponse = await GET(
       new NextRequest('http://localhost/api/integrations/discord/connection'),
     );
+    const postResponse = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-1' }),
+      }),
+    );
+    const deleteResponse = await DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-1' }),
+      }),
+    );
 
-    expect(response.status).toBe(401);
+    expect(getResponse.status).toBe(401);
+    expect(postResponse.status).toBe(401);
+    expect(deleteResponse.status).toBe(401);
     expect(mocks.listDiscordConnectionsForUser).not.toHaveBeenCalled();
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
   });
 
   it('requires teacher access for OAuth start and scheduled-class sync routes', async () => {
