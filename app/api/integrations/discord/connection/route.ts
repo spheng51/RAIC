@@ -49,13 +49,19 @@ async function readConnectionSnapshot(ownerUserId: string): Promise<DiscordInteg
   const connections = await listDiscordConnectionsForUser(ownerUserId);
   const connection = connections[0] ?? null;
   let channels: DiscordChannelSummary[] = [];
+  let channelsError: string | undefined;
   if (configured && connection) {
-    channels = await listDiscordGuildChannels(connection.guildId).catch(() => []);
+    try {
+      channels = await listDiscordGuildChannels(connection.guildId);
+    } catch (error) {
+      channelsError = normalizeDiscordError(error);
+    }
   }
   return {
     configured,
     connection: connection ? toSummary(connection) : null,
     channels: channels.map((channel) => ({ id: channel.id, name: channel.name })),
+    ...(channelsError ? { channelsError } : {}),
   };
 }
 

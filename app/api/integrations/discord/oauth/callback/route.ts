@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
 
   const expectedState = request.cookies.get(DISCORD_OAUTH_STATE_COOKIE)?.value ?? '';
   const state = request.nextUrl.searchParams.get('state') ?? '';
+  const oauthError = request.nextUrl.searchParams.get('error') ?? '';
   const code = request.nextUrl.searchParams.get('code') ?? '';
   const guildId = request.nextUrl.searchParams.get('guild_id') ?? '';
   const response = redirectToStudio(request, 'connected');
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest) {
   try {
     if (!expectedState || state !== expectedState) {
       return redirectToStudio(request, 'invalid_state');
+    }
+    if (oauthError) {
+      return redirectToStudio(request, 'error');
     }
     if (!code || !guildId) {
       return redirectToStudio(request, 'missing_guild');

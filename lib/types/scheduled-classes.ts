@@ -80,4 +80,5 @@ export interface DiscordIntegrationSnapshot {
   configured: boolean;
   connection: DiscordConnectionSummary | null;
   channels: DiscordChannelSummary[];
+  channelsError?: string;
 }

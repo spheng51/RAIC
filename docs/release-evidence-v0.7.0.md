@@ -31,6 +31,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
   - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
   - `5d7048a` TypeScript-safe PR-local drift policy fixture; GitHub CI and Vercel preview checks were green for this code snapshot.
+  - Current hardening slice: recoverable Discord connection snapshot channel-load warnings and explicit OAuth denial routing back to Studio.
 
 ## Branch Evidence
 
@@ -44,7 +45,7 @@ Environment:
 Passed focused gates:
 
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
-  - Result: 18 tests passed, including OAuth callback state-cookie cleanup and recoverable channel-save error coverage.
+  - Result: 20 tests passed, including OAuth callback state-cookie cleanup, explicit OAuth denial routing, recoverable connection snapshot channel-load warnings, and recoverable channel-save error coverage.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 18 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
@@ -82,6 +83,8 @@ Passed focused gates:
 - `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md docs/release-evidence-v0.7.0.md --check`
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
+- `corepack pnpm exec vitest run tests/components/schedule-classes-box.test.tsx --pool=forks --no-file-parallelism --maxWorkers=1 --reporter=verbose`
+  - Result: 11 tests passed, including recoverable Discord integration warning display. The local jsdom environment startup took roughly 45s before test import under the available Node 22 runtime.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
 - `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-git-codex-v070-discor-908f39-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
@@ -96,7 +99,7 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 14.94s after the PR-local drift policy fixture fix. PR `#54` later passed the canonical Lint, Typecheck & Unit Tests CI job on `5d7048a`. Re-run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.91s after the Discord connection warning slice. PR `#54` previously passed the canonical Lint, Typecheck & Unit Tests CI job on `5d7048a`; re-run CI on the new head and run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
 Recent completed code CI snapshot:
 
@@ -123,7 +126,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
 ## Coverage Notes
 
-- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, channel update/delete, recoverable channel-save failures when Discord channel listing fails, OAuth start, OAuth callback success and negative paths, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
+- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, recoverable snapshot warnings when Discord channel listing fails, channel update/delete, recoverable channel-save failures when Discord channel listing fails, OAuth start, OAuth callback success and negative paths, explicit OAuth denial routing, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
 - `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.

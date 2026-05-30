@@ -352,7 +352,9 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         configured: Boolean(body?.configured),
         connection: body?.connection ?? null,
         channels: body?.channels ?? [],
+        ...(body?.channelsError ? { channelsError: body.channelsError } : {}),
       });
+      setDiscordIntegrationError(body?.channelsError ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load Discord integration';
       setDiscordIntegrationError(message);
@@ -559,6 +561,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         }
         const body = (await response.json()) as DiscordIntegrationSnapshot;
         setDiscordIntegration(body);
+        setDiscordIntegrationError(body.channelsError ?? null);
         toast.success(t('home.schedule.discord.channelSaved'));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to save Discord channel';
@@ -586,6 +589,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         }
         const body = (await response.json()) as DiscordIntegrationSnapshot;
         setDiscordIntegration(body);
+        setDiscordIntegrationError(body.channelsError ?? null);
         toast.success(t('home.schedule.discord.disconnected'));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to disconnect Discord';

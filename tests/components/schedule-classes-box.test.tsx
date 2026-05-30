@@ -381,6 +381,17 @@ describe('ScheduleClassesBox', () => {
     expect(discordIntegration.onConnect).not.toHaveBeenCalled();
   });
 
+  it('shows recoverable Discord integration warnings in the setup row', async () => {
+    const { container } = await mountBox({
+      discordIntegration: makeDiscordIntegration({
+        channels: [],
+        error: 'Unable to load Discord announcement channels.',
+      }),
+    });
+
+    expect(container.textContent).toContain('Unable to load Discord announcement channels.');
+  });
+
   it('saves and disconnects a connected Discord announcement channel', async () => {
     const discordIntegration = makeDiscordIntegration();
     const { container } = await mountBox({ discordIntegration });

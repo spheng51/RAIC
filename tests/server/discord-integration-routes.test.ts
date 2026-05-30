@@ -133,6 +133,35 @@ describe('Discord integration routes', () => {
     expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
   });
 
+  it('keeps the connection snapshot recoverable when Discord channels cannot be loaded', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: null,
+        channelName: null,
+      },
+    ]);
+    mocks.listDiscordGuildChannels.mockRejectedValue(new Error('Missing Discord permissions'));
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      configured: true,
+      connection: { id: 'connection-1', guildId: 'guild-1' },
+      channels: [],
+      channelsError: 'Missing Discord permissions',
+    });
+  });
+
   it('updates and deletes a Discord announcement channel', async () => {
     const connection = {
       id: 'connection-1',
@@ -285,6 +314,24 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=missing_guild');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns a recoverable Studio status when Discord OAuth is denied before code exchange', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&error=access_denied',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=error');
     expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
