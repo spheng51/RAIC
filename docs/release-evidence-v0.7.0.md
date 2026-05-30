@@ -27,6 +27,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `42cba11` first fully checked implementation head after protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
   - `786e241` one-time Discord OAuth state-cookie cleanup on every callback redirect path.
   - `639a6fb` recoverable `UPSTREAM_ERROR` response when Discord channel loading fails while saving the announcement channel.
+  - `bd2b20c` latest fully checked head before this final evidence refresh; GitHub CI and Vercel preview checks were green.
 
 ## Branch Evidence
 
@@ -68,8 +69,8 @@ Passed focused gates:
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
-- `RAIC_DISCORD_SMOKE_BASE_URL=<current Vercel preview URL> corepack pnpm run smoke:discord-beta -- --allow-blockers`
-  - Result: exited 0 and recorded Vercel deployment protection as a preview-access blocker. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
+- `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-git-codex-v070-discor-908f39-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
+  - Result: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
 - CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, and `actions/upload-artifact@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
 - `ops:drift` enforces those Node 24-native CI action major floors so the release gate catches accidental downgrades.
@@ -82,9 +83,9 @@ Current-slice typecheck note:
 
 Current-slice CI note:
 
-- PR `#54` CI on `42cba11` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `bd2b20c` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- The latest green E2E run completed successfully at `2026-05-30T06:21:15Z`.
+- The latest green E2E run completed successfully at `2026-05-30T17:21:28Z`. Vercel reported preview deployment `3ydpjm3r1etSCJQd1ba6k5Qc6xsG` ready at `2026-05-30T17:19:23Z`.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
