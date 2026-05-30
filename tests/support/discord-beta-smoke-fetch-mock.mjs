@@ -103,6 +103,10 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === '/api/cron/discord-scheduled-class-reminders') {
     const expectedSecret = process.env.RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET || '';
     if (expectedSecret && headers.get('authorization') === `Bearer ${expectedSecret}`) {
+      if (process.env.RAIC_DISCORD_SMOKE_MOCK_CRON_BAD_COUNTS === '1') {
+        return json(200, { success: true, checked: '1', sent: 0, failed: 0 });
+      }
+
       return json(200, { success: true, checked: 1, sent: 0, failed: 0 });
     }
 

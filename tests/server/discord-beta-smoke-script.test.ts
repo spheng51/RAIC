@@ -221,4 +221,25 @@ describe('discord beta smoke script', () => {
     expect(result.stdout).toContain('scheduledEventUrl=https://evil.example/events/guild/event');
     expect(result.stderr).toBe('');
   });
+
+  it('fails reminder cron when the API returns malformed count fields', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_CRON_SECRET: ' smoke-secret ',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_BAD_COUNTS: '1',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'smoke-secret',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    Discord reminder cron');
+    expect(result.stdout).toContain('expected cron result counts');
+    expect(result.stdout).toContain('HTTP 200');
+    expect(result.stderr).toBe('');
+  });
 });
