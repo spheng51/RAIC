@@ -105,14 +105,14 @@ Current-slice typecheck note:
 
 Recent completed code CI snapshot:
 
-- PR `#54` CI on `5d7048a` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `f1f55eb` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- Latest green check times on `5d7048a`:
-  - Ops Drift: `2026-05-30T19:43:42Z`
-  - MiroFish Contract Gate: `2026-05-30T19:44:01Z`
-  - Lint, Typecheck & Unit Tests: `2026-05-30T19:45:16Z`
-  - E2E Tests: `2026-05-30T19:46:41Z`
-  - Vercel preview deployment: `77q8RTAqGU96aitjg9eSsWgX7td5`, ready from `2026-05-30T19:44:25Z`
+- Latest green check times on `f1f55eb`:
+  - Ops Drift: `2026-05-30T20:27:27Z`
+  - MiroFish Contract Gate: `2026-05-30T20:27:43Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-30T20:29:02Z`
+  - E2E Tests: `2026-05-30T20:30:18Z`
+  - Vercel preview deployment: `4n5e4zwyj8J9ehQToFVPZftNfvsk`, ready from `2026-05-30T20:27:52Z`
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
