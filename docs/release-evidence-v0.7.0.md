@@ -30,6 +30,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `bd2b20c` Discord readiness hardening checkpoint; GitHub CI and Vercel preview checks were green at that point.
   - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
   - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
+  - `5d7048a` TypeScript-safe PR-local drift policy fixture; GitHub CI and Vercel preview checks were green for this code snapshot.
 
 ## Branch Evidence
 
@@ -59,7 +60,7 @@ Passed focused gates:
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
   - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
-  - Result: 3 tests passed before the later PR-local drift mode case was added; the updated 4-test slice passed locally under the available Node runtime and awaits PR CI's Node 24 coverage.
+  - Result: 3 tests passed before the later PR-local drift mode case was added; the updated 4-test slice passed locally under the available Node runtime and then passed PR CI's Node 24 TypeScript/test coverage on `5d7048a`.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/vercel-env-audit.test.ts`
   - Result: 7 tests passed.
 - `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
@@ -95,18 +96,18 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24, and PR `#54` later passed the canonical Lint, Typecheck & Unit Tests CI job on `fcb110e`. Re-run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 14.94s after the PR-local drift policy fixture fix. PR `#54` later passed the canonical Lint, Typecheck & Unit Tests CI job on `5d7048a`. Re-run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
-Recent completed CI snapshot before the PR-local drift slice:
+Recent completed code CI snapshot:
 
-- PR `#54` CI on `fcb110e` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `5d7048a` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- Latest green check times on `fcb110e`:
-  - Ops Drift: `2026-05-30T18:29:05Z`
-  - MiroFish Contract Gate: `2026-05-30T18:29:21Z`
-  - Lint, Typecheck & Unit Tests: `2026-05-30T18:30:36Z`
-  - E2E Tests: `2026-05-30T18:31:49Z`
-  - Vercel preview deployment: `BLkR6YHU1hqbjfRHhN31X4X9pFU4`, ready from `2026-05-30T18:29:49Z`
+- Latest green check times on `5d7048a`:
+  - Ops Drift: `2026-05-30T19:43:42Z`
+  - MiroFish Contract Gate: `2026-05-30T19:44:01Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-30T19:45:16Z`
+  - E2E Tests: `2026-05-30T19:46:41Z`
+  - Vercel preview deployment: `77q8RTAqGU96aitjg9eSsWgX7td5`, ready from `2026-05-30T19:44:25Z`
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
