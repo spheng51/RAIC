@@ -35,6 +35,10 @@ globalThis.fetch = async (input, init = {}) => {
   }
 
   if (url.pathname === '/api/health') {
+    if (process.env.RAIC_DISCORD_SMOKE_MOCK_HEALTH_ERROR === '1') {
+      return json(503, { success: false, errorCode: 'SERVICE_UNAVAILABLE' });
+    }
+
     return json(200, { success: true });
   }
 
@@ -59,6 +63,18 @@ globalThis.fetch = async (input, init = {}) => {
   if (/^\/api\/scheduled-classes\/[^/]+\/discord-sync$/.test(url.pathname)) {
     if (!cookie) {
       return json(401, { success: false, errorCode: 'UNAUTHORIZED' });
+    }
+
+    if (process.env.RAIC_DISCORD_SMOKE_MOCK_SYNC_WARNING_ONLY === '1') {
+      return json(200, {
+        success: true,
+        event: {
+          discordSync: {
+            enabled: true,
+            syncWarning: 'Discord rate limited this update.',
+          },
+        },
+      });
     }
 
     return json(200, {

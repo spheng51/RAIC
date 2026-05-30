@@ -157,6 +157,42 @@ function describeApiResponse(response, body) {
   return parts.join(', ');
 }
 
+function isDiscordScheduledEventUrl(value) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'discord.com' &&
+      pathParts.length === 3 &&
+      pathParts[0] === 'events'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function describeDiscordSync(sync) {
+  if (!sync) {
+    return 'missing discordSync metadata';
+  }
+
+  const details = [`enabled=${String(sync.enabled)}`];
+  if (sync.scheduledEventUrl) {
+    details.push(`scheduledEventUrl=${sync.scheduledEventUrl}`);
+  } else {
+    details.push('scheduledEventUrl=missing');
+  }
+  if (sync.syncWarning) {
+    details.push(`syncWarning=${sync.syncWarning}`);
+  }
+  return details.join(', ');
+}
+
 function isVercelDeploymentProtection(response, body) {
   if (response.status !== 401) {
     return false;
@@ -188,7 +224,10 @@ async function checkHealth() {
     pass('/api/health', 'target is reachable');
     return 'passed';
   } else {
-    fail('/api/health', `expected HTTP 200 success:true, got HTTP ${response.status}`);
+    fail(
+      '/api/health',
+      `expected HTTP 200 success:true, got ${describeApiResponse(response, body)}`,
+    );
     return 'failed';
   }
 }
@@ -237,7 +276,7 @@ async function checkConnectionSnapshot() {
   if (response.status !== 200 || body?.success !== true) {
     fail(
       '/api/integrations/discord/connection',
-      `expected HTTP 200 success:true, got HTTP ${response.status}`,
+      `expected HTTP 200 success:true, got ${describeApiResponse(response, body)}`,
     );
     return null;
   }
@@ -288,7 +327,10 @@ async function saveChannelIfRequested(snapshot) {
     return body;
   }
 
-  fail('Save Discord channel', `expected saved channel ${channelId}, got HTTP ${response.status}`);
+  fail(
+    'Save Discord channel',
+    `expected saved channel ${channelId}, got ${describeApiResponse(response, body)}`,
+  );
   return snapshot;
 }
 
@@ -306,13 +348,23 @@ async function syncScheduledClassIfRequested() {
     { method: 'POST' },
   );
   const sync = body?.event?.discordSync;
-  if (response.status === 200 && body?.success === true && sync?.enabled === true) {
-    const detail = sync.scheduledEventUrl || sync.syncWarning || 'Discord sync metadata returned';
-    pass('Sync scheduled class', detail);
+  if (
+    response.status === 200 &&
+    body?.success === true &&
+    sync?.enabled === true &&
+    isDiscordScheduledEventUrl(sync.scheduledEventUrl)
+  ) {
+    pass('Sync scheduled class', sync.scheduledEventUrl);
     return;
   }
 
-  fail('Sync scheduled class', `expected synced event, got HTTP ${response.status}`);
+  fail(
+    'Sync scheduled class',
+    `expected Discord scheduled event URL, got ${describeApiResponse(
+      response,
+      body,
+    )}; ${describeDiscordSync(sync)}`,
+  );
 }
 
 async function runReminderCron() {

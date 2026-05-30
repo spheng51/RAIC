@@ -162,4 +162,42 @@ describe('discord beta smoke script', () => {
     expect(result.stdout).toContain('Summary: 7 automated passed, 0 failed, 0 blocked');
     expect(result.stderr).toBe('');
   });
+
+  it('reports response details when health check fails', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_MOCK_HEALTH_ERROR: '1',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    /api/health');
+    expect(result.stdout).toContain('HTTP 503');
+    expect(result.stdout).toContain('errorCode=SERVICE_UNAVAILABLE');
+    expect(result.stderr).toBe('');
+  });
+
+  it('fails live sync when Discord only returns a recoverable warning without an event URL', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_EVENT_ID: 'class-1',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_MOCK_SYNC_WARNING_ONLY: '1',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    Sync scheduled class');
+    expect(result.stdout).toContain('scheduledEventUrl=missing');
+    expect(result.stdout).toContain('syncWarning=Discord rate limited this update.');
+    expect(result.stderr).toBe('');
+  });
 });
