@@ -199,6 +199,29 @@ describe('Discord integration routes', () => {
     expect(mocks.deleteDiscordConnectionForUser).toHaveBeenCalledWith('teacher-1', 'connection-1');
   });
 
+  it('rejects channel saves when Discord app config is missing', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'MISSING_API_KEY',
+      error: 'Discord integration is not configured.',
+    });
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
   it('returns a recoverable error when Discord channels cannot be loaded while saving', async () => {
     const connection = {
       id: 'connection-1',

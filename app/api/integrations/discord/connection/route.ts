@@ -99,6 +99,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!getDiscordConfig()) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.MISSING_API_KEY,
+      503,
+      'Discord integration is not configured.',
+    );
+  }
+
   const connection = await readDiscordConnectionForUser(auth.user.id, connectionId);
   if (!connection) {
     return apiErrorWithRequestSession(
