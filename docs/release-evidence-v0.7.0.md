@@ -27,8 +27,8 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `42cba11` first fully checked implementation head after protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
   - `786e241` one-time Discord OAuth state-cookie cleanup on every callback redirect path.
   - `639a6fb` recoverable `UPSTREAM_ERROR` response when Discord channel loading fails while saving the announcement channel.
-  - `bd2b20c` latest fully checked head before this final evidence refresh; GitHub CI and Vercel preview checks were green.
-  - Current ops slice: feature-aware Vercel env audit for required Discord beta keys.
+  - `bd2b20c` Discord readiness hardening checkpoint; GitHub CI and Vercel preview checks were green at that point.
+  - `fcb110e` latest completed CI snapshot before this evidence sync: feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
 
 ## Branch Evidence
 
@@ -75,6 +75,7 @@ Passed focused gates:
 - `node scripts/discord-beta-smoke.mjs --help`
 - `corepack pnpm exec prettier package.json scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
 - `corepack pnpm exec prettier lib/server/scheduled-classes.ts tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
+- `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md docs/release-evidence-v0.7.0.md --check`
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
@@ -89,13 +90,18 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24. Re-run the canonical `corepack pnpm exec tsc --noEmit` on CI or clean local `main` before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24, and PR `#54` later passed the canonical Lint, Typecheck & Unit Tests CI job on `fcb110e`. Re-run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
-Current-slice CI note:
+Latest completed CI snapshot:
 
-- PR `#54` CI on `bd2b20c` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `fcb110e` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- The latest green E2E run completed successfully at `2026-05-30T17:21:28Z`. Vercel reported preview deployment `3ydpjm3r1etSCJQd1ba6k5Qc6xsG` ready at `2026-05-30T17:19:23Z`.
+- Latest green check times on `fcb110e`:
+  - Ops Drift: `2026-05-30T18:29:05Z`
+  - MiroFish Contract Gate: `2026-05-30T18:29:21Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-30T18:30:36Z`
+  - E2E Tests: `2026-05-30T18:31:49Z`
+  - Vercel preview deployment: `BLkR6YHU1hqbjfRHhN31X4X9pFU4`, ready from `2026-05-30T18:29:49Z`
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
