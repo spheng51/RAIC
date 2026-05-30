@@ -38,6 +38,8 @@ Environment:
 Passed focused gates:
 
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
+  - Result: 17 tests passed, including the OAuth callback state-cookie cleanup coverage.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 17 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
   - Result: 7 tests passed after protected-preview blocker and bypass coverage was added.
@@ -96,7 +98,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
 ## Coverage Notes
 
-- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, channel update/delete, OAuth start, OAuth callback success and negative paths, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
+- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, channel update/delete, OAuth start, OAuth callback success and negative paths, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
 - `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.

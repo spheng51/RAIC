@@ -60,6 +60,12 @@ const authContext = {
   user: { id: 'teacher-1' },
 };
 
+function expectDiscordOAuthStateCookieCleared(response: Response) {
+  const setCookie = response.headers.get('set-cookie') ?? '';
+  expect(setCookie).toContain('raic_discord_oauth_state=');
+  expect(setCookie.toLowerCase()).toMatch(/expires=thu, 01 jan 1970|max-age=0/);
+}
+
 describe('Discord integration routes', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -196,6 +202,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=connected');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'code-1' }),
     );
@@ -222,6 +229,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=invalid_state');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
     expect(mocks.getDiscordGuild).not.toHaveBeenCalled();
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
@@ -240,6 +248,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=missing_guild');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
@@ -259,6 +268,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=error');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
 
@@ -279,6 +289,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/sign-in?redirectTo=/studio');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
