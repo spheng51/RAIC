@@ -201,9 +201,9 @@ Discord beta smoke inputs are operator-only local values:
 Protected preview example:
 
 ```bash
-RAIC_DISCORD_SMOKE_BASE_URL=https://<preview>.vercel.app \
-RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN=<short-lived-bypass-token> \
-corepack pnpm run smoke:discord-beta -- --allow-blockers
+read -rs RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
+export RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
+RAIC_DISCORD_SMOKE_BASE_URL=https://<preview>.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers
 ```
 
 If you enable `MIROFISH_AUTHORING_ENABLED`, the MiroFish wrapper also needs to expose:
