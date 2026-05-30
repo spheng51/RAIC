@@ -12,6 +12,12 @@ const ciWebServerCommand = useStandaloneServer
 const useDevServer = process.env.PLAYWRIGHT_USE_DEV_SERVER === 'true';
 const webServerCommand = useDevServer ? 'corepack pnpm dev' : ciWebServerCommand;
 const useSystemChrome = process.env.PLAYWRIGHT_USE_SYSTEM_CHROME === 'true';
+const systemChromeExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+const chromiumSystemBrowserUse = useSystemChrome
+  ? systemChromeExecutablePath
+    ? { launchOptions: { executablePath: systemChromeExecutablePath } }
+    : { channel: 'chrome' }
+  : {};
 
 export default defineConfig({
   testDir: './e2e/tests',
@@ -30,7 +36,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], ...(useSystemChrome ? { channel: 'chrome' } : {}) },
+      use: { ...devices['Desktop Chrome'], ...chromiumSystemBrowserUse },
     },
   ],
   webServer: {

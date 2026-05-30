@@ -20,7 +20,11 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
 - Current branch commits:
   - `303e30d` `feat: add discord schedule teacher UI`
   - `aade99c` `test: add discord beta smoke gate`
-  - Latest PR `#54` commit: evidence, smoke hardening, and regression-test slice.
+  - `d43bf01` / `42734e3` evidence and release-readiness doc hardening.
+  - `48db290` scheduled-class route regression tests.
+  - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
+  - `d651003` release evidence for the green `f49bebc` PR checks.
+  - Current branch head: Chrome binary-path discovery hardening and evidence wording cleanup.
 
 ## Branch Evidence
 
@@ -65,7 +69,7 @@ Current-slice typecheck note:
 
 Current-slice CI note:
 
-- Latest PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
+- Earlier PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
 - E2E on `48db290` was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started.
 - E2E on `a706168` proved the browser download reached 100% quickly, then the Playwright install process hung until the new 15-minute step timeout failed it. The follow-up CI-only hardening removes the browser install step in CI, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true` while retaining a 45-minute job timeout and 30-minute test timeout.
 - PR `#54` CI on `f49bebc` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review remained neutral/non-blocking. E2E verified system Chrome and completed successfully at `2026-05-30T00:03:34Z`.

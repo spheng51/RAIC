@@ -108,7 +108,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Verify system Chrome
-        run: google-chrome --version
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome_path" ]; then
+            echo "No system Chrome binary found on the runner." >&2
+            exit 1
+          fi
+          "$chrome_path" --version
+          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$chrome_path" >> "$GITHUB_ENV"
 
       - name: Run e2e tests
         timeout-minutes: 30
