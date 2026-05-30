@@ -5,11 +5,17 @@ type VercelEnvAuditModule = typeof import('../../scripts/lib/vercel-env-audit.mj
 let auditEnvRecords: VercelEnvAuditModule['auditEnvRecords'];
 let manualFallbackLines: VercelEnvAuditModule['manualFallbackLines'];
 let parseAuditContexts: VercelEnvAuditModule['parseAuditContexts'];
+let parseRequiredFeatures: VercelEnvAuditModule['parseRequiredFeatures'];
 let summarizeAudit: VercelEnvAuditModule['summarizeAudit'];
 
 beforeAll(async () => {
-  ({ auditEnvRecords, manualFallbackLines, parseAuditContexts, summarizeAudit } =
-    await import('../../scripts/lib/vercel-env-audit.mjs'));
+  ({
+    auditEnvRecords,
+    manualFallbackLines,
+    parseAuditContexts,
+    parseRequiredFeatures,
+    summarizeAudit,
+  } = await import('../../scripts/lib/vercel-env-audit.mjs'));
 });
 
 describe('Vercel env audit helpers', () => {
@@ -71,20 +77,101 @@ describe('Vercel env audit helpers', () => {
     expect(auditResults[1].missingRequiredKeys).toContain('BLOB_READ_WRITE_TOKEN');
   });
 
+  it('requires Discord beta env keys only when the feature is requested', () => {
+    const auditResults = auditEnvRecords({
+      contexts: ['preview'],
+      requiredFeatures: 'discord-scheduled-classes',
+      envRecords: [
+        { key: 'DATABASE_URL', target: ['preview'], value: 'postgres://secret' },
+        { key: 'RAIC_SECRET_ENCRYPTION_KEY', target: ['preview'], value: 'encryption-secret' },
+        { key: 'BLOB_READ_WRITE_TOKEN', target: ['preview'], value: 'blob-secret' },
+        { key: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID', target: ['preview'], value: 'public-client' },
+        { key: 'GOOGLE_CLIENT_ID', target: ['preview'], value: 'google-client-secret' },
+        { key: 'OPENAI_API_KEY', target: ['preview'], value: 'sk-secret' },
+        { key: 'DISCORD_CLIENT_ID', target: ['preview'], value: 'discord-client' },
+        { key: 'DISCORD_BOT_TOKEN', target: ['preview'], value: 'discord-bot-secret' },
+      ],
+    });
+
+    expect(auditResults[0].ok).toBe(false);
+    expect(auditResults[0].requiredFeatureEnvs).toEqual([
+      {
+        feature: 'discord',
+        label: 'Discord scheduled-class beta',
+        required: [
+          { key: 'DISCORD_CLIENT_ID', present: true },
+          { key: 'DISCORD_CLIENT_SECRET', present: false },
+          { key: 'DISCORD_BOT_TOKEN', present: true },
+          { key: 'CRON_SECRET', present: false },
+        ],
+        missingRequiredKeys: ['DISCORD_CLIENT_SECRET', 'CRON_SECRET'],
+        ok: false,
+      },
+    ]);
+    expect(JSON.stringify(auditResults[0])).not.toContain('discord-bot-secret');
+  });
+
+  it('passes Discord beta env checks when all feature keys are present', () => {
+    const auditResults = auditEnvRecords({
+      contexts: ['preview'],
+      requiredFeatures: parseRequiredFeatures('discord-beta').join(','),
+      envRecords: [
+        { key: 'DATABASE_URL', target: ['preview'] },
+        { key: 'RAIC_SECRET_ENCRYPTION_KEY', target: ['preview'] },
+        { key: 'BLOB_READ_WRITE_TOKEN', target: ['preview'] },
+        { key: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID', target: ['preview'] },
+        { key: 'GOOGLE_CLIENT_ID', target: ['preview'] },
+        { key: 'OPENAI_API_KEY', target: ['preview'] },
+        { key: 'DISCORD_CLIENT_ID', target: ['preview'] },
+        { key: 'DISCORD_CLIENT_SECRET', target: ['preview'] },
+        { key: 'DISCORD_BOT_TOKEN', target: ['preview'] },
+        { key: 'CRON_SECRET', target: ['preview'] },
+      ],
+    });
+
+    expect(auditResults[0].ok).toBe(true);
+    expect(auditResults[0].requiredFeatureEnvs[0].ok).toBe(true);
+    expect(summarizeAudit(auditResults).ok).toBe(true);
+  });
+
+  it('fails closed for unknown required feature names', () => {
+    const auditResults = auditEnvRecords({
+      contexts: ['production'],
+      requiredFeatures: 'unknown-feature',
+      envRecords: [
+        { key: 'DATABASE_URL', target: ['production'] },
+        { key: 'RAIC_SECRET_ENCRYPTION_KEY', target: ['production'] },
+        { key: 'BLOB_READ_WRITE_TOKEN', target: ['production'] },
+        { key: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID', target: ['production'] },
+        { key: 'GOOGLE_CLIENT_ID', target: ['production'] },
+        { key: 'OPENAI_API_KEY', target: ['production'] },
+      ],
+    });
+
+    expect(auditResults[0].ok).toBe(false);
+    expect(auditResults[0].unknownRequiredFeatures).toEqual(['unknown-feature']);
+    expect(summarizeAudit(auditResults).ok).toBe(false);
+  });
+
   it('normalizes requested contexts and documents manual fallback', () => {
     expect(parseAuditContexts(' production, preview,production ')).toEqual([
       'production',
       'preview',
+    ]);
+    expect(parseRequiredFeatures('discord-scheduled-classes, discord_beta,discord')).toEqual([
+      'discord',
     ]);
 
     const fallback = manualFallbackLines({
       projectId: 'prj_123',
       teamId: 'team_123',
       contexts: ['production'],
+      requiredFeatures: 'discord',
     }).join('\n');
 
     expect(fallback).toContain('prj_123');
     expect(fallback).toContain('team_123');
+    expect(fallback).toContain('Feature-required keys (discord)');
     expect(fallback).toContain('Do not paste or print secret values');
   });
 });

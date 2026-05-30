@@ -105,6 +105,7 @@ Public launch on `open-raic.com`:
    - `CI=1 corepack pnpm run test:e2e`
    - `corepack pnpm run benchmark:milestone`
    - `corepack pnpm run ops:verify`
+   - For releases where Discord scheduled-class sync is in scope, run the Vercel env audit with `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` for the target context before smoke sign-off.
 8. Merge to `main`, let Vercel deploy production automatically, then smoke-check the auth and governed surfaces before declaring the release healthy:
    - Signed out: `/studio` redirects to `/sign-in?next=%2Fstudio`
    - Signed out: `/admin` redirects to `/sign-in?next=%2Fadmin`
@@ -173,6 +174,19 @@ corepack pnpm run ops:env:vercel
 ```
 
 The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
+
+Discord beta Vercel env audit:
+
+```bash
+VERCEL_PROJECT_ID=prj_... \
+VERCEL_TEAM_ID=team_... \
+VERCEL_TOKEN=... \
+VERCEL_ENV_AUDIT_CONTEXTS=preview \
+VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord \
+corepack pnpm run ops:env:vercel
+```
+
+For production Discord beta sign-off, repeat with `VERCEL_ENV_AUDIT_CONTEXTS=production` after the preview smoke has passed.
 
 Optional advanced parsing:
 

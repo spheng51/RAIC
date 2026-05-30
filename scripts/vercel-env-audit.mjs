@@ -5,6 +5,7 @@ import {
   auditEnvRecords,
   manualFallbackLines,
   parseAuditContexts,
+  parseRequiredFeatures,
   summarizeAudit,
 } from './lib/vercel-env-audit.mjs';
 
@@ -12,10 +13,18 @@ const token = process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN;
 const projectId = process.env.VERCEL_PROJECT_ID;
 const teamId = process.env.VERCEL_TEAM_ID;
 const contexts = parseAuditContexts(process.env.VERCEL_ENV_AUDIT_CONTEXTS || 'production');
+const requiredFeatures = parseRequiredFeatures(
+  process.env.VERCEL_ENV_AUDIT_REQUIRED_FEATURES || '',
+);
 
 function printManualFallback(reason) {
   console.error(`[vercel-env-audit] ${reason}`);
-  for (const line of manualFallbackLines({ projectId, teamId, contexts })) {
+  for (const line of manualFallbackLines({
+    projectId,
+    teamId,
+    contexts,
+    requiredFeatures: requiredFeatures.join(','),
+  })) {
     console.error(line);
   }
 }
@@ -64,6 +73,17 @@ function printAuditResults(auditResults) {
     } else {
       console.log('[vercel-env-audit] MISS LLM provider key present');
     }
+
+    for (const feature of result.requiredFeatureEnvs) {
+      console.log(`[vercel-env-audit] Feature: ${feature.label} (${feature.feature})`);
+      for (const entry of feature.required) {
+        const status = entry.present ? 'PASS' : 'MISS';
+        console.log(`[vercel-env-audit] ${status} ${entry.key} (${feature.feature})`);
+      }
+    }
+    for (const feature of result.unknownRequiredFeatures) {
+      console.log(`[vercel-env-audit] MISS unknown required feature: ${feature}`);
+    }
   }
 }
 
@@ -89,7 +109,11 @@ async function main() {
     return;
   }
 
-  const auditResults = auditEnvRecords({ envRecords, contexts });
+  const auditResults = auditEnvRecords({
+    envRecords,
+    contexts,
+    requiredFeatures: requiredFeatures.join(','),
+  });
   printAuditResults(auditResults);
 
   const summary = summarizeAudit(auditResults);
@@ -108,6 +132,22 @@ async function main() {
     }
     if (!result.llmProviderReady) {
       console.error(`[vercel-env-audit] Missing LLM provider key in ${result.context}.`);
+    }
+    for (const feature of result.requiredFeatureEnvs) {
+      if (feature.missingRequiredKeys.length > 0) {
+        console.error(
+          `[vercel-env-audit] Missing required ${feature.feature} keys in ${
+            result.context
+          }: ${feature.missingRequiredKeys.join(', ')}`,
+        );
+      }
+    }
+    if (result.unknownRequiredFeatures.length > 0) {
+      console.error(
+        `[vercel-env-audit] Unknown required feature(s): ${result.unknownRequiredFeatures.join(
+          ', ',
+        )}`,
+      );
     }
   }
   process.exitCode = 1;
