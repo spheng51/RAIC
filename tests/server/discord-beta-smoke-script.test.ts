@@ -121,6 +121,28 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('uses a Vercel bypass token when preview deployment protection is enabled', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: '',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_CRON_SECRET: '',
+        RAIC_DISCORD_SMOKE_MOCK_VERCEL_BYPASS_TOKEN: 'preview-bypass',
+        RAIC_DISCORD_SMOKE_MOCK_VERCEL_PROTECTION: '1',
+        RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN: ' preview-bypass ',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('PASS    /api/health');
+    expect(result.stdout).toContain('/api/integrations/discord/connection unauth guard');
+    expect(result.stdout).not.toContain('Vercel deployment protection');
+    expect(result.stdout).toContain('BLOCK   Discord connection snapshot');
+    expect(result.stderr).toBe('');
+  });
+
   it('prefers and trims the smoke-specific cron secret', async () => {
     const result = await runSmoke(
       [],

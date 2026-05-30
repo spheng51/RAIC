@@ -21,6 +21,7 @@ const teacherCookie = process.env.RAIC_DISCORD_SMOKE_COOKIE || '';
 const eventId = process.env.RAIC_DISCORD_SMOKE_EVENT_ID || '';
 const connectionId = process.env.RAIC_DISCORD_SMOKE_CONNECTION_ID || '';
 const channelId = process.env.RAIC_DISCORD_SMOKE_CHANNEL_ID || '';
+const vercelBypassToken = (process.env.RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN || '').trim();
 const cronSecretSource = process.env.RAIC_DISCORD_SMOKE_CRON_SECRET
   ? 'RAIC_DISCORD_SMOKE_CRON_SECRET'
   : process.env.CRON_SECRET
@@ -90,10 +91,21 @@ Environment:
   RAIC_DISCORD_SMOKE_CHANNEL_ID     Optional Discord channel id for automated channel save.
   RAIC_DISCORD_SMOKE_EVENT_ID       Optional scheduled class id for automated Discord sync.
   RAIC_DISCORD_SMOKE_CRON_SECRET    Preferred cron bearer token for this smoke. Falls back to CRON_SECRET.
+  RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
+                                      Optional Vercel Protection Bypass for Automation token for protected previews.
 
 Exit behavior:
   Fails on automated failures or missing live-smoke prerequisites.
   Use --allow-blockers to record blocked live-smoke prerequisites without failing.`);
+}
+
+function buildRequestUrl(path) {
+  const requestUrl = new URL(path, baseUrl);
+  if (vercelBypassToken) {
+    requestUrl.searchParams.set('x-vercel-set-bypass-cookie', 'true');
+    requestUrl.searchParams.set('x-vercel-protection-bypass', vercelBypassToken);
+  }
+  return requestUrl;
 }
 
 async function fetchJson(path, init = {}) {
@@ -104,7 +116,7 @@ async function fetchJson(path, init = {}) {
   let response;
 
   try {
-    response = await fetch(new URL(path, baseUrl), {
+    response = await fetch(buildRequestUrl(path), {
       ...init,
       headers: {
         Accept: 'application/json',

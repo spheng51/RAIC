@@ -24,7 +24,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `48db290` scheduled-class route regression tests.
   - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
   - `d651003` release evidence for the green `f49bebc` PR checks.
-  - Current branch head: Chrome binary-path discovery hardening, protected-preview smoke blocker handling, and evidence wording cleanup.
+  - Current branch head: Chrome binary-path discovery hardening, protected-preview smoke blocker/bypass handling, and evidence wording cleanup.
 
 ## Branch Evidence
 
@@ -62,6 +62,7 @@ Passed focused gates:
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
 - `RAIC_DISCORD_SMOKE_BASE_URL=<current Vercel preview URL> corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result: exited 0 and recorded Vercel deployment protection as a preview-access blocker. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
+- Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
 - `git diff --check`
   - Result: no whitespace errors.
 
@@ -125,6 +126,7 @@ Preview first:
   - `RAIC_DISCORD_SMOKE_CHANNEL_ID`
   - `RAIC_DISCORD_SMOKE_EVENT_ID`
   - `RAIC_DISCORD_SMOKE_CRON_SECRET`
+  - `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` if Vercel deployment protection is enabled on the preview.
 
 Production after preview smoke passes:
 

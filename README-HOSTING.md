@@ -117,7 +117,7 @@ Public launch on `open-raic.com`:
    - One classroom flow still works end to end
    - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
-   - For the Discord scheduled-class beta, run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before credentials are available, then rerun `corepack pnpm run smoke:discord-beta` with a signed-in teacher cookie, Discord test server, scheduled class id, and cron secret before production sign-off.
+   - For the Discord scheduled-class beta, run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before credentials are available, adding `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` when the preview is behind Vercel deployment protection. Then rerun `corepack pnpm run smoke:discord-beta` with a signed-in teacher cookie, Discord test server, scheduled class id, and cron secret before production sign-off.
    - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke.
 9. Roll back with Vercel if production is unhealthy.
 
@@ -196,6 +196,15 @@ Discord beta smoke inputs are operator-only local values:
 - `RAIC_DISCORD_SMOKE_CONNECTION_ID` and `RAIC_DISCORD_SMOKE_CHANNEL_ID` automate channel save.
 - `RAIC_DISCORD_SMOKE_EVENT_ID` automates syncing one future teacher-owned scheduled class with a linked classroom.
 - `RAIC_DISCORD_SMOKE_CRON_SECRET` is preferred over `CRON_SECRET` for smoke cron invocation.
+- `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` optionally bypasses Vercel deployment protection for preview API smoke. Keep it operator-local and do not store it in project env.
+
+Protected preview example:
+
+```bash
+RAIC_DISCORD_SMOKE_BASE_URL=https://<preview>.vercel.app \
+RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN=<short-lived-bypass-token> \
+corepack pnpm run smoke:discord-beta -- --allow-blockers
+```
 
 If you enable `MIROFISH_AUTHORING_ENABLED`, the MiroFish wrapper also needs to expose:
 

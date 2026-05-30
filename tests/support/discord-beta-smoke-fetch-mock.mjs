@@ -11,16 +11,27 @@ globalThis.fetch = async (input, init = {}) => {
   const cookie = headers.get('cookie') || '';
 
   if (process.env.RAIC_DISCORD_SMOKE_MOCK_VERCEL_PROTECTION === '1') {
-    return new Response(
-      '<!doctype html><title>Authentication Required</title>Vercel Authentication',
-      {
-        status: 401,
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-          'set-cookie': '_vercel_sso_nonce=test; Path=/; Secure; HttpOnly; SameSite=Lax',
+    const expectedBypassToken = process.env.RAIC_DISCORD_SMOKE_MOCK_VERCEL_BYPASS_TOKEN || '';
+    const hasBypass =
+      expectedBypassToken &&
+      url.searchParams.get('x-vercel-set-bypass-cookie') === 'true' &&
+      url.searchParams.get('x-vercel-protection-bypass') === expectedBypassToken;
+
+    if (hasBypass) {
+      url.searchParams.delete('x-vercel-set-bypass-cookie');
+      url.searchParams.delete('x-vercel-protection-bypass');
+    } else {
+      return new Response(
+        '<!doctype html><title>Authentication Required</title>Vercel Authentication',
+        {
+          status: 401,
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'set-cookie': '_vercel_sso_nonce=test; Path=/; Secure; HttpOnly; SameSite=Lax',
+          },
         },
-      },
-    );
+      );
+    }
   }
 
   if (url.pathname === '/api/health') {
