@@ -31,6 +31,9 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
   - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
   - `5d7048a` TypeScript-safe PR-local drift policy fixture; GitHub CI and Vercel preview checks were green for this code snapshot.
+  - `0a36c8c` / `20217e8` recoverable Discord connection warnings, explicit OAuth denial routing, and Studio callback feedback refresh coverage.
+  - `f1f55eb` missing-config channel-save protection when Discord config is absent.
+  - `d074b03` strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
   - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, and strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
 
 ## Branch Evidence
