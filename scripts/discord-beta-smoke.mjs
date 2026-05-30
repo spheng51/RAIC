@@ -353,7 +353,7 @@ function printManualChecklist() {
   );
   manual(
     'Connect Discord test server',
-    'Sign in as a teacher, connect a disposable Discord server, and verify Studio returns with ?discord=connected.',
+    'Sign in as a teacher, connect a disposable Discord server, and verify Studio returns with ?discord=connected. Before Discord app config exists, ?discord=not_configured is the expected preflight signal.',
   );
   manual(
     'Verify Discord scheduled event',
