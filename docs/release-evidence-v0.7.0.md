@@ -60,7 +60,7 @@ Passed focused gates:
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
-- `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-dzx1hi2in-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
+- `RAIC_DISCORD_SMOKE_BASE_URL=<current Vercel preview URL> corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result: exited 0 and recorded Vercel deployment protection as a preview-access blocker. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - `git diff --check`
   - Result: no whitespace errors.
