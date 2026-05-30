@@ -1,6 +1,6 @@
 # Release Evidence: v0.7.0 Discord Scheduled-Class Beta Readiness
 
-Date: 2026-05-29
+Date: 2026-05-30
 Target release: `v0.7.0`
 Evidence status: draft branch evidence. Final clean-main gates, live Discord smoke, production deployment ID, and tag are pending.
 
@@ -17,14 +17,14 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
 
 - Backend PR: `#53`, merged into `main` as `de2fdf20a99388748e60804a50a586900375706a`.
 - Teacher UI PR: `#54`, branch `codex/v0.7.0-discord-scheduled-classes-ui`.
-- Current branch commits:
+- Notable branch commits:
   - `303e30d` `feat: add discord schedule teacher UI`
   - `aade99c` `test: add discord beta smoke gate`
   - `d43bf01` / `42734e3` evidence and release-readiness doc hardening.
   - `48db290` scheduled-class route regression tests.
   - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
   - `d651003` release evidence for the green `f49bebc` PR checks.
-  - Current branch head: Chrome binary-path discovery hardening, protected-preview smoke blocker/bypass handling, GitHub Actions Node 24 action upgrades, and evidence wording cleanup.
+  - `42cba11` latest fully checked implementation head before this evidence-only update; includes protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
 
 ## Branch Evidence
 
@@ -40,13 +40,17 @@ Passed focused gates:
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 17 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 6 tests passed after protected-preview blocker coverage was added.
+  - Result: 7 tests passed after protected-preview blocker and bypass coverage was added.
+- `corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
+  - Result: 3 tests passed.
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 3 files passed, 28 tests passed.
+  - Result: 3 files passed, 28 tests passed before the later bypass-token smoke-script case was added; the focused smoke-script rerun above is the current count.
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
   - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
   - Result: 6 files passed, 52 tests passed.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
+  - Result: 3 tests passed.
 - `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
   - Result: completed in 55.38s.
 - `node ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
@@ -74,10 +78,9 @@ Current-slice typecheck note:
 
 Current-slice CI note:
 
-- Earlier PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
-- E2E on `48db290` was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started.
-- E2E on `a706168` proved the browser download reached 100% quickly, then the Playwright install process hung until the new 15-minute step timeout failed it. The follow-up CI-only hardening removes the browser install step in CI, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true` while retaining a 45-minute job timeout and 30-minute test timeout.
-- PR `#54` CI on `f49bebc` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review remained neutral/non-blocking. E2E verified system Chrome and completed successfully at `2026-05-30T00:03:34Z`.
+- PR `#54` CI on `42cba11` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
+- The latest green E2E run completed successfully at `2026-05-30T06:21:15Z`.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
@@ -96,7 +99,8 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 - `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, channel update/delete, OAuth start, OAuth callback success and negative paths, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access.
 - `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
-- `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, and smoke-specific cron secret precedence.
+- `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.
+- `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, and no-classroom disabled state.
 
 ## Pending Release Gates
