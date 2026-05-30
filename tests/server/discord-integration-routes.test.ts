@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   exchangeDiscordOAuthCode: vi.fn(),
   getDiscordGuild: vi.fn(),
   listDiscordGuildChannels: vi.fn(),
+  normalizeDiscordError: vi.fn(),
   sendDueDiscordScheduledClassReminders: vi.fn(),
   syncScheduledClassDiscordForAccess: vi.fn(),
 }));
@@ -34,6 +35,7 @@ vi.mock('@/lib/server/discord', () => ({
   getDiscordGuild: mocks.getDiscordGuild,
   getDiscordConfig: mocks.getDiscordConfig,
   listDiscordGuildChannels: mocks.listDiscordGuildChannels,
+  normalizeDiscordError: mocks.normalizeDiscordError,
 }));
 
 vi.mock('@/lib/server/scheduled-classes', () => ({
@@ -81,6 +83,9 @@ describe('Discord integration routes', () => {
       { id: 'channel-1', name: 'announcements', type: 0 },
       { id: 'channel-2', name: 'study-hall', type: 0 },
     ]);
+    mocks.normalizeDiscordError.mockImplementation((error) =>
+      error instanceof Error ? error.message : String(error),
+    );
     mocks.exchangeDiscordOAuthCode.mockResolvedValue(undefined);
     mocks.getDiscordGuild.mockResolvedValue({ id: 'guild-1', name: 'Physics Guild' });
   });
@@ -163,6 +168,38 @@ describe('Discord integration routes', () => {
     );
     expect(deleteResponse.status).toBe(200);
     expect(mocks.deleteDiscordConnectionForUser).toHaveBeenCalledWith('teacher-1', 'connection-1');
+  });
+
+  it('returns a recoverable error when Discord channels cannot be loaded while saving', async () => {
+    const connection = {
+      id: 'connection-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      guildId: 'guild-1',
+      guildName: 'Physics Guild',
+      channelId: 'channel-1',
+      channelName: 'announcements',
+    };
+    mocks.readDiscordConnectionForUser.mockResolvedValue(connection);
+    mocks.listDiscordGuildChannels.mockRejectedValue(new Error('Missing Discord permissions'));
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'UPSTREAM_ERROR',
+      error: 'Unable to load Discord announcement channels.',
+      details: 'Missing Discord permissions',
+    });
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
 
   it('starts Discord OAuth only when Discord app config exists', async () => {

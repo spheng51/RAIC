@@ -11,7 +11,11 @@ import {
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
-import { getDiscordConfig, listDiscordGuildChannels } from '@/lib/server/discord';
+import {
+  getDiscordConfig,
+  listDiscordGuildChannels,
+  normalizeDiscordError,
+} from '@/lib/server/discord';
 import type {
   DiscordChannelSummary,
   DiscordConnectionSummary,
@@ -99,7 +103,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const channels = await listDiscordGuildChannels(connection.guildId);
+  let channels: DiscordChannelSummary[];
+  try {
+    channels = await listDiscordGuildChannels(connection.guildId);
+  } catch (error) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.UPSTREAM_ERROR,
+      502,
+      'Unable to load Discord announcement channels.',
+      normalizeDiscordError(error),
+    );
+  }
+
   const channel = channels.find((item) => item.id === channelId);
   if (!channel) {
     return apiErrorWithRequestSession(
