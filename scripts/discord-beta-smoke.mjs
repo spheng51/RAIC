@@ -145,12 +145,39 @@ function describeApiResponse(response, body) {
   return parts.join(', ');
 }
 
+function isVercelDeploymentProtection(response, body) {
+  if (response.status !== 401) {
+    return false;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const setCookie = response.headers.get('set-cookie') || '';
+  const rawBody = typeof body?.raw === 'string' ? body.raw : '';
+
+  return (
+    contentType.includes('text/html') &&
+    (setCookie.includes('_vercel_sso_nonce') ||
+      rawBody.includes('Vercel Authentication') ||
+      rawBody.includes('Authentication Required'))
+  );
+}
+
 async function checkHealth() {
   const { response, body } = await fetchJson('/api/health');
+  if (isVercelDeploymentProtection(response, body)) {
+    block(
+      'Vercel deployment protection',
+      'authenticate preview access with vercel curl, a trusted source token, or a protection-bypass token before API smoke',
+    );
+    return 'blocked';
+  }
+
   if (response.status === 200 && body?.success === true) {
     pass('/api/health', 'target is reachable');
+    return 'passed';
   } else {
     fail('/api/health', `expected HTTP 200 success:true, got HTTP ${response.status}`);
+    return 'failed';
   }
 }
 
@@ -356,7 +383,13 @@ async function main() {
     return;
   }
 
-  await checkHealth();
+  const healthStatus = await checkHealth();
+  if (healthStatus === 'blocked') {
+    printManualChecklist();
+    summarizeResults();
+    return;
+  }
+
   await checkUnauthenticatedGuards();
   const snapshot = await checkConnectionSnapshot();
   await saveChannelIfRequested(snapshot);

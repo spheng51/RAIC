@@ -24,7 +24,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `48db290` scheduled-class route regression tests.
   - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
   - `d651003` release evidence for the green `f49bebc` PR checks.
-  - Current branch head: Chrome binary-path discovery hardening and evidence wording cleanup.
+  - Current branch head: Chrome binary-path discovery hardening, protected-preview smoke blocker handling, and evidence wording cleanup.
 
 ## Branch Evidence
 
@@ -40,7 +40,7 @@ Passed focused gates:
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 17 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 5 tests passed.
+  - Result: 6 tests passed after protected-preview blocker coverage was added.
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
   - Result: 3 files passed, 28 tests passed.
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
@@ -60,6 +60,8 @@ Passed focused gates:
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
+- `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-dzx1hi2in-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
+  - Result: exited 0 and recorded Vercel deployment protection as a preview-access blocker. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - `git diff --check`
   - Result: no whitespace errors.
 

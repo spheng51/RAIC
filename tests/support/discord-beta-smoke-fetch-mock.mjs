@@ -10,6 +10,19 @@ globalThis.fetch = async (input, init = {}) => {
   const headers = new Headers(init.headers || {});
   const cookie = headers.get('cookie') || '';
 
+  if (process.env.RAIC_DISCORD_SMOKE_MOCK_VERCEL_PROTECTION === '1') {
+    return new Response(
+      '<!doctype html><title>Authentication Required</title>Vercel Authentication',
+      {
+        status: 401,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'set-cookie': '_vercel_sso_nonce=test; Path=/; Secure; HttpOnly; SameSite=Lax',
+        },
+      },
+    );
+  }
+
   if (url.pathname === '/api/health') {
     return json(200, { success: true });
   }

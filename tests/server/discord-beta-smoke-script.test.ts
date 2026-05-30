@@ -102,6 +102,25 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('treats Vercel deployment protection as a blocker when explicitly allowed', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: '',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_CRON_SECRET: '',
+        RAIC_DISCORD_SMOKE_MOCK_VERCEL_PROTECTION: '1',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('BLOCK   Vercel deployment protection');
+    expect(result.stdout).not.toContain('FAIL    /api/health');
+    expect(result.stdout).not.toContain('discord/connection unauth guard');
+    expect(result.stderr).toBe('');
+  });
+
   it('prefers and trims the smoke-specific cron secret', async () => {
     const result = await runSmoke(
       [],
