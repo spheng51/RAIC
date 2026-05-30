@@ -28,7 +28,8 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `786e241` one-time Discord OAuth state-cookie cleanup on every callback redirect path.
   - `639a6fb` recoverable `UPSTREAM_ERROR` response when Discord channel loading fails while saving the announcement channel.
   - `bd2b20c` Discord readiness hardening checkpoint; GitHub CI and Vercel preview checks were green at that point.
-  - `fcb110e` latest completed CI snapshot before this evidence sync: feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
+  - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
+  - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
 
 ## Branch Evidence
 
@@ -48,7 +49,7 @@ Passed focused gates:
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
   - Result: 7 tests passed after protected-preview blocker and bypass coverage was added.
 - `corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
-  - Result: 3 tests passed.
+  - Result: 4 tests passed, including the explicit PR-local drift mode guard.
 - `corepack pnpm test tests/server/vercel-env-audit.test.ts`
   - Result: 7 tests passed.
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
@@ -58,7 +59,7 @@ Passed focused gates:
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
   - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
-  - Result: 3 tests passed.
+  - Result: 3 tests passed before the later PR-local drift mode case was added; the updated 4-test slice passed locally under the available Node runtime and awaits PR CI's Node 24 coverage.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/vercel-env-audit.test.ts`
   - Result: 7 tests passed.
 - `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
@@ -68,6 +69,7 @@ Passed focused gates:
 - `PLAYWRIGHT_USE_SYSTEM_CHROME=true corepack pnpm exec playwright test --list`
   - Result: Playwright loaded config and listed 33 tests in 10 files.
 - `node --check scripts/discord-beta-smoke.mjs`
+- `node --check scripts/ops-check.mjs`
 - `node --check scripts/vercel-env-audit.mjs`
 - `node --check scripts/lib/vercel-env-audit.mjs`
 - `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord node scripts/vercel-env-audit.mjs`
@@ -75,6 +77,7 @@ Passed focused gates:
 - `node scripts/discord-beta-smoke.mjs --help`
 - `corepack pnpm exec prettier package.json scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
 - `corepack pnpm exec prettier lib/server/scheduled-classes.ts tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
+- `corepack pnpm exec prettier scripts/ops-check.mjs tests/server/ops-check-workflow-policy.test.ts package.json README-HOSTING.md --check`
 - `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md docs/release-evidence-v0.7.0.md --check`
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
@@ -83,6 +86,8 @@ Passed focused gates:
   - Result: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
 - `ops:env:vercel` now supports `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` so preview and production env audits can require `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` without exposing values.
+- `corepack pnpm run ops:drift:pr`
+  - Result: passed on the PR worktree; required a clean working tree, ran CI action runtime policy, and explicitly logged skipped clean-main-only local branch/ref/worktree/scratch-branch hygiene. This is PR evidence only and does not replace final clean-`main` `ops:drift` or `ops:verify`.
 - CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, and `actions/upload-artifact@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
 - `ops:drift` enforces those Node 24-native CI action major floors so the release gate catches accidental downgrades.
 - `git diff --check`
@@ -92,7 +97,7 @@ Current-slice typecheck note:
 
 - `corepack pnpm exec tsc --noEmit` and `npx -y node@24 /usr/local/bin/corepack pnpm exec tsc --noEmit` both started but remained silent in this local desktop sandbox and were stopped. The direct TypeScript binary completed successfully under Node 24, and PR `#54` later passed the canonical Lint, Typecheck & Unit Tests CI job on `fcb110e`. Re-run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
-Latest completed CI snapshot:
+Recent completed CI snapshot before the PR-local drift slice:
 
 - PR `#54` CI on `fcb110e` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
@@ -121,7 +126,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 - `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.
-- `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow.
+- `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow and keeps the final clean-main drift mode distinct from explicit PR-local drift evidence.
 - `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, unknown feature names failing closed, manual fallback feature-key output, and non-leakage of secret values in audit results.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, and no-classroom disabled state.
 
