@@ -65,10 +65,11 @@ const NEXT_PUBLIC_SECRET_RE =
 const PLACEHOLDER_VALUE_RE =
   /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
-function normalizeArgv(argv) {
+function normalizeArgv(argv, env = process.env) {
   const args = {
     mode: null,
-    ci: process.env.GITHUB_ACTIONS === 'true',
+    ci: env.GITHUB_ACTIONS === 'true',
+    prLocal: false,
     strictRemoteBacklog: false,
   };
   let seenMode = false;
@@ -76,6 +77,8 @@ function normalizeArgv(argv) {
   for (const arg of argv) {
     if (arg === '--ci') {
       args.ci = true;
+    } else if (arg === '--pr-local') {
+      args.prLocal = true;
     } else if (arg === '--strict-remote-backlog') {
       args.strictRemoteBacklog = true;
     } else if (!arg.startsWith('--') && !seenMode) {
@@ -89,6 +92,10 @@ function normalizeArgv(argv) {
   }
 
   return args;
+}
+
+function shouldEnforceStrictLocalHandoff(args) {
+  return !args.ci && !args.prLocal;
 }
 
 const options = normalizeArgv(process.argv.slice(2));
@@ -511,8 +518,9 @@ function checkDrift() {
   console.log('[ops-check] Starting local branch and environment drift checks.');
 
   const branch = getCurrentBranch();
+  const enforceStrictLocalHandoff = shouldEnforceStrictLocalHandoff(options);
 
-  if (!options.ci && branch !== 'main') {
+  if (enforceStrictLocalHandoff && branch !== 'main') {
     fail(`Expected local branch to be 'main', found '${branch}'.`);
   }
 
@@ -530,10 +538,12 @@ function checkDrift() {
     (name) => !(options.ci && isDetachedHeadBranchName(name)),
   );
   const extraBranches = localBranches.filter((name) => name !== 'main');
-  if (extraBranches.length > 0) {
+  if (enforceStrictLocalHandoff && extraBranches.length > 0) {
     fail('Local branch cleanup required before handoff.', {
       details: [`Remove local branches: ${extraBranches.join(', ')}`],
     });
+  } else if (options.prLocal && extraBranches.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping strict local branch cleanup gate.');
   }
 
   const remoteBranches = listRemoteBranches().filter((name) => name !== 'origin');
@@ -544,6 +554,8 @@ function checkDrift() {
     console.log(
       '[ops-check] CI mode active: skipping strict remote ref gating to allow ephemeral runner refs.',
     );
+  } else if (options.prLocal) {
+    console.log('[ops-check] PR-local mode active: skipping strict remote ref gating.');
   } else if (unexpectedRemote.length > 0) {
     fail('Unexpected remote refs detected.', {
       details: [
@@ -556,17 +568,21 @@ function checkDrift() {
   const worktrees = parseWorktrees();
   const toplevel = getWorkingToplevel();
   const otherWorktrees = worktrees.filter((path) => path !== toplevel);
-  if (otherWorktrees.length > 0) {
+  if (enforceStrictLocalHandoff && otherWorktrees.length > 0) {
     fail('Additional git worktrees detected; remove stale worktrees before handoff.', {
       details: ['Run: git worktree list', `Remaining: ${otherWorktrees.join(', ')}`],
     });
+  } else if (options.prLocal && otherWorktrees.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping sibling worktree cleanup gate.');
   }
 
   const codexBranches = localBranches.filter((name) => name.startsWith('codex/'));
-  if (codexBranches.length > 0) {
+  if (enforceStrictLocalHandoff && codexBranches.length > 0) {
     fail('Scratch branches still exist locally.', {
       details: codexBranches,
     });
+  } else if (options.prLocal && codexBranches.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping scratch branch cleanup gate.');
   }
 
   checkCiWorkflowActionRuntimePolicy();
@@ -580,6 +596,8 @@ export {
   extractBenchmarkMetricValue,
   findCiWorkflowActionRuntimeFindings,
   isFixtureBenchmarkSnapshot,
+  normalizeArgv,
+  shouldEnforceStrictLocalHandoff,
 };
 
 function checkBenchmarkEvidence() {
@@ -750,6 +768,12 @@ function checkVerify() {
 }
 
 async function main() {
+  if (options.prLocal && options.mode !== 'drift') {
+    fail(
+      '--pr-local is only supported with drift mode. Use final ops gates without PR-local mode.',
+    );
+  }
+
   if (options.mode === 'drift') {
     checkDrift();
     await checkRemoteBacklog();

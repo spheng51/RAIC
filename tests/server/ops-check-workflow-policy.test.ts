@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-const { findCiWorkflowActionRuntimeFindings } = await import('../../scripts/ops-check.mjs');
+const { findCiWorkflowActionRuntimeFindings, normalizeArgv, shouldEnforceStrictLocalHandoff } =
+  await import('../../scripts/ops-check.mjs');
 
 function workflowWithUses(uses: string[]) {
   return `
@@ -50,5 +51,20 @@ describe('ops CI workflow policy', () => {
     );
 
     expect(findings).toEqual([]);
+  });
+
+  it('keeps final drift strict while allowing explicit PR-local drift evidence', () => {
+    const finalDrift = normalizeArgv(['drift'], {});
+    const ciDrift = normalizeArgv(['drift', '--ci'], {});
+    const prLocalDrift = normalizeArgv(['drift', '--pr-local'], {});
+
+    expect(finalDrift).toMatchObject({ mode: 'drift', ci: false, prLocal: false });
+    expect(shouldEnforceStrictLocalHandoff(finalDrift)).toBe(true);
+
+    expect(ciDrift).toMatchObject({ mode: 'drift', ci: true, prLocal: false });
+    expect(shouldEnforceStrictLocalHandoff(ciDrift)).toBe(false);
+
+    expect(prLocalDrift).toMatchObject({ mode: 'drift', ci: false, prLocal: true });
+    expect(shouldEnforceStrictLocalHandoff(prLocalDrift)).toBe(false);
   });
 });

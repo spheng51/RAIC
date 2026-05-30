@@ -25,6 +25,7 @@
     "secrets:scan": "node scripts/ops-check.mjs secrets",
     "ops:verify": "node scripts/ops-check.mjs verify",
     "ops:drift:ci": "node scripts/ops-check.mjs drift --ci",
+    "ops:drift:pr": "node scripts/ops-check.mjs drift --pr-local",
     "ops:env:vercel": "node scripts/vercel-env-audit.mjs",
     "smoke:production:milestone": "node scripts/production-milestone-smoke.mjs",
     "smoke:production:classroom": "node scripts/production-classroom-smoke.mjs",

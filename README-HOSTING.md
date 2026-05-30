@@ -17,7 +17,7 @@ The legacy pre-cutover deployment path is retired. Production and staging deploy
 
 ### Prerequisites
 
-- Node.js **20.9+**
+- Node.js **24.x** for parity with CI, Vercel runtime policy, and release/ops scripts
 - pnpm **10+**
 
 ### Setup
@@ -106,6 +106,7 @@ Public launch on `open-raic.com`:
    - `corepack pnpm run benchmark:milestone`
    - `corepack pnpm run ops:verify`
    - For releases where Discord scheduled-class sync is in scope, run the Vercel env audit with `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` for the target context before smoke sign-off.
+   During PR hardening, `corepack pnpm run ops:drift:pr` can provide branch-local drift evidence from a feature worktree. It does not replace the final clean-`main` `ops:drift` or `ops:verify` gates.
 8. Merge to `main`, let Vercel deploy production automatically, then smoke-check the auth and governed surfaces before declaring the release healthy:
    - Signed out: `/studio` redirects to `/sign-in?next=%2Fstudio`
    - Signed out: `/admin` redirects to `/sign-in?next=%2Fadmin`
@@ -141,7 +142,7 @@ Recommended for self-hosting on a VPS or internal server.
 
 ## Option C: Traditional VM / Bare Metal
 
-1. Install Node.js + pnpm.
+1. Install Node.js 24.x + pnpm 10+.
 2. Clone repo, copy the previous `data/` directory forward if `DATABASE_URL` is unset, and configure `.env.local`.
 3. Run `pnpm build && pnpm start`.
 4. Put Nginx/Caddy in front for TLS and reverse proxy.
