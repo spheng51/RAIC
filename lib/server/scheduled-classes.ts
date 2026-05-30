@@ -320,6 +320,28 @@ async function deleteDiscordScheduledEventIfPresent(event: ScheduledClassEventRe
   }
 }
 
+async function writeDiscordScheduledEvent(input: {
+  guildId: string;
+  scheduledEventId?: string;
+  payload: DiscordScheduledEventPayload;
+}) {
+  if (input.scheduledEventId) {
+    try {
+      return await updateDiscordScheduledEvent(
+        input.guildId,
+        input.scheduledEventId,
+        input.payload,
+      );
+    } catch (error) {
+      if (!isDiscordScheduledEventAlreadyDeleted(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return createDiscordScheduledEvent(input.guildId, input.payload);
+}
+
 async function updateScheduledClassRecord(
   event: ScheduledClassEventRecord,
 ): Promise<ScheduledClassEventRecord | null> {
@@ -467,13 +489,11 @@ export async function syncScheduledClassDiscordForAccess(
   });
 
   try {
-    const syncedEvent = event.discordSync?.scheduledEventId
-      ? await updateDiscordScheduledEvent(
-          connection.guildId,
-          event.discordSync.scheduledEventId,
-          payload,
-        )
-      : await createDiscordScheduledEvent(connection.guildId, payload);
+    const syncedEvent = await writeDiscordScheduledEvent({
+      guildId: connection.guildId,
+      scheduledEventId: event.discordSync?.scheduledEventId,
+      payload,
+    });
     const scheduledEventId = syncedEvent.id;
     const now = new Date().toISOString();
     const updated: ScheduledClassEventRecord = {
