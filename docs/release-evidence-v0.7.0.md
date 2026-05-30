@@ -68,6 +68,7 @@ Current-slice CI note:
 - Latest PR `#54` CI on `48db290` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review was neutral/non-blocking.
 - E2E on `48db290` was still in progress after about 20 minutes and was stuck in the Playwright browser install step before tests started.
 - E2E on `a706168` proved the browser download reached 100% quickly, then the Playwright install process hung until the new 15-minute step timeout failed it. The follow-up CI-only hardening removes the browser install step in CI, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true` while retaining a 45-minute job timeout and 30-minute test timeout.
+- PR `#54` CI on `f49bebc` was mergeable and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review remained neutral/non-blocking. E2E verified system Chrome and completed successfully at `2026-05-30T00:03:34Z`.
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
