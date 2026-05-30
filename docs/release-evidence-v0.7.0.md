@@ -63,7 +63,8 @@ Passed focused gates:
 - `RAIC_DISCORD_SMOKE_BASE_URL=<current Vercel preview URL> corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result: exited 0 and recorded Vercel deployment protection as a preview-access blocker. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
-- CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, and `pnpm/action-setup@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
+- CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, and `actions/upload-artifact@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
+- `ops:drift` enforces those Node 24-native CI action major floors so the release gate catches accidental downgrades.
 - `git diff --check`
   - Result: no whitespace errors.
 

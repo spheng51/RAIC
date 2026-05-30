@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import yaml from 'js-yaml';
 import {
   assessBenchmarkEvidence,
   evaluateBenchmarkSnapshot,
@@ -38,6 +39,13 @@ const SECRET_SCANNERS = [
 const PERF_BUDGETS_PATH = path.join('ops', 'perf-budgets.json');
 const BENCHMARK_REPLAY_PATH = path.join('ops', 'benchmark-replay.json');
 const BENCHMARK_LIVE_SNAPSHOT_PATH = path.join('data', 'perf-results', 'latest.json');
+const CI_WORKFLOW_PATH = path.join('.github', 'workflows', 'ci.yml');
+const NODE24_ACTION_MAJOR_FLOORS = new Map([
+  ['actions/checkout', 6],
+  ['actions/setup-node', 6],
+  ['pnpm/action-setup', 6],
+  ['actions/upload-artifact', 6],
+]);
 
 const SECRET_VALUE_INDICATORS = [
   /\bsk-[A-Za-z0-9]{20,}\b/g,
@@ -189,6 +197,103 @@ function readJsonFile(pathname) {
 
 function listTrackedFiles() {
   return runGitCommand('git ls-files', { parse: true });
+}
+
+function collectWorkflowActionUses(workflow) {
+  const uses = [];
+  const jobs = workflow && typeof workflow === 'object' ? workflow.jobs : null;
+  if (!jobs || typeof jobs !== 'object') {
+    return uses;
+  }
+
+  for (const [jobName, job] of Object.entries(jobs)) {
+    if (!job || typeof job !== 'object') {
+      continue;
+    }
+
+    if (typeof job.uses === 'string') {
+      uses.push({ location: `jobs.${jobName}`, uses: job.uses });
+    }
+
+    if (!Array.isArray(job.steps)) {
+      continue;
+    }
+
+    job.steps.forEach((step, index) => {
+      if (step && typeof step === 'object' && typeof step.uses === 'string') {
+        uses.push({ location: `jobs.${jobName}.steps[${index}]`, uses: step.uses });
+      }
+    });
+  }
+
+  return uses;
+}
+
+function parseActionMajor(uses) {
+  const atIndex = uses.lastIndexOf('@');
+  if (atIndex === -1) {
+    return null;
+  }
+
+  const action = uses.slice(0, atIndex).toLowerCase();
+  const ref = uses.slice(atIndex + 1);
+  const majorMatch = ref.match(/^v?(\d+)(?:\.|$)/i);
+  return {
+    action,
+    major: majorMatch ? Number.parseInt(majorMatch[1], 10) : null,
+    ref,
+  };
+}
+
+function findCiWorkflowActionRuntimeFindings(workflowText, workflowPath = CI_WORKFLOW_PATH) {
+  let workflow;
+  try {
+    workflow = yaml.load(workflowText);
+  } catch (error) {
+    return [
+      `${workflowPath}: unable to parse workflow YAML: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    ];
+  }
+
+  const findings = [];
+  for (const usage of collectWorkflowActionUses(workflow)) {
+    const parsed = parseActionMajor(usage.uses);
+    if (!parsed) {
+      continue;
+    }
+
+    const requiredMajor = NODE24_ACTION_MAJOR_FLOORS.get(parsed.action);
+    if (!requiredMajor) {
+      continue;
+    }
+
+    if (parsed.major == null || parsed.major < requiredMajor) {
+      findings.push(
+        `${workflowPath} ${usage.location}: ${usage.uses} must use v${requiredMajor}+ to keep CI actions on a Node 24-native runtime.`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+function checkCiWorkflowActionRuntimePolicy() {
+  if (!existsSync(CI_WORKFLOW_PATH)) {
+    fail('CI workflow file is missing.', {
+      details: [`Expected: ${CI_WORKFLOW_PATH}`],
+    });
+  }
+
+  const findings = findCiWorkflowActionRuntimeFindings(readFileSync(CI_WORKFLOW_PATH, 'utf8'));
+  if (findings.length > 0) {
+    fail('CI workflow uses action majors that are not Node 24-native.', {
+      details: findings,
+    });
+  }
+
+  console.log('[ops-check] CI action runtime policy passed.');
 }
 
 function isFileIgnored(path) {
@@ -464,6 +569,8 @@ function checkDrift() {
     });
   }
 
+  checkCiWorkflowActionRuntimePolicy();
+
   console.log('[ops-check] Drift checks passed.');
 }
 
@@ -471,6 +578,7 @@ export {
   assessBenchmarkEvidence,
   evaluateBenchmarkSnapshot,
   extractBenchmarkMetricValue,
+  findCiWorkflowActionRuntimeFindings,
   isFixtureBenchmarkSnapshot,
 };
 

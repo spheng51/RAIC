@@ -125,7 +125,7 @@ jobs:
           PLAYWRIGHT_USE_SYSTEM_CHROME: 'true'
         run: pnpm exec playwright test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: playwright-report
