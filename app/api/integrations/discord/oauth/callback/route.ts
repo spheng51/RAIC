@@ -5,6 +5,7 @@ import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import {
   DISCORD_OAUTH_STATE_COOKIE,
   exchangeDiscordOAuthCode,
+  getDiscordConfig,
   getDiscordGuild,
   listDiscordGuildChannels,
 } from '@/lib/server/discord';
@@ -43,6 +44,9 @@ export async function GET(request: NextRequest) {
     }
     if (!code || !guildId) {
       return redirectToStudio(request, 'missing_guild');
+    }
+    if (!getDiscordConfig()) {
+      return redirectToStudio(request, 'not_configured');
     }
 
     await exchangeDiscordOAuthCode({

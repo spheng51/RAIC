@@ -25,6 +25,11 @@ const DISCORD_STUDIO_CALLBACK_FEEDBACK: Record<string, DiscordStudioCallbackFeed
     toastKind: 'error',
     shouldRefreshConnection: true,
   },
+  not_configured: {
+    messageKey: 'home.schedule.discord.notConfigured',
+    toastKind: 'error',
+    shouldRefreshConnection: true,
+  },
 };
 
 export function getDiscordStudioCallbackFeedback(

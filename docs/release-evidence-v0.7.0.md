@@ -34,7 +34,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `0a36c8c` / `20217e8` recoverable Discord connection warnings, explicit OAuth denial routing, and Studio callback feedback refresh coverage.
   - `f1f55eb` missing-config channel-save protection when Discord config is absent.
   - `d074b03` strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
-  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, and strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
+  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, explicit `not_configured` OAuth callback feedback when Discord config is absent, and safe rendering for stored Discord scheduled-event URLs.
 
 ## Branch Evidence
 
@@ -48,9 +48,9 @@ Environment:
 Passed focused gates:
 
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts`
-  - Result: 21 tests passed, including OAuth callback state-cookie cleanup, explicit OAuth denial routing, recoverable connection snapshot channel-load warnings, missing-config channel-save protection, recoverable channel-save error coverage, and teacher-only `GET`/`POST`/`DELETE` connection-route access coverage.
+  - Result: 22 tests passed, including OAuth callback state-cookie cleanup, explicit OAuth denial routing, missing-config OAuth callback feedback, recoverable connection snapshot channel-load warnings, missing-config channel-save protection, recoverable channel-save error coverage, and teacher-only `GET`/`POST`/`DELETE` connection-route access coverage.
 - `corepack pnpm test tests/lib/discord-studio-callback.test.ts`
-  - Result: 6 tests passed, covering `connected`, `invalid_state`, `missing_guild`, `error`, unknown statuses, and the connection-snapshot refresh flag used by `/studio`.
+  - Result: 7 tests passed, covering `connected`, `invalid_state`, `missing_guild`, `not_configured`, `error`, unknown statuses, and the connection-snapshot refresh flag used by `/studio`.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts`
   - Result: 18 tests passed.
 - `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
@@ -89,7 +89,9 @@ Passed focused gates:
 - `corepack pnpm run check:i18n-keys`
   - Result: i18n key alignment passed.
 - `corepack pnpm exec vitest run tests/components/schedule-classes-box.test.tsx --pool=forks --no-file-parallelism --maxWorkers=1 --reporter=verbose`
-  - Result: 11 tests passed, including recoverable Discord integration warning display. The local jsdom environment startup took roughly 45s before test import under the available Node 22 runtime.
+  - Result: 12 tests passed, including recoverable Discord integration warning display and suppression of unsafe stored Discord event links.
+- `corepack pnpm exec prettier app/api/integrations/discord/oauth/callback/route.ts lib/utils/discord-studio-callback.ts tests/lib/discord-studio-callback.test.ts tests/server/discord-integration-routes.test.ts components/schedule/schedule-classes-box.tsx tests/components/schedule-classes-box.test.tsx --check`
+  - Result: all matched files use Prettier style.
 - `corepack pnpm exec prettier .github/workflows/ci.yml --check`
 - `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-git-codex-v070-discor-908f39-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
@@ -104,18 +106,18 @@ Passed focused gates:
 
 Current-slice typecheck note:
 
-- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.35s after the strengthened connection-route access coverage. PR `#54` passed the canonical Lint, Typecheck & Unit Tests CI job on `d074b03`; run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.06s after the missing-config OAuth callback guard and safe Discord event URL rendering. PR `#54` passed the canonical Lint, Typecheck & Unit Tests CI job on `2d1ab6b` before this local hardening slice; rerun PR CI on the new head and run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
 Recent completed code CI snapshot:
 
-- PR `#54` CI on `d074b03` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `2d1ab6b` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- Latest green check times on `d074b03`:
-  - Ops Drift: `2026-05-30T20:49:11Z`
-  - MiroFish Contract Gate: `2026-05-30T20:49:27Z`
-  - Lint, Typecheck & Unit Tests: `2026-05-30T20:50:35Z`
-  - E2E Tests: `2026-05-30T20:51:50Z`
-  - Vercel preview deployment: `ByxdwXc81AwNSM6HcuMjJqH8KFn6`, ready from `2026-05-30T20:49:51Z`
+- Latest green check times on `2d1ab6b`:
+  - Ops Drift: `2026-05-30T20:58:50Z`
+  - MiroFish Contract Gate: `2026-05-30T20:59:10Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-30T21:00:22Z`
+  - E2E Tests: `2026-05-30T21:01:42Z`
+  - Vercel preview deployment: `3PJDug4yAwjnthxoqdHDQxNXd3V5`, ready from `2026-05-30T20:59:12Z`
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
@@ -131,14 +133,14 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
 ## Coverage Notes
 
-- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, teacher-only `GET`/`POST`/`DELETE` connection-route access, recoverable snapshot warnings when Discord channel listing fails, channel update/delete, missing-config channel-save protection, recoverable channel-save failures when Discord channel listing fails, OAuth start, OAuth callback success and negative paths, explicit OAuth denial routing, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access for protected Discord routes.
+- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, teacher-only `GET`/`POST`/`DELETE` connection-route access, recoverable snapshot warnings when Discord channel listing fails, channel update/delete, missing-config channel-save protection, recoverable channel-save failures when Discord channel listing fails, OAuth start, OAuth callback success and negative paths, missing-config OAuth callback feedback without code exchange, explicit OAuth denial routing, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, and teacher-only access for protected Discord routes.
 - `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and teacher-only access.
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, and legacy synced records not silently moving to another Discord connection.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, Vercel deployment-protection blocker detection, Vercel bypass-token injection, and smoke-specific cron secret precedence.
 - `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow and keeps the final clean-main drift mode distinct from explicit PR-local drift evidence.
 - `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, unknown feature names failing closed, manual fallback feature-key output, and non-leakage of secret values in audit results.
-- `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
-- `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, and no-classroom disabled state.
+- `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping, including `not_configured`, and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
+- `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, unsafe event-link suppression, and no-classroom disabled state.
 
 ## Pending Release Gates
 

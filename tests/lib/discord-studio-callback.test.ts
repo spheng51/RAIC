@@ -10,6 +10,7 @@ describe('getDiscordStudioCallbackFeedback', () => {
     ['connected', 'success', 'home.schedule.discord.connected'],
     ['invalid_state', 'error', 'home.schedule.discord.invalidState'],
     ['missing_guild', 'error', 'home.schedule.discord.missingGuild'],
+    ['not_configured', 'error', 'home.schedule.discord.notConfigured'],
     ['error', 'error', 'home.schedule.discord.connectionFailed'],
   ])(
     'maps %s to Studio feedback and refreshes the connection snapshot',

@@ -342,6 +342,28 @@ describe('Discord integration routes', () => {
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
 
+  it('returns an explicit Studio status when Discord OAuth callback config is missing', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=not_configured');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.getDiscordGuild).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
   it('returns a recoverable Studio status when Discord OAuth is denied before code exchange', async () => {
     const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
     const response = await GET(

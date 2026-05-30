@@ -153,6 +153,25 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function getSafeDiscordEventUrl(value?: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'discord.com' ||
+      pathParts.length !== 3 ||
+      pathParts[0] !== 'events'
+    ) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function ScheduleClassesBox({
   events,
   classrooms,
@@ -457,6 +476,9 @@ export function ScheduleClassesBox({
                       : event.discordSync?.lastSyncedAt
                         ? t('home.schedule.discord.synced')
                         : null;
+                  const discordEventUrl = getSafeDiscordEventUrl(
+                    event.discordSync?.scheduledEventUrl,
+                  );
 
                   return (
                     <li key={event.id} className="group flex items-center gap-2 px-2 py-2">
@@ -508,7 +530,7 @@ export function ScheduleClassesBox({
                       </button>
                       {discordIntegration ? (
                         <>
-                          {event.discordSync?.scheduledEventUrl ? (
+                          {discordEventUrl ? (
                             <Button
                               asChild
                               variant="ghost"
@@ -516,11 +538,7 @@ export function ScheduleClassesBox({
                               aria-label={t('home.schedule.discord.openEvent')}
                               className="opacity-80 hover:bg-white/80 dark:hover:bg-white/5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                             >
-                              <a
-                                href={event.discordSync.scheduledEventUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
+                              <a href={discordEventUrl} target="_blank" rel="noreferrer">
                                 <ExternalLink className="size-3.5" />
                               </a>
                             </Button>
