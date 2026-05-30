@@ -200,4 +200,25 @@ describe('discord beta smoke script', () => {
     expect(result.stdout).toContain('syncWarning=Discord rate limited this update.');
     expect(result.stderr).toBe('');
   });
+
+  it('fails live sync when Discord returns a non-Discord scheduled event URL', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_EVENT_ID: 'class-1',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_MOCK_SYNC_INVALID_URL: '1',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    Sync scheduled class');
+    expect(result.stdout).toContain('expected Discord scheduled event URL');
+    expect(result.stdout).toContain('scheduledEventUrl=https://evil.example/events/guild/event');
+    expect(result.stderr).toBe('');
+  });
 });
