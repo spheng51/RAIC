@@ -54,9 +54,10 @@ describe('ops CI workflow policy', () => {
   });
 
   it('keeps final drift strict while allowing explicit PR-local drift evidence', () => {
-    const finalDrift = normalizeArgv(['drift'], {});
-    const ciDrift = normalizeArgv(['drift', '--ci'], {});
-    const prLocalDrift = normalizeArgv(['drift', '--pr-local'], {});
+    const env = { NODE_ENV: 'test' as const };
+    const finalDrift = normalizeArgv(['drift'], env);
+    const ciDrift = normalizeArgv(['drift', '--ci'], env);
+    const prLocalDrift = normalizeArgv(['drift', '--pr-local'], env);
 
     expect(finalDrift).toMatchObject({ mode: 'drift', ci: false, prLocal: false });
     expect(shouldEnforceStrictLocalHandoff(finalDrift)).toBe(true);
