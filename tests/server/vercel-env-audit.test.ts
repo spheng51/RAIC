@@ -1,6 +1,18 @@
+import { spawn } from 'node:child_process';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 type VercelEnvAuditModule = typeof import('../../scripts/lib/vercel-env-audit.mjs');
+
+const scriptPath = resolve(process.cwd(), 'scripts/vercel-env-audit.mjs');
+
+type ScriptResult = {
+  code: number;
+  stderr: string;
+  stdout: string;
+};
 
 let auditEnvRecords: VercelEnvAuditModule['auditEnvRecords'];
 let manualFallbackLines: VercelEnvAuditModule['manualFallbackLines'];
@@ -21,6 +33,52 @@ beforeAll(async () => {
     summarizeAudit,
   } = await import('../../scripts/lib/vercel-env-audit.mjs'));
 });
+
+function runEnvAuditScript(env: Record<string, string>): Promise<ScriptResult> {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [scriptPath], {
+      cwd: process.cwd(),
+      env: {
+        HOME: process.env.HOME || '',
+        NODE_ENV: 'test',
+        PATH: process.env.PATH || '',
+        ...env,
+      },
+    });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('error', rejectRun);
+    child.on('close', (code) => {
+      resolveRun({ code: code ?? 1, stdout, stderr });
+    });
+  });
+}
+
+async function createMockNpx(tempDir: string, stdout: string) {
+  const capturePath = join(tempDir, 'npx-capture.json');
+  const npxPath = join(tempDir, 'npx');
+  await writeFile(
+    npxPath,
+    `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs';
+writeFileSync(process.env.NPX_MOCK_CAPTURE_PATH, JSON.stringify({
+  argv: process.argv.slice(2),
+  path: process.env.PATH,
+  telemetry: process.env.VERCEL_TELEMETRY_DISABLED
+}));
+console.log(${JSON.stringify(stdout)});
+`,
+  );
+  await chmod(npxPath, 0o755);
+  return { capturePath };
+}
 
 describe('Vercel env audit helpers', () => {
   it('reports missing required keys without reading or returning secret values', () => {
@@ -220,5 +278,86 @@ describe('Vercel env audit helpers', () => {
     expect(fallback).toContain('team_123');
     expect(fallback).toContain('Feature-required keys (discord)');
     expect(fallback).toContain('Do not paste or print secret values');
+  });
+});
+
+describe('Vercel env audit script boundary', () => {
+  it('uses the Vercel CLI fallback without leaking CLI env values', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'raic-vercel-env-audit-'));
+    try {
+      const cliEnvJson = JSON.stringify([
+        { key: 'DATABASE_URL', target: ['preview'], value: 'postgres://secret' },
+        { key: 'RAIC_SECRET_ENCRYPTION_KEY', target: ['preview'], value: 'encryption-secret' },
+        { key: 'BLOB_READ_WRITE_TOKEN', target: ['preview'], value: 'blob-secret' },
+        { key: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID', target: ['preview'], value: 'public-client' },
+        { key: 'GOOGLE_CLIENT_ID', target: ['preview'], value: 'google-secret' },
+        { key: 'OPENAI_API_KEY', target: ['preview'], value: 'sk-secret' },
+        { key: 'DISCORD_CLIENT_ID', target: ['preview'], value: 'discord-client-id' },
+        { key: 'DISCORD_CLIENT_SECRET', target: ['preview'], value: 'discord-client-secret' },
+        { key: 'DISCORD_BOT_TOKEN', target: ['preview'], value: 'discord-bot-secret' },
+        { key: 'CRON_SECRET', target: ['preview'], value: 'cron-secret' },
+      ]);
+      const { capturePath } = await createMockNpx(tempDir, cliEnvJson);
+      const testPath = [tempDir, dirname(process.execPath), process.env.PATH || ''].join(delimiter);
+
+      const result = await runEnvAuditScript({
+        NPX_MOCK_CAPTURE_PATH: capturePath,
+        PATH: testPath,
+        VERCEL_API_TOKEN: '',
+        VERCEL_ENV_AUDIT_CONTEXTS: 'preview',
+        VERCEL_ENV_AUDIT_REQUIRED_FEATURES: 'discord',
+        VERCEL_TOKEN: '',
+      });
+      const capture = JSON.parse(await readFile(capturePath, 'utf8'));
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Source: Vercel CLI');
+      expect(result.stdout).toContain('PASS DISCORD_BOT_TOKEN (discord)');
+      expect(result.stdout).toContain('Environment audit passed without exposing secret values');
+      expect(result.stderr).toBe('');
+      expect(result.stdout).not.toContain('discord-bot-secret');
+      expect(result.stdout).not.toContain('postgres://secret');
+      expect(result.stderr).not.toContain('discord-bot-secret');
+      expect(capture.argv).toEqual([
+        '-y',
+        'vercel',
+        'env',
+        'ls',
+        '--format',
+        'json',
+        '--non-interactive',
+      ]);
+      expect(capture.path).toBe(testPath);
+      expect(capture.telemetry).toBe('1');
+    } finally {
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not invoke the CLI fallback when API source is explicitly required', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'raic-vercel-env-audit-'));
+    try {
+      const { capturePath } = await createMockNpx(tempDir, '[]');
+
+      const result = await runEnvAuditScript({
+        NPX_MOCK_CAPTURE_PATH: capturePath,
+        PATH: [tempDir, dirname(process.execPath), process.env.PATH || ''].join(delimiter),
+        VERCEL_API_TOKEN: '',
+        VERCEL_ENV_AUDIT_SOURCE: 'api',
+        VERCEL_PROJECT_ID: 'prj_123',
+        VERCEL_TOKEN: '',
+      });
+      const capture = await readFile(capturePath, 'utf8').catch(() => '');
+
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain(
+        'VERCEL_TOKEN or VERCEL_API_TOKEN is required for automatic env auditing',
+      );
+      expect(result.stderr).toContain('Manual fallback');
+      expect(result.stdout).toBe('');
+      expect(capture).toBe('');
+    } finally {
+      await rm(tempDir, { force: true, recursive: true });
+    }
   });
 });
