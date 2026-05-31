@@ -43,6 +43,7 @@ import { SettingsDialog } from '@/components/settings';
 import { GenerationToolbar } from '@/components/generation/generation-toolbar';
 import { AgentBar } from '@/components/agent/agent-bar';
 import { useTheme } from '@/lib/hooks/use-theme';
+import { useDiscordStudioCallback } from '@/lib/hooks/use-discord-studio-callback';
 import { nanoid } from 'nanoid';
 import { storePdfBlob } from '@/lib/utils/image-storage';
 import type { ExperiencePreset, GameTemplateId, UserRequirements } from '@/lib/types/generation';
@@ -69,7 +70,6 @@ import {
   type ClassroomLaunchMode,
   writeClassroomLaunchContext,
 } from '@/lib/utils/classroom-launch';
-import { getDiscordStudioCallbackFeedback } from '@/lib/utils/discord-studio-callback';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { getBrowserLocalUnsupportedFlowGuard } from '@/lib/utils/browser-local-guards';
 import { ClassroomShareDialog } from '@/components/classroom/classroom-share-dialog';
@@ -365,6 +365,12 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     }
   }, [launchMode]);
 
+  useDiscordStudioCallback({
+    launchMode,
+    refreshConnection: loadDiscordIntegration,
+    t,
+  });
+
   useEffect(() => {
     // Clear stale media store to prevent cross-course thumbnail contamination.
     // The store may hold tasks from a previously visited classroom whose elementIds
@@ -376,36 +382,6 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     loadScheduledClassEvents();
     loadDiscordIntegration();
   }, [loadClassrooms, loadDiscordIntegration, loadScheduledClassEvents]);
-
-  useEffect(() => {
-    if (launchMode !== 'teacher-server') {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    const discordCallbackStatus = url.searchParams.get('discord');
-    if (!discordCallbackStatus) {
-      return;
-    }
-
-    const feedback = getDiscordStudioCallbackFeedback(discordCallbackStatus);
-    if (!feedback) {
-      return;
-    }
-
-    if (feedback.toastKind === 'success') {
-      toast.success(t(feedback.messageKey));
-    } else {
-      toast.error(t(feedback.messageKey));
-    }
-
-    if (feedback.shouldRefreshConnection) {
-      void loadDiscordIntegration();
-    }
-
-    url.searchParams.delete('discord');
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-  }, [launchMode, loadDiscordIntegration, t]);
 
   const handleScheduleRequestFailure = async (response: Response) => {
     const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
