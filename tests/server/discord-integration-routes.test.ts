@@ -118,6 +118,64 @@ describe('Discord integration routes', () => {
     ]);
   });
 
+  it('scopes the Discord connection snapshot to the active organization', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-other',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-other',
+        guildName: 'Other Guild',
+        channelId: 'channel-other',
+        channelName: 'other-announcements',
+      },
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.connection).toMatchObject({ id: 'connection-1', guildId: 'guild-1' });
+    expect(mocks.listDiscordGuildChannels).toHaveBeenCalledWith('guild-1');
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalledWith('guild-other');
+  });
+
+  it('does not expose another organization Discord connection as the active snapshot', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-other',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-other',
+        guildName: 'Other Guild',
+        channelId: 'channel-other',
+        channelName: 'other-announcements',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ configured: true, connection: null, channels: [] });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+  });
+
   it('reports when Discord is not configured', async () => {
     mocks.getDiscordConfig.mockReturnValue(null);
     mocks.listDiscordConnectionsForUser.mockResolvedValue([]);
@@ -222,6 +280,36 @@ describe('Discord integration routes', () => {
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
 
+  it('rejects channel saves for another organization Discord connection', async () => {
+    mocks.readDiscordConnectionForUser.mockResolvedValue({
+      id: 'connection-other',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-2',
+      guildId: 'guild-other',
+      guildName: 'Other Guild',
+      channelId: 'channel-other',
+      channelName: 'other-announcements',
+    });
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-other', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord connection not found.',
+    });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
   it('returns a recoverable error when Discord channels cannot be loaded while saving', async () => {
     const connection = {
       id: 'connection-1',
@@ -252,6 +340,35 @@ describe('Discord integration routes', () => {
       details: 'Missing Discord permissions',
     });
     expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects disconnect requests for another organization Discord connection', async () => {
+    mocks.readDiscordConnectionForUser.mockResolvedValue({
+      id: 'connection-other',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-2',
+      guildId: 'guild-other',
+      guildName: 'Other Guild',
+      channelId: 'channel-other',
+      channelName: 'other-announcements',
+    });
+
+    const { DELETE } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-other' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord connection not found.',
+    });
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
   });
 
   it('starts Discord OAuth only when Discord app config exists', async () => {

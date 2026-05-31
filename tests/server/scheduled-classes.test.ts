@@ -135,6 +135,55 @@ describe('scheduled class server storage', () => {
     await expect(deleteScheduledClassForAccess(teacherScope, created.id)).resolves.toBe(true);
   });
 
+  it('clears Discord reminder state when a synced class is rescheduled', async () => {
+    const { updateScheduledClassForAccess } = await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    store.scheduledClassEvents.push({
+      id: 'event-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+        inviteUrl: 'https://open-raic.com/join/token',
+        scheduledEventId: 'discord-event-1',
+        reminderSentAt: '2099-05-12T16:50:00.000Z',
+        reminderMessageId: 'message-1',
+      },
+    });
+
+    const updated = await updateScheduledClassForAccess(teacherScope, 'event-1', {
+      title: 'Physics lab later',
+      startsAt: '2099-05-13T17:00:00.000Z',
+      classroomId: 'room-1',
+    });
+
+    expect(updated?.discordSync).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        connectionId: 'connection-1',
+        scheduledEventId: 'discord-event-1',
+      }),
+    );
+    expect(updated?.discordSync?.reminderSentAt).toBeUndefined();
+    expect(updated?.discordSync?.reminderMessageId).toBeUndefined();
+    expect(store.scheduledClassEvents[0].discordSync?.reminderSentAt).toBeUndefined();
+    expect(store.scheduledClassEvents[0].discordSync?.reminderMessageId).toBeUndefined();
+  });
+
   it('deletes synced Discord events before removing scheduled classes', async () => {
     const { deleteScheduledClassForAccess } = await import('@/lib/server/scheduled-classes');
     const teacherScope = {

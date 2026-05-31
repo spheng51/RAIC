@@ -44,9 +44,21 @@ function toSummary(connection: {
   };
 }
 
-async function readConnectionSnapshot(ownerUserId: string): Promise<DiscordIntegrationSnapshot> {
+function connectionMatchesOrganization(
+  connection: { organizationId: string | null },
+  organizationId: string | null,
+): boolean {
+  return connection.organizationId === organizationId;
+}
+
+async function readConnectionSnapshot(
+  ownerUserId: string,
+  organizationId: string | null,
+): Promise<DiscordIntegrationSnapshot> {
   const configured = Boolean(getDiscordConfig());
-  const connections = await listDiscordConnectionsForUser(ownerUserId);
+  const connections = (await listDiscordConnectionsForUser(ownerUserId)).filter((connection) =>
+    connectionMatchesOrganization(connection, organizationId),
+  );
   const connection = connections[0] ?? null;
   let channels: DiscordChannelSummary[] = [];
   let channelsError: string | undefined;
@@ -71,7 +83,7 @@ export async function GET(request: NextRequest) {
     return auth;
   }
 
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
@@ -117,6 +129,14 @@ export async function POST(request: NextRequest) {
       'Discord connection not found.',
     );
   }
+  if (!connectionMatchesOrganization(connection, auth.session.organizationId ?? null)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
 
   let channels: DiscordChannelSummary[];
   try {
@@ -150,7 +170,7 @@ export async function POST(request: NextRequest) {
     channelName: channel.name,
   });
 
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
@@ -174,7 +194,20 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
+  const connection = await readDiscordConnectionForUser(auth.user.id, id);
+  if (
+    !connection ||
+    !connectionMatchesOrganization(connection, auth.session.organizationId ?? null)
+  ) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
+
   await deleteDiscordConnectionForUser(auth.user.id, id);
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
   return apiSuccessWithRequestSession(request, snapshot);
 }

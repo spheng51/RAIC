@@ -153,6 +153,26 @@ function preserveExistingInviteMetadata(
   };
 }
 
+function preserveDiscordSyncForScheduleUpdate(
+  eventInput: NormalizedScheduledClassEventInput,
+  existing: ScheduledClassEventRecord,
+): ScheduledClassEventRecord['discordSync'] {
+  if (!existing.discordSync) {
+    return undefined;
+  }
+
+  if (eventInput.startsAt === existing.startsAt) {
+    return existing.discordSync;
+  }
+
+  const {
+    reminderMessageId: _reminderMessageId,
+    reminderSentAt: _reminderSentAt,
+    ...sync
+  } = existing.discordSync;
+  return sync;
+}
+
 export async function listScheduledClassesForAccess(
   scope: ScheduledClassAccessScope,
 ): Promise<ScheduledClassEvent[]> {
@@ -233,7 +253,7 @@ export async function updateScheduledClassForAccess(
       durationMinutes: eventInput.durationMinutes,
       classroomId: eventInput.classroomId,
       multiplayerGame: eventInput.multiplayerGame,
-      discordSync: existing.discordSync,
+      discordSync: preserveDiscordSyncForScheduleUpdate(eventInput, existing),
       updatedAt: new Date().toISOString(),
     });
     return updated ? toClientEvent(updated) : null;
@@ -264,7 +284,10 @@ export async function updateScheduledClassForAccess(
       durationMinutes: eventInput.durationMinutes,
       classroomId: eventInput.classroomId,
       multiplayerGame: eventInput.multiplayerGame,
-      discordSync: nextStore.scheduledClassEvents[index].discordSync,
+      discordSync: preserveDiscordSyncForScheduleUpdate(
+        eventInput,
+        nextStore.scheduledClassEvents[index],
+      ),
       updatedAt: new Date().toISOString(),
     };
     nextStore.scheduledClassEvents[index] = updated;
