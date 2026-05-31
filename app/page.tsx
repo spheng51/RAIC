@@ -591,18 +591,20 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         const response = await fetch(`/api/scheduled-classes/${eventId}/discord-sync`, {
           method: 'POST',
         });
-        if (!response.ok) {
-          throw new Error(await readApiError(response, 'Failed to sync scheduled class'));
+        const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
+        if (body?.event) {
+          setScheduledClassEvents((prev) =>
+            sortScheduledClassEvents(
+              prev.map((event) => (event.id === eventId ? body.event! : event)),
+            ),
+          );
         }
-        const body = (await response.json()) as ScheduledClassesApiBody;
-        if (!body.event) {
+        if (!response.ok) {
+          throw new Error(body?.details || body?.error || 'Failed to sync scheduled class');
+        }
+        if (!body?.event) {
           throw new Error('Failed to sync scheduled class');
         }
-        setScheduledClassEvents((prev) =>
-          sortScheduledClassEvents(
-            prev.map((event) => (event.id === eventId ? body.event! : event)),
-          ),
-        );
         toast.success(t('home.schedule.discord.synced'));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to sync scheduled class';

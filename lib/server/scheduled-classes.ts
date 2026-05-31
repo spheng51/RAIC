@@ -52,6 +52,18 @@ export interface ScheduledClassAccessScope {
   organizationId?: string | null;
 }
 
+export class ScheduledClassDiscordSyncError extends Error {
+  readonly event?: ScheduledClassEvent;
+
+  constructor(message: string, event?: ScheduledClassEvent | null) {
+    super(message);
+    this.name = 'ScheduledClassDiscordSyncError';
+    if (event) {
+      this.event = event;
+    }
+  }
+}
+
 function canAccessEvent(event: ScheduledClassEventRecord, scope: ScheduledClassAccessScope) {
   if (scope.role === 'system_admin') return true;
   if (scope.role === 'org_admin') {
@@ -582,7 +594,7 @@ export async function syncScheduledClassDiscordForAccess(
   } catch (error) {
     const warning = normalizeDiscordError(error);
     const now = new Date().toISOString();
-    await updateScheduledClassRecord({
+    const saved = await updateScheduledClassRecord({
       ...event,
       discordSync: {
         ...event.discordSync,
@@ -598,7 +610,7 @@ export async function syncScheduledClassDiscordForAccess(
       },
       updatedAt: now,
     });
-    throw new Error(warning);
+    throw new ScheduledClassDiscordSyncError(warning, saved ? toClientEvent(saved) : null);
   }
 }
 

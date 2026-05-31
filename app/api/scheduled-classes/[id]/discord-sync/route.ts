@@ -4,9 +4,11 @@ import {
   apiErrorWithRequestSession,
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
+  withRequestWebSession,
 } from '@/lib/server/api-response';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import {
+  ScheduledClassDiscordSyncError,
   syncScheduledClassDiscordForAccess,
   type ScheduledClassAccessScope,
 } from '@/lib/server/scheduled-classes';
@@ -44,11 +46,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     return apiSuccessWithRequestSession(request, { event });
   } catch (error) {
-    return apiErrorWithRequestSession(
-      request,
-      API_ERROR_CODES.INVALID_REQUEST,
-      400,
-      error instanceof Error ? error.message : 'Failed to sync scheduled class with Discord.',
-    );
+    const message =
+      error instanceof Error ? error.message : 'Failed to sync scheduled class with Discord.';
+    if (error instanceof ScheduledClassDiscordSyncError && error.event) {
+      return withRequestWebSession(
+        request,
+        NextResponse.json(
+          {
+            success: false,
+            errorCode: API_ERROR_CODES.INVALID_REQUEST,
+            error: message,
+            event: error.event,
+          },
+          { status: 400 },
+        ),
+      );
+    }
+
+    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, message);
   }
 }

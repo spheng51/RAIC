@@ -22,16 +22,14 @@ const eventId = process.env.RAIC_DISCORD_SMOKE_EVENT_ID || '';
 const connectionId = process.env.RAIC_DISCORD_SMOKE_CONNECTION_ID || '';
 const channelId = process.env.RAIC_DISCORD_SMOKE_CHANNEL_ID || '';
 const vercelBypassToken = (process.env.RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN || '').trim();
-const cronSecretSource = process.env.RAIC_DISCORD_SMOKE_CRON_SECRET
+const smokeCronSecret = (process.env.RAIC_DISCORD_SMOKE_CRON_SECRET || '').trim();
+const fallbackCronSecret = (process.env.CRON_SECRET || '').trim();
+const cronSecretSource = smokeCronSecret
   ? 'RAIC_DISCORD_SMOKE_CRON_SECRET'
-  : process.env.CRON_SECRET
+  : fallbackCronSecret
     ? 'CRON_SECRET'
     : '';
-const cronSecret = (
-  process.env.RAIC_DISCORD_SMOKE_CRON_SECRET ||
-  process.env.CRON_SECRET ||
-  ''
-).trim();
+const cronSecret = smokeCronSecret || fallbackCronSecret;
 
 function normalizeBaseUrl(rawValue) {
   const parsed = new URL(rawValue);

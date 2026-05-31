@@ -38,10 +38,25 @@ vi.mock('@/lib/server/discord', () => ({
   normalizeDiscordError: mocks.normalizeDiscordError,
 }));
 
-vi.mock('@/lib/server/scheduled-classes', () => ({
-  sendDueDiscordScheduledClassReminders: mocks.sendDueDiscordScheduledClassReminders,
-  syncScheduledClassDiscordForAccess: mocks.syncScheduledClassDiscordForAccess,
-}));
+vi.mock('@/lib/server/scheduled-classes', () => {
+  class ScheduledClassDiscordSyncError extends Error {
+    readonly event?: unknown;
+
+    constructor(message: string, event?: unknown) {
+      super(message);
+      this.name = 'ScheduledClassDiscordSyncError';
+      if (event) {
+        this.event = event;
+      }
+    }
+  }
+
+  return {
+    ScheduledClassDiscordSyncError,
+    sendDueDiscordScheduledClassReminders: mocks.sendDueDiscordScheduledClassReminders,
+    syncScheduledClassDiscordForAccess: mocks.syncScheduledClassDiscordForAccess,
+  };
+});
 
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
@@ -662,6 +677,47 @@ describe('Discord integration routes', () => {
       success: false,
       errorCode: 'INVALID_REQUEST',
       error: 'Connect Discord before syncing this scheduled class.',
+    });
+  });
+
+  it('returns the persisted warning event when Discord sync records a recoverable failure', async () => {
+    const { ScheduledClassDiscordSyncError } = await import('@/lib/server/scheduled-classes');
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(
+      new ScheduledClassDiscordSyncError('Discord unavailable', {
+        id: 'event-1',
+        title: 'Physics game night',
+        startsAt: '2099-05-12T17:00:00.000Z',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:01:00.000Z',
+        discordSync: {
+          enabled: true,
+          syncWarning: 'Discord unavailable',
+          inviteUrl: 'https://open-raic.com/join/token',
+        },
+      }),
+    );
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord unavailable',
+      event: {
+        id: 'event-1',
+        discordSync: {
+          syncWarning: 'Discord unavailable',
+          inviteUrl: 'https://open-raic.com/join/token',
+        },
+      },
     });
   });
 

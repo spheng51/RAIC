@@ -560,6 +560,77 @@ describe('scheduled class server storage', () => {
     expect(store.scheduledClassEvents[0].discordSync?.scheduledEventId).toBe('discord-event-new');
   });
 
+  it('throws Discord sync failures with the persisted warning event', async () => {
+    const { DiscordApiError } = await import('@/lib/server/discord');
+    const { ScheduledClassDiscordSyncError, syncScheduledClassDiscordForAccess } =
+      await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    store.discordConnections.push({
+      id: 'connection-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      guildId: 'guild-1',
+      guildName: 'Physics guild',
+      channelId: 'channel-1',
+      channelName: 'announcements',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+    store.scheduledClassEvents.push({
+      id: 'event-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-1',
+        guildId: 'guild-1',
+        guildName: 'Physics guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+        scheduledEventId: 'discord-event-1',
+        scheduledEventUrl: 'https://discord.com/events/guild-1/discord-event-1',
+        lastSyncedAt: '2026-05-11T00:00:00.000Z',
+      },
+    });
+    discordMocks.updateDiscordScheduledEvent.mockRejectedValue(
+      new DiscordApiError('Discord request failed', 500, 'Discord unavailable'),
+    );
+
+    let caught: unknown;
+    try {
+      await syncScheduledClassDiscordForAccess(teacherScope, 'event-1', {
+        baseUrl: 'https://open-raic.com',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ScheduledClassDiscordSyncError);
+    expect((caught as InstanceType<typeof ScheduledClassDiscordSyncError>).event).toEqual(
+      expect.objectContaining({
+        id: 'event-1',
+        discordSync: expect.objectContaining({
+          enabled: true,
+          connectionId: 'connection-1',
+          syncWarning: 'Discord request failed (500). Discord unavailable',
+          inviteUrl: expect.stringMatching(/^https:\/\/open-raic\.com\/join\//),
+        }),
+      }),
+    );
+    expect(store.scheduledClassEvents[0].discordSync?.syncWarning).toBe(
+      'Discord request failed (500). Discord unavailable',
+    );
+  });
+
   it('creates multiplayer invites and refreshes expiry when scheduled classes change', async () => {
     const { createScheduledClassForAccess, updateScheduledClassForAccess } =
       await import('@/lib/server/scheduled-classes');

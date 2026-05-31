@@ -164,6 +164,25 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('falls back to CRON_SECRET when the smoke-specific cron secret is blank', async () => {
+    const result = await runSmoke(
+      [],
+      {
+        CRON_SECRET: 'fallback-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_CRON_SECRET: '   ',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'fallback-secret',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('source=CRON_SECRET');
+    expect(result.stdout).not.toContain('source=RAIC_DISCORD_SMOKE_CRON_SECRET');
+    expect(result.stderr).toBe('');
+  });
+
   it('reports response details when health check fails', async () => {
     const result = await runSmoke(
       ['--allow-blockers'],
