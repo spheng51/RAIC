@@ -97,7 +97,7 @@ Public launch on `open-raic.com`:
 7. Run the full local release gates on clean local `main` before each production merge:
    - `corepack pnpm run secrets:scan`
    - `corepack pnpm run ops:drift`
-   - `VERCEL_PROJECT_ID=<project-id> VERCEL_TEAM_ID=<team-id> VERCEL_TOKEN=<token> corepack pnpm run ops:env:vercel`
+   - `corepack pnpm run ops:env:vercel` from a linked, logged-in Vercel CLI checkout, or `VERCEL_PROJECT_ID=<project-id> VERCEL_TEAM_ID=<team-id> VERCEL_TOKEN=<token> corepack pnpm run ops:env:vercel` for REST-token automation
    - `corepack pnpm run check`
    - `corepack pnpm run build`
    - `corepack pnpm run test:mirofish:gate`
@@ -168,20 +168,23 @@ Recommended for managed org configuration:
 Production Vercel env audit:
 
 ```bash
+corepack pnpm run ops:env:vercel
+```
+
+By default, the audit uses `VERCEL_TOKEN`/`VERCEL_API_TOKEN` plus `VERCEL_PROJECT_ID` when provided. Without a REST token, it falls back to the logged-in Vercel CLI for the linked project and sanitizes the CLI JSON down to key/target metadata before auditing. The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
+
+For deterministic REST-token automation:
+
+```bash
 VERCEL_PROJECT_ID=prj_... \
 VERCEL_TEAM_ID=team_... \
 VERCEL_TOKEN=... \
 corepack pnpm run ops:env:vercel
 ```
 
-The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
-
 Discord beta Vercel env audit:
 
 ```bash
-VERCEL_PROJECT_ID=prj_... \
-VERCEL_TEAM_ID=team_... \
-VERCEL_TOKEN=... \
 VERCEL_ENV_AUDIT_CONTEXTS=preview \
 VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord \
 corepack pnpm run ops:env:vercel

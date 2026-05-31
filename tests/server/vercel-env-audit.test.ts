@@ -6,6 +6,8 @@ let auditEnvRecords: VercelEnvAuditModule['auditEnvRecords'];
 let manualFallbackLines: VercelEnvAuditModule['manualFallbackLines'];
 let parseAuditContexts: VercelEnvAuditModule['parseAuditContexts'];
 let parseRequiredFeatures: VercelEnvAuditModule['parseRequiredFeatures'];
+let parseVercelEnvListJson: VercelEnvAuditModule['parseVercelEnvListJson'];
+let sanitizeEnvRecords: VercelEnvAuditModule['sanitizeEnvRecords'];
 let summarizeAudit: VercelEnvAuditModule['summarizeAudit'];
 
 beforeAll(async () => {
@@ -14,6 +16,8 @@ beforeAll(async () => {
     manualFallbackLines,
     parseAuditContexts,
     parseRequiredFeatures,
+    parseVercelEnvListJson,
+    sanitizeEnvRecords,
     summarizeAudit,
   } = await import('../../scripts/lib/vercel-env-audit.mjs'));
 });
@@ -109,6 +113,49 @@ describe('Vercel env audit helpers', () => {
       },
     ]);
     expect(JSON.stringify(auditResults[0])).not.toContain('discord-bot-secret');
+  });
+
+  it('sanitizes Vercel CLI env JSON down to key and target metadata', () => {
+    const records = parseVercelEnvListJson(
+      JSON.stringify([
+        {
+          configurationId: 'env_1',
+          key: 'DISCORD_BOT_TOKEN',
+          target: ['preview'],
+          type: 'encrypted',
+          value: 'discord-bot-secret',
+        },
+        {
+          configurationId: 'env_2',
+          key: 'CRON_SECRET',
+          target: ['preview', 'production'],
+          type: 'encrypted',
+          updatedAt: 1780186912,
+        },
+      ]),
+    );
+
+    expect(records).toEqual([
+      { key: 'DISCORD_BOT_TOKEN', target: ['preview'] },
+      { key: 'CRON_SECRET', target: ['preview', 'production'] },
+    ]);
+    expect(JSON.stringify(records)).not.toContain('discord-bot-secret');
+    expect(JSON.stringify(records)).not.toContain('configurationId');
+  });
+
+  it('sanitizes REST env records before audit output is summarized', () => {
+    const records = sanitizeEnvRecords([
+      { key: 'DATABASE_URL', targets: ['production'], value: 'postgres://secret' },
+      { key: 'OPENAI_API_KEY', target: 'production', value: 'sk-secret' },
+    ]);
+
+    expect(records).toEqual([
+      { key: 'DATABASE_URL', targets: ['production'] },
+      { key: 'OPENAI_API_KEY', target: 'production' },
+    ]);
+    expect(
+      JSON.stringify(auditEnvRecords({ contexts: ['production'], envRecords: records })),
+    ).not.toContain('postgres://secret');
   });
 
   it('passes Discord beta env checks when all feature keys are present', () => {

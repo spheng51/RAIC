@@ -34,7 +34,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `0a36c8c` / `20217e8` recoverable Discord connection warnings, explicit OAuth denial routing, and Studio callback feedback refresh coverage.
   - `f1f55eb` missing-config channel-save protection when Discord config is absent.
   - `d074b03` strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
-  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, explicit `not_configured` OAuth callback feedback when Discord config is absent, safe rendering for stored Discord scheduled-event URLs, operator guidance for `?discord=not_configured` pre-credential smoke behavior, automatic recreation of missing upstream Discord scheduled events during re-sync, stricter smoke proof that automated live sync only passes with a valid Discord scheduled-event URL, malformed reminder-cron count rejection, and cron unauth smoke guarding.
+  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, explicit `not_configured` OAuth callback feedback when Discord config is absent, safe rendering for stored Discord scheduled-event URLs, operator guidance for `?discord=not_configured` pre-credential smoke behavior, automatic recreation of missing upstream Discord scheduled events during re-sync, stricter smoke proof that automated live sync only passes with a valid Discord scheduled-event URL, malformed reminder-cron count rejection, cron unauth smoke guarding, and tokenless Vercel CLI fallback for secret-safe env presence auditing.
 
 ## Branch Evidence
 
@@ -63,7 +63,7 @@ Passed focused gates:
 - `corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
   - Result: 4 tests passed, including the explicit PR-local drift mode guard.
 - `corepack pnpm test tests/server/vercel-env-audit.test.ts`
-  - Result: 7 tests passed.
+  - Result: 9 tests passed after adding sanitized Vercel CLI JSON parsing and REST/CLI env-record sanitization coverage.
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
   - Result: 3 files passed, 40 tests passed after the latest smoke-gate hardening.
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
@@ -85,6 +85,8 @@ Passed focused gates:
 - `node --check scripts/ops-check.mjs`
 - `node --check scripts/vercel-env-audit.mjs`
 - `node --check scripts/lib/vercel-env-audit.mjs`
+- `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md --check`
+  - Result: all matched files use Prettier style after the CLI fallback hardening.
 - `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord node scripts/vercel-env-audit.mjs`
   - Result: exited 2 as expected without Vercel credentials and printed the manual fallback, including the Discord feature-required key list, without secret values.
 - `node scripts/discord-beta-smoke.mjs --help`
@@ -104,7 +106,11 @@ Passed focused gates:
 - `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-git-codex-v070-discor-908f39-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
   - Result after the `4f8435a` preview deploy: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
 - Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
-- `ops:env:vercel` now supports `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` so preview and production env audits can require `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` without exposing values.
+- `ops:env:vercel` now supports `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` so preview and production env audits can require `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` without exposing values. When `VERCEL_TOKEN` is absent, it can use the logged-in Vercel CLI and sanitizes `vercel env ls --format json` output down to key/target metadata before auditing.
+- `VERCEL_ENV_AUDIT_CONTEXTS=preview VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+  - Result on the linked Vercel project: exited 1 from the secret-safe Vercel CLI fallback. Preview currently has `BLOB_READ_WRITE_TOKEN`, but is missing `DATABASE_URL`, `RAIC_SECRET_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_ID`, an LLM provider key, and all four Discord beta keys: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`.
+- `VERCEL_ENV_AUDIT_CONTEXTS=production VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+  - Result on the linked Vercel project: exited 1 from the secret-safe Vercel CLI fallback. Production base keys and `OPENAI_API_KEY` are present, but all four Discord beta keys are missing: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`.
 - `corepack pnpm run ops:drift:pr`
   - Result: passed on the PR worktree; required a clean working tree, ran CI action runtime policy, and explicitly logged skipped clean-main-only local branch/ref/worktree/scratch-branch hygiene. This is PR evidence only and does not replace final clean-`main` `ops:drift` or `ops:verify`.
 - CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, and `actions/upload-artifact@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
@@ -146,7 +152,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 - `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, legacy synced records not silently moving to another Discord connection, and re-sync recreation when the upstream Discord scheduled event is already gone.
 - `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries, default blocker exit behavior, `--allow-blockers`, `?discord=not_configured` operator guidance, Vercel deployment-protection blocker detection, Vercel bypass-token injection, smoke-specific cron secret precedence, cron unauth smoke guarding, malformed reminder-cron count rejection, richer health-check diagnostics, and failure when live sync returns only a recoverable Discord warning or a non-Discord scheduled-event URL.
 - `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow and keeps the final clean-main drift mode distinct from explicit PR-local drift evidence.
-- `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, unknown feature names failing closed, manual fallback feature-key output, and non-leakage of secret values in audit results.
+- `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, unknown feature names failing closed, manual fallback feature-key output, sanitized Vercel CLI JSON parsing, REST/CLI env-record sanitization, and non-leakage of secret values in audit results.
 - `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping, including `not_configured`, and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state, channel save/disconnect, sync callbacks, warning/link rendering, unsafe event-link suppression, and no-classroom disabled state.
 
@@ -204,6 +210,6 @@ Manual Discord beta checks printed by the smoke gate:
 
 ## Current Blockers
 
-- Live preview and production Discord smoke require real `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` values. Record only variable presence, never secret values.
+- Live preview and production Discord smoke require real `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` values. The latest secret-safe Vercel CLI fallback audit confirms all four Discord keys are missing in both preview and production. Record only variable presence, never secret values.
 - Live smoke also requires a maintainer teacher account, a disposable Discord test server, bot install permissions, and a future teacher-owned scheduled class linked to a classroom.
 - Final `v0.7.0` closeout requires a clean `main` gate run, production deployment ID, production smoke output, and `v0.7.0` tag.

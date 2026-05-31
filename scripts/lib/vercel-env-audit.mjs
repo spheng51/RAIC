@@ -71,6 +71,34 @@ export function envTargets(envRecord) {
   return [];
 }
 
+export function sanitizeEnvRecords(envRecords = []) {
+  return envRecords
+    .filter((envRecord) => envRecord?.key)
+    .map((envRecord) => {
+      const sanitized = { key: String(envRecord.key) };
+      if (Array.isArray(envRecord.target)) {
+        sanitized.target = envRecord.target.map(String);
+      } else if (typeof envRecord.target === 'string' && envRecord.target.trim()) {
+        sanitized.target = envRecord.target.trim();
+      }
+      if (Array.isArray(envRecord.targets)) {
+        sanitized.targets = envRecord.targets.map(String);
+      } else if (typeof envRecord.targets === 'string' && envRecord.targets.trim()) {
+        sanitized.targets = envRecord.targets.trim();
+      }
+      return sanitized;
+    });
+}
+
+export function parseVercelEnvListJson(rawValue) {
+  const body = JSON.parse(rawValue);
+  const envRecords = Array.isArray(body) ? body : body?.envs;
+  if (!Array.isArray(envRecords)) {
+    throw new Error('Vercel env list JSON did not contain an env array.');
+  }
+  return sanitizeEnvRecords(envRecords);
+}
+
 export function envAppliesToContext(envRecord, context) {
   return envTargets(envRecord).includes(context);
 }
