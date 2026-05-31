@@ -7,11 +7,27 @@ import {
   withRequestWebSession,
 } from '@/lib/server/api-response';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
+import { createLogger } from '@/lib/logger';
 import {
   ScheduledClassDiscordSyncError,
   syncScheduledClassDiscordForAccess,
   type ScheduledClassAccessScope,
 } from '@/lib/server/scheduled-classes';
+
+const log = createLogger('Scheduled Class Discord Sync API');
+
+const RECOVERABLE_DISCORD_SYNC_ERROR_PREFIXES = [
+  'Assign this scheduled class',
+  'Choose a classroom',
+  'Choose an accessible classroom',
+  'Choose a Discord announcement channel',
+  'Connect Discord',
+  'Reconnect Discord',
+];
+
+function isRecoverableDiscordSyncError(message: string) {
+  return RECOVERABLE_DISCORD_SYNC_ERROR_PREFIXES.some((prefix) => message.startsWith(prefix));
+}
 
 function getScope(auth: Awaited<ReturnType<typeof requireRequestRole>>): ScheduledClassAccessScope {
   if (auth instanceof NextResponse) {
@@ -63,6 +79,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, message);
+    if (isRecoverableDiscordSyncError(message)) {
+      return apiErrorWithRequestSession(request, API_ERROR_CODES.INVALID_REQUEST, 400, message);
+    }
+
+    log.error('Unexpected scheduled class Discord sync failure:', error);
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INTERNAL_ERROR,
+      500,
+      'Failed to sync scheduled class with Discord.',
+    );
   }
 }

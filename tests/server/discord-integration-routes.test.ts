@@ -680,6 +680,27 @@ describe('Discord integration routes', () => {
     });
   });
 
+  it('returns a safe server error when Discord sync fails unexpectedly', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(new Error('db unavailable'));
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      error: 'Failed to sync scheduled class with Discord.',
+    });
+    expect(JSON.stringify(json)).not.toContain('db unavailable');
+  });
+
   it('returns the persisted warning event when Discord sync records a recoverable failure', async () => {
     const { ScheduledClassDiscordSyncError } = await import('@/lib/server/scheduled-classes');
     mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(
