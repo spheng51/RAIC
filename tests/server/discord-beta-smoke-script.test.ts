@@ -144,7 +144,8 @@ describe('discord beta smoke script', () => {
         ['--allow-blockers'],
         {
           CRON_SECRET: '',
-          RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+          RAIC_DISCORD_SMOKE_BASE_URL:
+            'https://smoke-user:discord-base-secret@smoke.test?token=discord-url-secret',
           RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher-cookie-secret',
           RAIC_DISCORD_SMOKE_CRON_SECRET: '',
           RAIC_DISCORD_SMOKE_EVIDENCE_PATH: evidencePath,
@@ -174,6 +175,10 @@ describe('discord beta smoke script', () => {
       expect(evidence.exitCode).toBe(0);
       expect(rawEvidence).not.toContain('teacher-cookie-secret');
       expect(rawEvidence).not.toContain('preview-bypass-secret');
+      expect(rawEvidence).not.toContain('discord-base-secret');
+      expect(rawEvidence).not.toContain('discord-url-secret');
+      expect(result.stdout).not.toContain('discord-base-secret');
+      expect(result.stdout).not.toContain('discord-url-secret');
       expect(result.stderr).toBe('');
     } finally {
       await rm(tmp, { recursive: true, force: true });

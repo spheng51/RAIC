@@ -967,13 +967,29 @@ describe('Discord integration routes', () => {
     expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
   });
 
-  it('requires teacher access for OAuth start and scheduled-class sync routes', async () => {
+  it('keeps Discord routes behind teacher-only access', async () => {
     mocks.requireRequestRole.mockResolvedValue(
       NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 }),
     );
 
+    const connection = await import('@/app/api/integrations/discord/connection/route');
     const oauthStart = await import('@/app/api/integrations/discord/oauth/start/route');
     const discordSync = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const connectionGetResponse = await connection.GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const connectionPostResponse = await connection.POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-1' }),
+      }),
+    );
+    const connectionDeleteResponse = await connection.DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-1' }),
+      }),
+    );
     const oauthResponse = await oauthStart.GET(
       new NextRequest('http://localhost/api/integrations/discord/oauth/start'),
     );
@@ -984,8 +1000,24 @@ describe('Discord integration routes', () => {
       },
     );
 
+    expect(connectionGetResponse.status).toBe(403);
+    expect(connectionPostResponse.status).toBe(403);
+    expect(connectionDeleteResponse.status).toBe(403);
     expect(oauthResponse.status).toBe(403);
     expect(syncResponse.status).toBe(403);
+    expect(mocks.requireRequestRole).toHaveBeenCalledTimes(5);
+    expect(mocks.requireRequestRole.mock.calls.map(([, roles]) => roles)).toEqual([
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+    ]);
+    expect(mocks.listDiscordConnectionsForUser).not.toHaveBeenCalled();
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
     expect(mocks.buildDiscordOAuthUrl).not.toHaveBeenCalled();
     expect(mocks.syncScheduledClassDiscordForAccess).not.toHaveBeenCalled();
   });

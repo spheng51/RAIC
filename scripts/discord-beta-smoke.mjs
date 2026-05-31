@@ -37,6 +37,8 @@ const cronSecret = smokeCronSecret || fallbackCronSecret;
 
 function normalizeBaseUrl(rawValue) {
   const parsed = new URL(rawValue);
+  parsed.username = '';
+  parsed.password = '';
   parsed.hash = '';
   parsed.search = '';
   parsed.pathname = parsed.pathname.replace(/\/+$/, '');

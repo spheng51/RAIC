@@ -135,7 +135,8 @@ describe('production milestone smoke script', () => {
 
     try {
       const result = await runSmoke({
-        RAIC_PRODUCTION_BASE_URL: 'https://production-smoke.test?token=prod-url-secret',
+        RAIC_PRODUCTION_BASE_URL:
+          'https://prod-user:prod-base-secret@production-smoke.test?token=prod-url-secret',
         RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH: evidencePath,
         RAIC_REQUIRED_PRODUCTION_FEATURES: 'discord',
       });
@@ -160,6 +161,9 @@ describe('production milestone smoke script', () => {
       });
       expect(evidence.exitCode).toBe(2);
       expect(rawEvidence).not.toContain('prod-url-secret');
+      expect(rawEvidence).not.toContain('prod-base-secret');
+      expect(result.stdout).not.toContain('prod-url-secret');
+      expect(result.stdout).not.toContain('prod-base-secret');
       expect(result.stderr).toBe('');
     } finally {
       await rm(tmp, { recursive: true, force: true });
