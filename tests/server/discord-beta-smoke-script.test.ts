@@ -298,6 +298,46 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('writes evidence when a Discord smoke request fails at runtime', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-discord-smoke-runtime-'));
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
+
+    try {
+      const result = await runSmoke(
+        ['--allow-blockers'],
+        {
+          RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+          RAIC_DISCORD_SMOKE_EVIDENCE_PATH: evidencePath,
+          RAIC_DISCORD_SMOKE_MOCK_HEALTH_THROW: '1',
+        },
+        { mockFetch: true },
+      );
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain('FAIL    Discord beta smoke runtime');
+      expect(result.stdout).toContain('simulated Discord smoke health fetch failure');
+      expect(result.stdout).toContain('Summary: 0 automated passed, 1 failed');
+      expect(evidence.summary).toEqual({
+        automatedPassed: 0,
+        blocked: 0,
+        failed: 1,
+        manual: 0,
+      });
+      expect(evidence.results).toEqual([
+        expect.objectContaining({
+          label: 'Discord beta smoke runtime',
+          status: 'fail',
+        }),
+      ]);
+      expect(evidence.exitCode).toBe(1);
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('redacts Vercel bypass tokens from redirected response diagnostics', async () => {
     const result = await runSmoke(
       ['--allow-blockers'],

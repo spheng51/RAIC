@@ -45,6 +45,10 @@ globalThis.fetch = async (input, init = {}) => {
   }
 
   if (url.pathname === '/api/health') {
+    if (process.env.RAIC_DISCORD_SMOKE_MOCK_HEALTH_THROW === '1') {
+      throw new Error('simulated Discord smoke health fetch failure');
+    }
+
     if (process.env.RAIC_DISCORD_SMOKE_MOCK_HEALTH_REDIRECT_ERROR === '1') {
       return redirectedJson(
         502,
