@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import {
   evaluateOptionalProviderFeature,
@@ -7,6 +8,7 @@ import {
   getFirstEnabledSecretProvider,
   isFriendlyProviderError,
   isRequiredFeature,
+  parseRequiredFeatures,
 } from './lib/production-smoke-readiness.mjs';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
@@ -16,6 +18,8 @@ const baseUrl = normalizeBaseUrl(process.env.RAIC_PRODUCTION_BASE_URL || DEFAULT
 const missingClassroomId =
   process.env.RAIC_SMOKE_MISSING_CLASSROOM_ID || DEFAULT_MISSING_CLASSROOM_ID;
 const allowBlockers = process.argv.includes('--allow-blockers');
+const evidencePath = (process.env.RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH || '').trim();
+const runStartedAt = new Date().toISOString();
 
 const results = [];
 
@@ -57,6 +61,63 @@ function recordFeatureEvaluation(label, evaluation) {
   } else {
     skip(label, evaluation.detail);
   }
+}
+
+function buildSummary() {
+  const failures = results.filter((result) => result.status === 'fail');
+  const blockers = results.filter((result) => result.status === 'block');
+  const skipped = results.filter((result) => result.status === 'skip');
+
+  return {
+    passed: results.length - failures.length - blockers.length - skipped.length,
+    failed: failures.length,
+    blocked: blockers.length,
+    skipped: skipped.length,
+  };
+}
+
+function resolveExitCode(summary) {
+  if (summary.failed > 0) {
+    return 1;
+  }
+
+  if (summary.blocked > 0 && !allowBlockers) {
+    return 2;
+  }
+
+  return 0;
+}
+
+async function writeEvidenceArtifact(summary, exitCode) {
+  if (!evidencePath) {
+    return;
+  }
+
+  const payload = {
+    script: 'production-milestone-smoke',
+    generatedAt: new Date().toISOString(),
+    startedAt: runStartedAt,
+    baseUrl,
+    allowBlockers,
+    preconditions: {
+      requiredProductionFeatures: [
+        ...parseRequiredFeatures(process.env.RAIC_REQUIRED_PRODUCTION_FEATURES),
+      ],
+      requiredDiscord: isRequiredFeature('discord'),
+      requiredMiroFish: isRequiredFeature('mirofish'),
+      missingClassroomId,
+    },
+    summary,
+    results,
+    exitCode,
+    redaction: {
+      policy:
+        'production smoke evidence records only feature names, readiness status, and response diagnostics; provider secrets and credentials are never serialized',
+    },
+  };
+
+  await writeFile(evidencePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  console.log(`[production-smoke] Evidence JSON: ${evidencePath}`);
 }
 
 async function fetchJson(path, init = {}) {
@@ -282,21 +343,26 @@ async function main() {
   await checkAuthGuard();
   await checkMissingClassroom404s();
 
-  const failures = results.filter((result) => result.status === 'fail');
-  const blockers = results.filter((result) => result.status === 'block');
-  const skipped = results.filter((result) => result.status === 'skip');
+  const summary = buildSummary();
+  const exitCode = resolveExitCode(summary);
 
   console.log(
-    `[production-smoke] Summary: ${
-      results.length - failures.length - blockers.length - skipped.length
-    } passed, ${failures.length} failed, ${blockers.length} blocked, ${skipped.length} skipped`,
+    `[production-smoke] Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.skipped} skipped`,
   );
 
-  if (failures.length > 0) {
+  try {
+    await writeEvidenceArtifact(summary, exitCode);
+  } catch (error) {
+    console.error(
+      `[production-smoke] Failed to write evidence JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     process.exitCode = 1;
-  } else if (blockers.length > 0 && !allowBlockers) {
-    process.exitCode = 2;
+    return;
   }
+
+  process.exitCode = exitCode;
 }
 
 await main();

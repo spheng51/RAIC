@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const scriptPath = resolve(process.cwd(), 'scripts/discord-beta-smoke.mjs');
@@ -101,6 +103,51 @@ describe('discord beta smoke script', () => {
     expect(result.stdout).toContain('blocked');
     expect(result.stdout).toContain('?discord=not_configured');
     expect(result.stderr).toBe('');
+  });
+
+  it('writes sanitized JSON evidence without changing blocker exit semantics', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-discord-smoke-'));
+    const evidencePath = join(tmp, 'evidence.json');
+
+    try {
+      const result = await runSmoke(
+        ['--allow-blockers'],
+        {
+          CRON_SECRET: '',
+          RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+          RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher-cookie-secret',
+          RAIC_DISCORD_SMOKE_CRON_SECRET: '',
+          RAIC_DISCORD_SMOKE_EVIDENCE_PATH: evidencePath,
+          RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN: 'preview-bypass-secret',
+        },
+        { mockFetch: true },
+      );
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(`Evidence JSON: ${evidencePath}`);
+      expect(evidence.script).toBe('discord-beta-smoke');
+      expect(evidence.baseUrl).toBe('https://smoke.test/');
+      expect(evidence.allowBlockers).toBe(true);
+      expect(evidence.preconditions).toMatchObject({
+        cronSecretSource: null,
+        hasTeacherCookie: true,
+        hasVercelBypassToken: true,
+      });
+      expect(evidence.summary).toEqual({
+        automatedPassed: 7,
+        blocked: 1,
+        failed: 0,
+        manual: 7,
+      });
+      expect(evidence.exitCode).toBe(0);
+      expect(rawEvidence).not.toContain('teacher-cookie-secret');
+      expect(rawEvidence).not.toContain('preview-bypass-secret');
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 
   it('treats Vercel deployment protection as a blocker when explicitly allowed', async () => {

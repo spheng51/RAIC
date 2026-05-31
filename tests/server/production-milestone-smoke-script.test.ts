@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const scriptPath = resolve(process.cwd(), 'scripts/production-milestone-smoke.mjs');
@@ -60,5 +62,42 @@ describe('production milestone smoke script', () => {
     expect(result.stdout).toContain('DISCORD_CLIENT_ID');
     expect(result.stdout).toContain('Summary: ');
     expect(result.stderr).toBe('');
+  });
+
+  it('writes sanitized JSON evidence for required Discord blockers', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-'));
+    const evidencePath = join(tmp, 'evidence.json');
+
+    try {
+      const result = await runSmoke({
+        RAIC_PRODUCTION_BASE_URL: 'https://production-smoke.test?token=prod-url-secret',
+        RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH: evidencePath,
+        RAIC_REQUIRED_PRODUCTION_FEATURES: 'discord',
+      });
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(2);
+      expect(result.stdout).toContain(`Evidence JSON: ${evidencePath}`);
+      expect(evidence.script).toBe('production-milestone-smoke');
+      expect(evidence.baseUrl).toBe('https://production-smoke.test/');
+      expect(evidence.preconditions).toMatchObject({
+        missingClassroomId: 'missing-milestone-smoke-404',
+        requiredDiscord: true,
+        requiredMiroFish: false,
+        requiredProductionFeatures: ['discord'],
+      });
+      expect(evidence.summary).toEqual({
+        blocked: 1,
+        failed: 0,
+        passed: 9,
+        skipped: 6,
+      });
+      expect(evidence.exitCode).toBe(2);
+      expect(rawEvidence).not.toContain('prod-url-secret');
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 });

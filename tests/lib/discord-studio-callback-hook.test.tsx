@@ -101,6 +101,28 @@ describe('useDiscordStudioCallback', () => {
     expect(window.location.search).toBe('');
   });
 
+  it.each([
+    ['error', 'translated:home.schedule.discord.connectionFailed'],
+    ['missing_guild', 'translated:home.schedule.discord.missingGuild'],
+  ])('shows recoverable feedback for %s callbacks once', async (status, message) => {
+    const refreshConnection = vi.fn();
+    window.history.replaceState(null, '', `/studio?discord=${status}&keep=1#schedule`);
+
+    const mounted = await renderHarness({ refreshConnection });
+
+    expect(toastMocks.error).toHaveBeenCalledWith(message);
+    expect(toastMocks.success).not.toHaveBeenCalled();
+    expect(refreshConnection).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe('/studio');
+    expect(window.location.search).toBe('?keep=1');
+    expect(window.location.hash).toBe('#schedule');
+
+    await mounted.rerender();
+
+    expect(toastMocks.error).toHaveBeenCalledTimes(1);
+    expect(refreshConnection).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores Discord callback params outside teacher-server mode', async () => {
     const refreshConnection = vi.fn();
     window.history.replaceState(null, '', '/?discord=connected');

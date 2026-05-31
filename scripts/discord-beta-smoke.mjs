@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
+import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
 const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h');
 const allowBlockers = process.argv.includes('--allow-blockers');
+const evidencePath = (process.env.RAIC_DISCORD_SMOKE_EVIDENCE_PATH || '').trim();
+const runStartedAt = new Date().toISOString();
 
 if (wantsHelp) {
   printUsage();
@@ -91,6 +94,7 @@ Environment:
   RAIC_DISCORD_SMOKE_CRON_SECRET    Preferred cron bearer token for this smoke. Falls back to CRON_SECRET.
   RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
                                       Optional Vercel Protection Bypass for Automation token for protected previews.
+  RAIC_DISCORD_SMOKE_EVIDENCE_PATH  Optional local path for sanitized JSON smoke evidence.
 
 Exit behavior:
   Fails on automated failures or missing live-smoke prerequisites.
@@ -451,36 +455,90 @@ function printManualChecklist() {
   );
 }
 
-function summarizeResults() {
+function buildSummary() {
   const failures = results.filter((result) => result.status === 'fail');
   const blockers = results.filter((result) => result.status === 'block');
   const manualSteps = results.filter((result) => result.status === 'manual');
 
+  return {
+    automatedPassed: results.length - failures.length - blockers.length - manualSteps.length,
+    failed: failures.length,
+    blocked: blockers.length,
+    manual: manualSteps.length,
+  };
+}
+
+function resolveExitCode(summary) {
+  return summary.failed > 0 || (summary.blocked > 0 && !allowBlockers) ? 1 : 0;
+}
+
+async function writeEvidenceArtifact(summary, exitCode) {
+  if (!evidencePath) {
+    return;
+  }
+
+  const payload = {
+    script: 'discord-beta-smoke',
+    generatedAt: new Date().toISOString(),
+    startedAt: runStartedAt,
+    baseUrl,
+    allowBlockers,
+    preconditions: {
+      hasTeacherCookie: Boolean(teacherCookie),
+      hasConnectionId: Boolean(connectionId),
+      hasChannelId: Boolean(channelId),
+      hasEventId: Boolean(eventId),
+      hasVercelBypassToken: Boolean(vercelBypassToken),
+      cronSecretSource: cronSecretSource || null,
+    },
+    summary,
+    results,
+    exitCode,
+    redaction: {
+      policy:
+        'request cookies, cron secrets, and Vercel bypass tokens are never serialized; diagnostic URLs are normalized or redacted before recording',
+    },
+  };
+
+  await writeFile(evidencePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  console.log(`[discord-beta-smoke] Evidence JSON: ${evidencePath}`);
+}
+
+async function summarizeResults() {
+  const summary = buildSummary();
+  const exitCode = resolveExitCode(summary);
+
   console.log('');
   console.log(
-    `[discord-beta-smoke] Summary: ${
-      results.length - failures.length - blockers.length - manualSteps.length
-    } automated passed, ${failures.length} failed, ${blockers.length} blocked, ${
-      manualSteps.length
-    } manual checks listed`,
+    `[discord-beta-smoke] Summary: ${summary.automatedPassed} automated passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.manual} manual checks listed`,
   );
 
-  if (failures.length > 0 || (blockers.length > 0 && !allowBlockers)) {
+  try {
+    await writeEvidenceArtifact(summary, exitCode);
+  } catch (error) {
+    console.error(
+      `[discord-beta-smoke] Failed to write evidence JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     process.exitCode = 1;
+    return;
   }
+
+  process.exitCode = exitCode;
 }
 
 async function main() {
   console.log(`[discord-beta-smoke] Base URL: ${baseUrl || '(invalid)'}`);
   if (!baseUrl) {
-    summarizeResults();
+    await summarizeResults();
     return;
   }
 
   const healthStatus = await checkHealth();
   if (healthStatus === 'blocked') {
     printManualChecklist();
-    summarizeResults();
+    await summarizeResults();
     return;
   }
 
@@ -490,12 +548,12 @@ async function main() {
   await syncScheduledClassIfRequested();
   await runReminderCron();
   printManualChecklist();
-  summarizeResults();
+  await summarizeResults();
 }
 
 try {
   await main();
 } catch (error) {
   fail('Discord beta smoke runtime', error instanceof Error ? error.message : String(error));
-  summarizeResults();
+  await summarizeResults();
 }
