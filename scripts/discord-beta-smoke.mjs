@@ -149,12 +149,26 @@ function describeApiResponse(response, body) {
   const contentType = response.headers.get('content-type') || 'unknown content-type';
   const parts = [`HTTP ${response.status}`, contentType];
   if (response.redirected) {
-    parts.push(`redirected to ${response.url}`);
+    parts.push(`redirected to ${redactUrlForLog(response.url)}`);
   }
   if (body?.errorCode) {
     parts.push(`errorCode=${body.errorCode}`);
   }
   return parts.join(', ');
+}
+
+function redactUrlForLog(value) {
+  try {
+    const url = new URL(value);
+    for (const key of [...url.searchParams.keys()]) {
+      if (/(authorization|bypass|cookie|key|secret|token)/i.test(key)) {
+        url.searchParams.set(key, 'redacted');
+      }
+    }
+    return url.toString();
+  } catch {
+    return '[unparseable redirect URL]';
+  }
 }
 
 function isDiscordScheduledEventUrl(value) {

@@ -181,6 +181,25 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('redacts Vercel bypass tokens from redirected response diagnostics', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_MOCK_HEALTH_REDIRECT_ERROR: '1',
+        RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN: 'preview-bypass-secret',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    /api/health');
+    expect(result.stdout).toContain('redirected to');
+    expect(result.stdout).toContain('x-vercel-protection-bypass=redacted');
+    expect(result.stdout).not.toContain('preview-bypass-secret');
+    expect(result.stderr).not.toContain('preview-bypass-secret');
+  });
+
   it('fails live sync when Discord only returns a recoverable warning without an event URL', async () => {
     const result = await runSmoke(
       ['--allow-blockers'],

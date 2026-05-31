@@ -5,6 +5,16 @@ function json(status, body) {
   });
 }
 
+function redirectedJson(status, body, url) {
+  return {
+    status,
+    redirected: true,
+    url,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    text: async () => JSON.stringify(body),
+  };
+}
+
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(String(input));
   const headers = new Headers(init.headers || {});
@@ -35,6 +45,14 @@ globalThis.fetch = async (input, init = {}) => {
   }
 
   if (url.pathname === '/api/health') {
+    if (process.env.RAIC_DISCORD_SMOKE_MOCK_HEALTH_REDIRECT_ERROR === '1') {
+      return redirectedJson(
+        502,
+        { success: false, errorCode: 'UPSTREAM_REDIRECT' },
+        url.toString(),
+      );
+    }
+
     if (process.env.RAIC_DISCORD_SMOKE_MOCK_HEALTH_ERROR === '1') {
       return json(503, { success: false, errorCode: 'SERVICE_UNAVAILABLE' });
     }
