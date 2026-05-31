@@ -15,14 +15,14 @@ import {
 const DEFAULT_BASE_URL = 'https://open-raic.com';
 const DEFAULT_MISSING_CLASSROOM_ID = 'missing-milestone-smoke-404';
 
-const baseUrl = normalizeBaseUrl(process.env.RAIC_PRODUCTION_BASE_URL || DEFAULT_BASE_URL);
+const results = [];
+const rawBaseUrl = process.env.RAIC_PRODUCTION_BASE_URL || DEFAULT_BASE_URL;
+const baseUrl = resolveBaseUrl(rawBaseUrl);
 const missingClassroomId =
   process.env.RAIC_SMOKE_MISSING_CLASSROOM_ID || DEFAULT_MISSING_CLASSROOM_ID;
 const allowBlockers = process.argv.includes('--allow-blockers');
 const evidencePath = (process.env.RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH || '').trim();
 const runStartedAt = new Date().toISOString();
-
-const results = [];
 
 function normalizeBaseUrl(rawValue) {
   const parsed = new URL(rawValue);
@@ -30,6 +30,18 @@ function normalizeBaseUrl(rawValue) {
   parsed.search = '';
   parsed.pathname = parsed.pathname.replace(/\/+$/, '');
   return parsed.toString();
+}
+
+function resolveBaseUrl(rawValue) {
+  try {
+    return normalizeBaseUrl(rawValue);
+  } catch (error) {
+    fail(
+      'Production milestone smoke base URL',
+      `invalid RAIC_PRODUCTION_BASE_URL: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 }
 
 function record(status, label, detail) {
@@ -123,6 +135,10 @@ async function writeEvidenceArtifact(summary, exitCode) {
 }
 
 async function fetchJson(path, init = {}) {
+  if (!baseUrl) {
+    throw new Error('base URL is invalid');
+  }
+
   const response = await fetch(new URL(path, baseUrl), {
     ...init,
     headers: {
@@ -337,14 +353,7 @@ async function checkMissingClassroom404s() {
   }
 }
 
-async function main() {
-  console.log(`[production-smoke] Base URL: ${baseUrl}`);
-  await checkHealth();
-  const providers = await checkProviderReadiness();
-  await checkFriendlyProviderErrors(providers);
-  await checkAuthGuard();
-  await checkMissingClassroom404s();
-
+async function summarizeResults() {
   const summary = buildSummary();
   const exitCode = resolveExitCode(summary);
 
@@ -367,4 +376,28 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-await main();
+async function main() {
+  console.log(`[production-smoke] Base URL: ${baseUrl || '(invalid)'}`);
+  if (!baseUrl) {
+    await summarizeResults();
+    return;
+  }
+
+  await checkHealth();
+  const providers = await checkProviderReadiness();
+  await checkFriendlyProviderErrors(providers);
+  await checkAuthGuard();
+  await checkMissingClassroom404s();
+
+  await summarizeResults();
+}
+
+try {
+  await main();
+} catch (error) {
+  fail(
+    'Production milestone smoke runtime',
+    error instanceof Error ? error.message : String(error),
+  );
+  await summarizeResults();
+}

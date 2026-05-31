@@ -64,6 +64,36 @@ describe('production milestone smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('reports invalid base URLs with sanitized evidence instead of a stack trace', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-invalid-'));
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
+
+    try {
+      const result = await runSmoke({
+        RAIC_PRODUCTION_BASE_URL: 'not a url prod-url-secret',
+        RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH: evidencePath,
+      });
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain('FAIL    Production milestone smoke base URL');
+      expect(result.stdout).toContain('Summary: 0 passed, 1 failed, 0 blocked, 0 skipped');
+      expect(evidence.summary).toEqual({
+        blocked: 0,
+        failed: 1,
+        passed: 0,
+        skipped: 0,
+      });
+      expect(evidence.exitCode).toBe(1);
+      expect(rawEvidence).not.toContain('prod-url-secret');
+      expect(result.stdout).not.toContain('prod-url-secret');
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('writes sanitized JSON evidence for required Discord blockers', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-'));
     const evidencePath = join(tmp, 'nested', 'evidence.json');
