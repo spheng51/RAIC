@@ -363,9 +363,27 @@ export function ScheduleClassesBox({
                 </div>
 
                 {!discordIntegration.configured ? (
-                  <Button type="button" size="sm" variant="outline" disabled>
-                    {t('home.schedule.discord.connect')}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="outline" disabled>
+                      {t('home.schedule.discord.connect')}
+                    </Button>
+                    {discordIntegration.connection ? (
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={t('home.schedule.discord.disconnect')}
+                        disabled={discordIntegration.busy || discordAction !== null}
+                        onClick={() => void disconnectDiscord()}
+                      >
+                        {discordAction === 'disconnect' ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Unplug className="size-3.5" />
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : !discordIntegration.connection ? (
                   <Button
                     type="button"

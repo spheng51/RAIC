@@ -381,6 +381,26 @@ describe('ScheduleClassesBox', () => {
     expect(discordIntegration.onConnect).not.toHaveBeenCalled();
   });
 
+  it('lets teachers disconnect a stale Discord connection when config is missing', async () => {
+    const discordIntegration = makeDiscordIntegration({
+      configured: false,
+      channels: [],
+    });
+    const { container } = await mountBox({ discordIntegration });
+
+    expect(container.textContent).toContain('Discord is not configured');
+    expect(findButton(container, 'Connect Discord')?.disabled).toBe(true);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Disconnect Discord"]')
+        ?.click();
+    });
+
+    expect(discordIntegration.onConnect).not.toHaveBeenCalled();
+    expect(discordIntegration.onDisconnect).toHaveBeenCalledWith('connection-1');
+  });
+
   it('shows recoverable Discord integration warnings in the setup row', async () => {
     const { container } = await mountBox({
       discordIntegration: makeDiscordIntegration({
