@@ -430,6 +430,62 @@ describe('scheduled class server storage', () => {
     expect(store.scheduledClassEvents[0].discordSync).toBeUndefined();
   });
 
+  it('does not bind legacy unscoped scheduled classes to the active organization during sync', async () => {
+    const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    store.discordConnections.push(
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:00:00.000Z',
+      },
+      {
+        id: 'connection-2',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-2',
+        guildName: 'Chemistry guild',
+        channelId: 'channel-2',
+        channelName: 'announcements',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:00:00.000Z',
+      },
+    );
+    store.scheduledClassEvents.push({
+      id: 'legacy-event',
+      ownerUserId: 'teacher-1',
+      organizationId: null,
+      title: 'Legacy lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+
+    await expect(
+      syncScheduledClassDiscordForAccess(teacherScope, 'legacy-event', {
+        baseUrl: 'https://open-raic.com',
+      }),
+    ).rejects.toThrow(
+      'Assign this scheduled class to an organization before syncing with Discord.',
+    );
+
+    expect(discordMocks.createDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(discordMocks.updateDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(store.scheduledClassEvents[0].discordSync).toBeUndefined();
+    expect(store.joinTokens).toHaveLength(0);
+  });
+
   it('recreates missing upstream Discord scheduled events during resync', async () => {
     const { DiscordApiError } = await import('@/lib/server/discord');
     const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');

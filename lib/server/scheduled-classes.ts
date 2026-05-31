@@ -479,19 +479,15 @@ function buildDiscordScheduledEventUrl(guildId: string, eventId: string) {
   return `https://discord.com/events/${guildId}/${eventId}`;
 }
 
-function getScheduledClassOrganizationId(
-  scope: ScheduledClassAccessScope,
-  event: ScheduledClassEventRecord,
-) {
-  return event.organizationId ?? scope.organizationId ?? null;
+function getScheduledClassOrganizationId(event: ScheduledClassEventRecord) {
+  return event.organizationId ?? null;
 }
 
 function isDiscordConnectionForScheduledClass(
-  scope: ScheduledClassAccessScope,
   event: ScheduledClassEventRecord,
   connection: DiscordConnectionRecord,
 ) {
-  return connection.organizationId === getScheduledClassOrganizationId(scope, event);
+  return connection.organizationId === getScheduledClassOrganizationId(event);
 }
 
 async function selectDefaultDiscordConnectionForScheduledClass(
@@ -500,7 +496,7 @@ async function selectDefaultDiscordConnectionForScheduledClass(
 ) {
   const connections = await listDiscordConnectionsForUser(scope.userId);
   const connection =
-    connections.find((item) => isDiscordConnectionForScheduledClass(scope, event, item)) ?? null;
+    connections.find((item) => isDiscordConnectionForScheduledClass(event, item)) ?? null;
   if (!connection && connections.length > 0) {
     throw new Error('Connect Discord for this organization before syncing this scheduled class.');
   }
@@ -514,6 +510,9 @@ export async function syncScheduledClassDiscordForAccess(
 ): Promise<ScheduledClassEvent | null> {
   const event = await readScheduledClassForAccess(scope, id);
   if (!event) return null;
+  if (!event.organizationId && scope.organizationId) {
+    throw new Error('Assign this scheduled class to an organization before syncing with Discord.');
+  }
 
   let connection: Awaited<ReturnType<typeof readDiscordConnectionForUser>> = null;
   if (options.connectionId) {
@@ -531,7 +530,7 @@ export async function syncScheduledClassDiscordForAccess(
   if (!connection) {
     throw new Error('Connect Discord before syncing this scheduled class.');
   }
-  if (!isDiscordConnectionForScheduledClass(scope, event, connection)) {
+  if (!isDiscordConnectionForScheduledClass(event, connection)) {
     throw new Error('Connect Discord for this organization before syncing this scheduled class.');
   }
   if (!connection.channelId) {
