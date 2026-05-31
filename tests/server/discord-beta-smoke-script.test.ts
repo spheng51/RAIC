@@ -159,7 +159,8 @@ describe('discord beta smoke script', () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('source=RAIC_DISCORD_SMOKE_CRON_SECRET');
-    expect(result.stdout).toContain('Summary: 7 automated passed, 0 failed, 0 blocked');
+    expect(result.stdout).toContain('/api/cron/discord-scheduled-class-reminders unauth guard');
+    expect(result.stdout).toContain('Summary: 8 automated passed, 0 failed, 0 blocked');
     expect(result.stderr).toBe('');
   });
 

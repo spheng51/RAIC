@@ -261,6 +261,19 @@ async function checkUnauthenticatedGuards() {
       `expected HTTP 401 UNAUTHORIZED JSON, got ${describeApiResponse(syncResponse, syncBody)}`,
     );
   }
+
+  const { response: cronResponse, body: cronBody } = await fetchJson(
+    '/api/cron/discord-scheduled-class-reminders',
+    { headers: { Cookie: '' } },
+  );
+  if (cronResponse.status === 403 && cronBody?.errorCode === 'FORBIDDEN') {
+    pass('/api/cron/discord-scheduled-class-reminders unauth guard', 'cron secret is required');
+  } else {
+    fail(
+      '/api/cron/discord-scheduled-class-reminders unauth guard',
+      `expected HTTP 403 FORBIDDEN JSON, got ${describeApiResponse(cronResponse, cronBody)}`,
+    );
+  }
 }
 
 async function checkConnectionSnapshot() {
