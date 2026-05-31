@@ -27,7 +27,7 @@ import type {
   ScheduledClassEventRecord,
 } from '@/lib/db/schema';
 import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
-import { readClassroom } from '@/lib/server/classroom-storage';
+import { isValidClassroomId, readClassroom } from '@/lib/server/classroom-storage';
 import {
   createDiscordScheduledEvent,
   deleteDiscordScheduledEvent,
@@ -508,6 +508,33 @@ function isDiscordConnectionForScheduledClass(
   return connection.organizationId === getScheduledClassOrganizationId(event);
 }
 
+function canScopeAccessClassroomForSync(
+  scope: ScheduledClassAccessScope,
+  classroom: Awaited<ReturnType<typeof readClassroom>>,
+) {
+  if (!classroom) return false;
+  if (scope.role === 'system_admin') return true;
+  if (scope.role === 'org_admin') {
+    return !!scope.organizationId && classroom.organizationId === scope.organizationId;
+  }
+  if (scope.role === 'teacher') {
+    return classroom.ownerUserId === scope.userId;
+  }
+  return false;
+}
+
+async function readAccessibleClassroomForDiscordSync(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+) {
+  if (!event.classroomId || !isValidClassroomId(event.classroomId)) {
+    return null;
+  }
+
+  const classroom = await readClassroom(event.classroomId);
+  return canScopeAccessClassroomForSync(scope, classroom) ? classroom : null;
+}
+
 async function selectDefaultDiscordConnectionForScheduledClass(
   scope: ScheduledClassAccessScope,
   event: ScheduledClassEventRecord,
@@ -530,6 +557,15 @@ export async function syncScheduledClassDiscordForAccess(
   if (!event) return null;
   if (!event.organizationId && scope.organizationId) {
     throw new Error('Assign this scheduled class to an organization before syncing with Discord.');
+  }
+  if (!event.classroomId) {
+    throw new Error('Choose a classroom before syncing this scheduled class with Discord.');
+  }
+  const classroom = await readAccessibleClassroomForDiscordSync(scope, event);
+  if (!classroom) {
+    throw new Error(
+      'Choose an accessible classroom before syncing this scheduled class with Discord.',
+    );
   }
 
   let connection: Awaited<ReturnType<typeof readDiscordConnectionForUser>> = null;
@@ -556,7 +592,6 @@ export async function syncScheduledClassDiscordForAccess(
   }
 
   const invite = await ensureDiscordInvite(scope, event, options.baseUrl);
-  const classroom = event.classroomId ? await readClassroom(event.classroomId) : null;
   const payload = buildDiscordScheduledClassPayload({
     event,
     inviteUrl: invite.inviteUrl,

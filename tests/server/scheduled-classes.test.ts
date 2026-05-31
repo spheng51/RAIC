@@ -10,6 +10,7 @@ const discordMocks = vi.hoisted(() => ({
   sendDiscordChannelMessage: vi.fn(),
   updateDiscordScheduledEvent: vi.fn(),
 }));
+const readClassroomMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db/client', () => ({
   isPostgresConfigured: () => false,
@@ -55,6 +56,25 @@ vi.mock('@/lib/server/discord', () => {
   };
 });
 
+vi.mock('@/lib/server/classroom-storage', () => ({
+  isValidClassroomId: (id: string) => /^[a-zA-Z0-9_-]+$/.test(id),
+  readClassroom: readClassroomMock,
+}));
+
+function makeClassroom(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'room-1',
+    ownerUserId: 'teacher-1',
+    organizationId: 'org-1',
+    roomVersion: 0,
+    stage: { name: 'Physics room' },
+    scenes: [],
+    createdAt: '2026-05-11T00:00:00.000Z',
+    updatedAt: '2026-05-11T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 function createStore(): PlatformStore {
   return {
     users: [],
@@ -86,6 +106,8 @@ describe('scheduled class server storage', () => {
     readPlatformStoreMock.mockImplementation(async () => store);
     updatePlatformStoreMock.mockImplementation(async (updater) => updater(store));
     runPostgresQueryMock.mockResolvedValue(null);
+    readClassroomMock.mockReset();
+    readClassroomMock.mockResolvedValue(makeClassroom());
     Object.values(discordMocks).forEach((mock) => mock.mockReset());
   });
 
@@ -481,6 +503,50 @@ describe('scheduled class server storage', () => {
       }),
     ).rejects.toThrow(
       'Assign this scheduled class to an organization before syncing with Discord.',
+    );
+
+    expect(discordMocks.createDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(discordMocks.updateDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(store.scheduledClassEvents[0].discordSync).toBeUndefined();
+    expect(store.joinTokens).toHaveLength(0);
+  });
+
+  it('rejects Discord sync when the linked classroom is no longer accessible', async () => {
+    const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    readClassroomMock.mockResolvedValue(makeClassroom({ ownerUserId: 'teacher-2' }));
+    store.discordConnections.push({
+      id: 'connection-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      guildId: 'guild-1',
+      guildName: 'Physics guild',
+      channelId: 'channel-1',
+      channelName: 'announcements',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+    store.scheduledClassEvents.push({
+      id: 'event-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+
+    await expect(
+      syncScheduledClassDiscordForAccess(teacherScope, 'event-1', {
+        baseUrl: 'https://open-raic.com',
+      }),
+    ).rejects.toThrow(
+      'Choose an accessible classroom before syncing this scheduled class with Discord.',
     );
 
     expect(discordMocks.createDiscordScheduledEvent).not.toHaveBeenCalled();

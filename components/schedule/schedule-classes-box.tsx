@@ -294,7 +294,7 @@ export function ScheduleClassesBox({
   };
 
   const syncDiscordEvent = async (event: ScheduledClassEvent) => {
-    if (!discordIntegration || !event.classroomId) return;
+    if (!discordIntegration || !event.classroomId || !classroomById.has(event.classroomId)) return;
     await runDiscordAction(`sync:${event.id}`, () => discordIntegration.onSyncEvent(event.id));
   };
 
@@ -484,7 +484,7 @@ export function ScheduleClassesBox({
                   const canSyncDiscord = Boolean(
                     discordIntegration?.configured &&
                     discordIntegration.connection?.channelId &&
-                    event.classroomId,
+                    canOpen,
                   );
                   const isSyncingDiscord =
                     discordAction === discordSyncAction ||

@@ -564,6 +564,26 @@ describe('ScheduleClassesBox', () => {
     ).toBe(true);
   });
 
+  it('disables Discord sync for scheduled classes with stale classroom links', async () => {
+    const discordIntegration = makeDiscordIntegration();
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-2', name: 'Chemistry room' }],
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1')],
+      discordIntegration,
+    });
+
+    expect(container.textContent).toContain('Unlinked classroom');
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Sync with Discord"]',
+    );
+    expect(syncButton?.disabled).toBe(true);
+
+    await act(async () => {
+      syncButton?.click();
+    });
+    expect(discordIntegration.onSyncEvent).not.toHaveBeenCalled();
+  });
+
   it('updates and deletes an existing scheduled class', async () => {
     const onUpdate = vi.fn().mockResolvedValue(undefined);
     const onDelete = vi.fn().mockResolvedValue(undefined);
