@@ -10,9 +10,11 @@ import {
 import {
   claimDiscordScheduledClassReminderRecord,
   deleteScheduledClassEventRecord,
+  finalizeDiscordScheduledClassReminderRecord,
   listDiscordSyncedScheduledClassEventRecords,
   listScheduledClassEventRecordsForAccess,
   readScheduledClassEventRecord,
+  releaseDiscordScheduledClassReminderClaimRecord,
   upsertScheduledClassEventRecord,
 } from '@/lib/db/repositories/scheduled-classes';
 import {
@@ -686,6 +688,102 @@ async function claimDiscordReminderForSend(
   });
 }
 
+async function finalizeDiscordReminderSend(
+  event: ScheduledClassEventRecord,
+  sentAt: string,
+  messageId: string,
+) {
+  const claimedAt = event.discordSync?.reminderClaimedAt;
+  if (!claimedAt) return null;
+
+  if (isPostgresConfigured()) {
+    return finalizeDiscordScheduledClassReminderRecord({
+      id: event.id,
+      claimedAt,
+      messageId,
+      sentAt,
+    });
+  }
+
+  return updatePlatformStore((store) => {
+    const index = store.scheduledClassEvents.findIndex((item) => item.id === event.id);
+    if (index < 0) return null;
+
+    const current = store.scheduledClassEvents[index];
+    if (
+      current.discordSync?.reminderClaimedAt !== claimedAt ||
+      current.discordSync.reminderSentAt
+    ) {
+      return null;
+    }
+
+    const {
+      reminderClaimedAt: _reminderClaimedAt,
+      syncWarning: _syncWarning,
+      ...sync
+    } = current.discordSync;
+    const updated: ScheduledClassEventRecord = {
+      ...current,
+      discordSync: {
+        ...sync,
+        reminderSentAt: sentAt,
+        reminderMessageId: messageId,
+      },
+      updatedAt: sentAt,
+    };
+    store.scheduledClassEvents[index] = updated;
+    return updated;
+  });
+}
+
+async function releaseDiscordReminderClaim(
+  event: ScheduledClassEventRecord,
+  releasedAt: string,
+  syncWarning: string,
+) {
+  const claimedAt = event.discordSync?.reminderClaimedAt;
+  if (!claimedAt) return null;
+
+  if (isPostgresConfigured()) {
+    return releaseDiscordScheduledClassReminderClaimRecord({
+      id: event.id,
+      claimedAt,
+      releasedAt,
+      syncWarning,
+    });
+  }
+
+  return updatePlatformStore((store) => {
+    const index = store.scheduledClassEvents.findIndex((item) => item.id === event.id);
+    if (index < 0) return null;
+
+    const current = store.scheduledClassEvents[index];
+    if (
+      current.discordSync?.reminderClaimedAt !== claimedAt ||
+      current.discordSync.reminderSentAt
+    ) {
+      return null;
+    }
+
+    const {
+      reminderClaimedAt: _reminderClaimedAt,
+      reminderMessageId: _reminderMessageId,
+      reminderSentAt: _reminderSentAt,
+      ...sync
+    } = current.discordSync;
+    const updated: ScheduledClassEventRecord = {
+      ...current,
+      discordSync: {
+        ...sync,
+        syncWarning,
+      },
+      updatedAt: releasedAt,
+    };
+    store.scheduledClassEvents[index] = updated;
+    return updated;
+  });
+}
+
 export async function sendDueDiscordScheduledClassReminders(
   options: { now?: Date; leadMinutes?: number } = {},
 ): Promise<{ checked: number; sent: number; failed: number }> {
@@ -712,34 +810,15 @@ export async function sendDueDiscordScheduledClassReminders(
       const message = await sendDiscordChannelMessage(claimedEvent.discordSync.channelId, {
         content: `Upcoming class: ${claimedEvent.title}\n${claimedEvent.discordSync.inviteUrl}`,
       });
-      const { reminderClaimedAt: _reminderClaimedAt, ...sync } = claimedEvent.discordSync;
-      await updateScheduledClassRecord({
-        ...claimedEvent,
-        discordSync: {
-          ...sync,
-          reminderSentAt: now.toISOString(),
-          reminderMessageId: message.id,
-          syncWarning: undefined,
-        },
-        updatedAt: now.toISOString(),
-      });
+      await finalizeDiscordReminderSend(claimedEvent, now.toISOString(), message.id);
       sent += 1;
     } catch (error) {
       failed += 1;
-      const {
-        reminderClaimedAt: _reminderClaimedAt,
-        reminderMessageId: _reminderMessageId,
-        reminderSentAt: _reminderSentAt,
-        ...sync
-      } = claimedEvent.discordSync;
-      await updateScheduledClassRecord({
-        ...claimedEvent,
-        discordSync: {
-          ...sync,
-          syncWarning: normalizeDiscordError(error),
-        },
-        updatedAt: now.toISOString(),
-      });
+      await releaseDiscordReminderClaim(
+        claimedEvent,
+        now.toISOString(),
+        normalizeDiscordError(error),
+      );
     }
   }
 

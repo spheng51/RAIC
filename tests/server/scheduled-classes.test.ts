@@ -21,8 +21,10 @@ vi.mock('@/lib/db/client', () => ({
 vi.mock('@/lib/db/repositories/scheduled-classes', () => ({
   claimDiscordScheduledClassReminderRecord: vi.fn(),
   deleteScheduledClassEventRecord: vi.fn(),
+  finalizeDiscordScheduledClassReminderRecord: vi.fn(),
   listScheduledClassEventRecordsForAccess: vi.fn(),
   readScheduledClassEventRecord: vi.fn(),
+  releaseDiscordScheduledClassReminderClaimRecord: vi.fn(),
   upsertScheduledClassEventRecord: vi.fn(),
 }));
 

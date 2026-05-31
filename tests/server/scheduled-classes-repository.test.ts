@@ -14,7 +14,9 @@ type ScheduledClassEventRow = {
     channelId?: string;
     inviteUrl?: string;
     reminderClaimedAt?: string;
+    reminderMessageId?: string;
     reminderSentAt?: string;
+    syncWarning?: string;
   } | null;
   created_at: string;
   updated_at: string;
@@ -105,6 +107,102 @@ describe('scheduled class repository', () => {
     );
     expect(runPostgresQuery).toHaveBeenCalledWith(
       expect.stringContaining('starts_at <= $5'),
+      expect.any(Array),
+    );
+  });
+
+  it('finalizes Discord reminders with a claim-matching Postgres update', async () => {
+    const claimedAt = '2026-05-12T16:50:00.000Z';
+    const sentAt = '2026-05-12T16:51:00.000Z';
+    const runPostgresQuery = vi.fn().mockResolvedValueOnce([
+      makeRow({
+        discord_sync: {
+          enabled: true,
+          channelId: 'channel-1',
+          inviteUrl: 'https://open-raic.com/join/token',
+          reminderSentAt: sentAt,
+          reminderMessageId: 'message-1',
+        },
+        updated_at: sentAt,
+      }),
+    ]);
+
+    vi.doMock('@/lib/db/client', () => ({
+      runPostgresQuery,
+    }));
+
+    const { finalizeDiscordScheduledClassReminderRecord } =
+      await import('@/lib/db/repositories/scheduled-classes');
+
+    await expect(
+      finalizeDiscordScheduledClassReminderRecord({
+        id: 'class-1',
+        claimedAt,
+        messageId: 'message-1',
+        sentAt,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        discordSync: expect.objectContaining({
+          reminderSentAt: sentAt,
+          reminderMessageId: 'message-1',
+        }),
+      }),
+    );
+
+    expect(runPostgresQuery).toHaveBeenCalledWith(
+      expect.stringContaining("discord_sync->>'reminderClaimedAt' = $2"),
+      ['class-1', claimedAt, sentAt, 'message-1'],
+    );
+    expect(runPostgresQuery).toHaveBeenCalledWith(
+      expect.stringContaining("discord_sync - 'reminderClaimedAt' - 'syncWarning'"),
+      expect.any(Array),
+    );
+  });
+
+  it('releases Discord reminder claims with a claim-matching Postgres update', async () => {
+    const claimedAt = '2026-05-12T16:50:00.000Z';
+    const releasedAt = '2026-05-12T16:51:00.000Z';
+    const runPostgresQuery = vi.fn().mockResolvedValueOnce([
+      makeRow({
+        discord_sync: {
+          enabled: true,
+          channelId: 'channel-1',
+          inviteUrl: 'https://open-raic.com/join/token',
+          syncWarning: 'Discord unavailable',
+        },
+        updated_at: releasedAt,
+      }),
+    ]);
+
+    vi.doMock('@/lib/db/client', () => ({
+      runPostgresQuery,
+    }));
+
+    const { releaseDiscordScheduledClassReminderClaimRecord } =
+      await import('@/lib/db/repositories/scheduled-classes');
+
+    await expect(
+      releaseDiscordScheduledClassReminderClaimRecord({
+        id: 'class-1',
+        claimedAt,
+        releasedAt,
+        syncWarning: 'Discord unavailable',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        discordSync: expect.objectContaining({
+          syncWarning: 'Discord unavailable',
+        }),
+      }),
+    );
+
+    expect(runPostgresQuery).toHaveBeenCalledWith(
+      expect.stringContaining("discord_sync - 'reminderClaimedAt' - 'reminderMessageId'"),
+      ['class-1', claimedAt, 'Discord unavailable', releasedAt],
+    );
+    expect(runPostgresQuery).toHaveBeenCalledWith(
+      expect.stringContaining("discord_sync->>'reminderClaimedAt' = $2"),
       expect.any(Array),
     );
   });

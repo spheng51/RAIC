@@ -36,9 +36,11 @@ function mockReminderRuntime(
   vi.doMock('@/lib/db/repositories/scheduled-classes', () => ({
     claimDiscordScheduledClassReminderRecord: vi.fn(),
     deleteScheduledClassEventRecord: vi.fn(),
+    finalizeDiscordScheduledClassReminderRecord: vi.fn(),
     listDiscordSyncedScheduledClassEventRecords: vi.fn(),
     listScheduledClassEventRecordsForAccess: vi.fn(),
     readScheduledClassEventRecord: vi.fn(),
+    releaseDiscordScheduledClassReminderClaimRecord: vi.fn(),
     upsertScheduledClassEventRecord: vi.fn(),
   }));
   vi.doMock('@/lib/server/classroom-storage', () => ({
@@ -61,6 +63,7 @@ describe('Discord scheduled class helpers', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('maps RAIC scheduled classes to external Discord event payloads', async () => {
@@ -216,5 +219,60 @@ describe('Discord scheduled class helpers', () => {
     expect(sendDiscordChannelMessage).toHaveBeenCalledTimes(2);
     expect(store.scheduledClassEvents[0].discordSync?.syncWarning).toBeUndefined();
     expect(store.scheduledClassEvents[0].discordSync?.reminderMessageId).toBe('message-2');
+  });
+
+  it('does not overwrite schedule edits that happen while a reminder is sending', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-12T16:49:00.000Z'));
+    const sendDiscordChannelMessage = vi.fn();
+    const store = {
+      scheduledClassEvents: [
+        makeEvent({
+          id: 'due',
+          discordSync: {
+            enabled: true,
+            channelId: 'channel-1',
+            inviteUrl: 'https://open-raic.com/join/due',
+          },
+        }),
+      ],
+      discordConnections: [],
+    };
+    mockReminderRuntime(store, sendDiscordChannelMessage);
+
+    const scheduledClasses = await import('@/lib/server/scheduled-classes');
+    sendDiscordChannelMessage.mockImplementationOnce(async () => {
+      await scheduledClasses.updateScheduledClassForAccess(
+        {
+          role: 'teacher',
+          userId: 'teacher-1',
+          organizationId: 'org-1',
+        },
+        'due',
+        {
+          title: 'Rescheduled physics game night',
+          startsAt: '2026-05-13T17:00:00.000Z',
+          durationMinutes: 45,
+          classroomId: 'room-1',
+        },
+      );
+      return { id: 'message-1' };
+    });
+
+    await expect(
+      scheduledClasses.sendDueDiscordScheduledClassReminders({
+        now: new Date('2026-05-12T16:50:00.000Z'),
+      }),
+    ).resolves.toEqual({ checked: 1, sent: 1, failed: 0 });
+
+    expect(store.scheduledClassEvents[0]).toEqual(
+      expect.objectContaining({
+        title: 'Rescheduled physics game night',
+        startsAt: '2026-05-13T17:00:00.000Z',
+      }),
+    );
+    expect(store.scheduledClassEvents[0].discordSync?.reminderClaimedAt).toBeUndefined();
+    expect(store.scheduledClassEvents[0].discordSync?.reminderSentAt).toBeUndefined();
+    expect(store.scheduledClassEvents[0].discordSync?.reminderMessageId).toBeUndefined();
   });
 });
