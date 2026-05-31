@@ -32,6 +32,7 @@ export interface ScheduledClassDiscordSync {
   scheduledEventUrl?: string;
   lastSyncedAt?: string;
   syncWarning?: string;
+  reminderClaimedAt?: string;
   reminderSentAt?: string;
   reminderMessageId?: string;
 }
