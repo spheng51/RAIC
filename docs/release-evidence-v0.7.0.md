@@ -169,18 +169,18 @@ Passed focused gates:
 
 Current-slice typecheck and CI note:
 
-- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.06s after the missing-config OAuth callback guard and safe Discord event URL rendering, then in 23.28s after missing upstream Discord event recreation, then in 629.31s after the org-bound Discord sync and non-leakage hardening, then in 1167.41s after stale request-key retry recovery and the latest smoke/env-audit hardening, then in 13.36s after organization-scoped connection handling and reminder-state reset hardening, then in 16.35s after stale not-configured connection recovery, then in 12.51s after same-guild connection isolation and legacy unscoped sync fail-fast hardening, then in 13.26s after scoped Postgres upsert race recovery, then in 12.58s after atomic Discord reminder claiming, then in 13.21s after targeted reminder finalization and Studio callback lifecycle hook coverage, then in 12.90s after failed-sync persisted warning reconciliation and trimmed smoke cron-secret fallback coverage, then in 12.96s after shared returned-event merge handling for Studio schedule state, then in 13.14s after stale classroom-link sync gating and server classroom-access validation, then in 12.98s after safe unexpected-sync-failure API handling, then in 11.95s after multi-guild Discord connection selection and explicit `connectionId` sync hardening, then in 12.62s after Discord health readiness and production milestone smoke blocking. The latest pushed PR head had passed the canonical Lint, Typecheck & Unit Tests CI job before this local hardening; rerun CI after push and run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.06s after the missing-config OAuth callback guard and safe Discord event URL rendering, then in 23.28s after missing upstream Discord event recreation, then in 629.31s after the org-bound Discord sync and non-leakage hardening, then in 1167.41s after stale request-key retry recovery and the latest smoke/env-audit hardening, then in 13.36s after organization-scoped connection handling and reminder-state reset hardening, then in 16.35s after stale not-configured connection recovery, then in 12.51s after same-guild connection isolation and legacy unscoped sync fail-fast hardening, then in 13.26s after scoped Postgres upsert race recovery, then in 12.58s after atomic Discord reminder claiming, then in 13.21s after targeted reminder finalization and Studio callback lifecycle hook coverage, then in 12.90s after failed-sync persisted warning reconciliation and trimmed smoke cron-secret fallback coverage, then in 12.96s after shared returned-event merge handling for Studio schedule state, then in 13.14s after stale classroom-link sync gating and server classroom-access validation, then in 12.98s after safe unexpected-sync-failure API handling, then in 11.95s after multi-guild Discord connection selection and explicit `connectionId` sync hardening, then in 12.62s after Discord health readiness and production milestone smoke blocking, then in 13.86s after sanitized smoke evidence artifacts and expanded Studio callback hook coverage. The latest pushed PR code head passed the canonical GitHub CI/Vercel checks; run the canonical clean-main gate after merge before marking `v0.7.0` ready.
 
 Recent completed code CI snapshot:
 
-- PR `#54` CI on `a0f6db48c817ee779ba116b7ce7f5f6a13dcecdd` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- PR `#54` CI on `1662481cad7a9c059cb89ceb62158849d9e88110` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
-- Latest green check times on `a0f6db48c817ee779ba116b7ce7f5f6a13dcecdd`:
-  - Ops Drift: `2026-05-31T01:17:33Z`
-  - MiroFish Contract Gate: `2026-05-31T01:17:56Z`
-  - Lint, Typecheck & Unit Tests: `2026-05-31T01:19:04Z`
-  - E2E Tests: `2026-05-31T01:20:11Z`
-  - Vercel preview deployment target: `https://vercel.com/vangorestudios-6959s-projects/raic/C9d79r3zfKhwQBUYYXPfXikpWBHD`
+- Latest green check times on `1662481cad7a9c059cb89ceb62158849d9e88110`:
+  - Ops Drift: `2026-05-31T23:11:28Z`
+  - MiroFish Contract Gate: `2026-05-31T23:11:40Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-31T23:13:04Z`
+  - E2E Tests: `2026-05-31T23:14:12Z`
+  - Vercel preview deployment target: `https://vercel.com/vangorestudios-6959s-projects/raic/3kNG33zQMbKeLfXPhBBpDRETdf2T`
 
 Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 
