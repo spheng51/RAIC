@@ -67,6 +67,24 @@ function cliTimeoutMs() {
   return Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 30000;
 }
 
+function describeCliFailure(error) {
+  if (!error || typeof error !== 'object') {
+    return 'command failed';
+  }
+
+  const details = [];
+  if ('code' in error && error.code !== undefined && error.code !== null) {
+    details.push(`exitCode=${String(error.code)}`);
+  }
+  if ('signal' in error && error.signal) {
+    details.push(`signal=${String(error.signal)}`);
+  }
+  if ('killed' in error && error.killed === true) {
+    details.push('timed out or killed');
+  }
+  return details.length > 0 ? details.join(', ') : 'command failed';
+}
+
 async function fetchProjectEnvsFromCli() {
   const { stdout } = await execFileAsync(
     'npx',
@@ -157,14 +175,7 @@ async function main() {
     try {
       envRecords = await fetchProjectEnvsFromCli();
     } catch (error) {
-      const reason =
-        auditSource === 'cli' || !shouldUseApi
-          ? `Vercel CLI env listing failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          : error instanceof Error
-            ? error.message
-            : String(error);
+      const reason = `Vercel CLI env listing failed: ${describeCliFailure(error)}`;
       printManualFallback(reason);
       process.exitCode = 2;
       return;

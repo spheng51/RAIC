@@ -61,7 +61,11 @@ function runEnvAuditScript(env: Record<string, string>): Promise<ScriptResult> {
   });
 }
 
-async function createMockNpx(tempDir: string, stdout: string) {
+async function createMockNpx(
+  tempDir: string,
+  stdout: string,
+  options: { exitCode?: number; stderr?: string } = {},
+) {
   const capturePath = join(tempDir, 'npx-capture.json');
   const npxPath = join(tempDir, 'npx');
   await writeFile(
@@ -73,7 +77,11 @@ writeFileSync(process.env.NPX_MOCK_CAPTURE_PATH, JSON.stringify({
   path: process.env.PATH,
   telemetry: process.env.VERCEL_TELEMETRY_DISABLED
 }));
+if (${JSON.stringify(options.stderr || '')}) {
+  process.stderr.write(${JSON.stringify(options.stderr || '')});
+}
 console.log(${JSON.stringify(stdout)});
+process.exit(${options.exitCode ?? 0});
 `,
   );
   await chmod(npxPath, 0o755);
@@ -278,6 +286,32 @@ describe('Vercel env audit helpers', () => {
     expect(fallback).toContain('team_123');
     expect(fallback).toContain('Feature-required keys (discord)');
     expect(fallback).toContain('Do not paste or print secret values');
+  });
+
+  it('does not leak CLI stderr when the fallback command fails', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'raic-vercel-env-audit-'));
+    try {
+      const { capturePath } = await createMockNpx(tempDir, '', {
+        exitCode: 1,
+        stderr: 'failed with token discord-bot-secret',
+      });
+
+      const result = await runEnvAuditScript({
+        NPX_MOCK_CAPTURE_PATH: capturePath,
+        PATH: [tempDir, dirname(process.execPath), process.env.PATH || ''].join(delimiter),
+        VERCEL_ENV_AUDIT_SOURCE: 'cli',
+      });
+      const capture = JSON.parse(await readFile(capturePath, 'utf8'));
+
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('Vercel CLI env listing failed: exitCode=1');
+      expect(result.stderr).toContain('Manual fallback');
+      expect(result.stderr).not.toContain('discord-bot-secret');
+      expect(result.stdout).toBe('');
+      expect(capture.telemetry).toBe('1');
+    } finally {
+      await rm(tempDir, { force: true, recursive: true });
+    }
   });
 });
 
