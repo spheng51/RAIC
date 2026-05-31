@@ -16,6 +16,10 @@ globalThis.fetch = async (input) => {
   const url = new URL(String(input));
 
   if (url.pathname === '/api/health') {
+    if (process.env.RAIC_PRODUCTION_SMOKE_MOCK_HEALTH_THROW === '1') {
+      throw new Error('simulated health fetch failure');
+    }
+
     const discordReady = process.env.RAIC_PRODUCTION_SMOKE_MOCK_DISCORD_READY === '1';
     return json(200, {
       success: true,

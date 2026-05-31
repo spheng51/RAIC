@@ -94,6 +94,41 @@ describe('production milestone smoke script', () => {
     }
   });
 
+  it('writes evidence when a production smoke request fails at runtime', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-runtime-'));
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
+
+    try {
+      const result = await runSmoke({
+        RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH: evidencePath,
+        RAIC_PRODUCTION_SMOKE_MOCK_HEALTH_THROW: '1',
+      });
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain('FAIL    Production milestone smoke runtime');
+      expect(result.stdout).toContain('simulated health fetch failure');
+      expect(result.stdout).toContain('Summary: 0 passed, 1 failed, 0 blocked, 0 skipped');
+      expect(evidence.summary).toEqual({
+        blocked: 0,
+        failed: 1,
+        passed: 0,
+        skipped: 0,
+      });
+      expect(evidence.results).toEqual([
+        expect.objectContaining({
+          label: 'Production milestone smoke runtime',
+          status: 'fail',
+        }),
+      ]);
+      expect(evidence.exitCode).toBe(1);
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('writes sanitized JSON evidence for required Discord blockers', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-'));
     const evidencePath = join(tmp, 'nested', 'evidence.json');
