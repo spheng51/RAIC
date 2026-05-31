@@ -34,7 +34,7 @@ Evidence status: draft branch evidence. Final clean-main gates, live Discord smo
   - `0a36c8c` / `20217e8` recoverable Discord connection warnings, explicit OAuth denial routing, and Studio callback feedback refresh coverage.
   - `f1f55eb` missing-config channel-save protection when Discord config is absent.
   - `d074b03` strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
-  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, explicit `not_configured` OAuth callback feedback when Discord config is absent, safe rendering for stored Discord scheduled-event URLs, operator guidance for `?discord=not_configured` pre-credential smoke behavior, automatic recreation of missing upstream Discord scheduled events during re-sync, and stricter smoke proof that automated live sync only passes with a valid Discord scheduled-event URL.
+  - Current hardening slices: recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, explicit `not_configured` OAuth callback feedback when Discord config is absent, safe rendering for stored Discord scheduled-event URLs, operator guidance for `?discord=not_configured` pre-credential smoke behavior, automatic recreation of missing upstream Discord scheduled events during re-sync, stricter smoke proof that automated live sync only passes with a valid Discord scheduled-event URL, malformed reminder-cron count rejection, and cron unauth smoke guarding.
 
 ## Branch Evidence
 
@@ -65,7 +65,7 @@ Passed focused gates:
 - `corepack pnpm test tests/server/vercel-env-audit.test.ts`
   - Result: 7 tests passed.
 - `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts`
-  - Result: 3 files passed, 28 tests passed before the later bypass-token smoke-script case was added; the focused smoke-script rerun above is the current count.
+  - Result: 3 files passed, 40 tests passed after the latest smoke-gate hardening.
 - `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
   - Result: 6 files passed, 52 tests passed.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
