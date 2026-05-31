@@ -415,6 +415,123 @@ describe('scheduled class server storage', () => {
     );
   });
 
+  it('uses an explicitly selected Discord connection before an existing sync fallback', async () => {
+    const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    store.discordConnections.push(
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:00:00.000Z',
+      },
+      {
+        id: 'connection-2',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-2',
+        guildName: 'Chemistry guild',
+        channelId: 'channel-2',
+        channelName: 'study-hall',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:00:00.000Z',
+      },
+    );
+    store.scheduledClassEvents.push({
+      id: 'event-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-1',
+        guildId: 'guild-1',
+        guildName: 'Physics guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+      },
+    });
+    discordMocks.createDiscordScheduledEvent.mockResolvedValue({
+      id: 'discord-event-2',
+      url: 'https://discord.com/events/guild-2/discord-event-2',
+    });
+
+    const result = await syncScheduledClassDiscordForAccess(teacherScope, 'event-1', {
+      baseUrl: 'https://open-raic.com',
+      connectionId: 'connection-2',
+    });
+
+    expect(discordMocks.createDiscordScheduledEvent).toHaveBeenCalledWith(
+      'guild-2',
+      expect.objectContaining({ name: 'Physics lab' }),
+    );
+    expect(discordMocks.createDiscordScheduledEvent).not.toHaveBeenCalledWith(
+      'guild-1',
+      expect.anything(),
+    );
+    expect(result?.discordSync).toEqual(
+      expect.objectContaining({
+        connectionId: 'connection-2',
+        guildId: 'guild-2',
+        channelId: 'channel-2',
+      }),
+    );
+  });
+
+  it('rejects explicitly selected Discord connections from another organization', async () => {
+    const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');
+    const teacherScope = {
+      role: 'teacher' as const,
+      userId: 'teacher-1',
+      organizationId: 'org-1',
+    };
+    store.discordConnections.push({
+      id: 'connection-other',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-2',
+      guildId: 'guild-other',
+      guildName: 'Other guild',
+      channelId: 'channel-other',
+      channelName: 'other-announcements',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+    store.scheduledClassEvents.push({
+      id: 'event-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      title: 'Physics lab',
+      startsAt: '2099-05-12T17:00:00.000Z',
+      classroomId: 'room-1',
+      createdAt: '2026-05-11T00:00:00.000Z',
+      updatedAt: '2026-05-11T00:00:00.000Z',
+    });
+
+    await expect(
+      syncScheduledClassDiscordForAccess(teacherScope, 'event-1', {
+        baseUrl: 'https://open-raic.com',
+        connectionId: 'connection-other',
+      }),
+    ).rejects.toThrow('Connect Discord for this organization before syncing this scheduled class.');
+
+    expect(discordMocks.createDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(discordMocks.updateDiscordScheduledEvent).not.toHaveBeenCalled();
+    expect(store.scheduledClassEvents[0].discordSync).toBeUndefined();
+  });
+
   it('does not default Discord sync to a connection from another organization', async () => {
     const { syncScheduledClassDiscordForAccess } = await import('@/lib/server/scheduled-classes');
     const teacherScope = {

@@ -223,20 +223,32 @@ function findButton(container: HTMLElement, text: string) {
 function makeDiscordIntegration(
   overrides: Partial<ScheduleDiscordIntegrationState> = {},
 ): ScheduleDiscordIntegrationState {
+  const connection = {
+    id: 'connection-1',
+    guildId: 'guild-1',
+    guildName: 'Physics Guild',
+    channelId: 'channel-1',
+    channelName: 'announcements',
+  };
+  const resolvedConnection = Object.prototype.hasOwnProperty.call(overrides, 'connection')
+    ? (overrides.connection ?? null)
+    : connection;
+  const resolvedConnections = Object.prototype.hasOwnProperty.call(overrides, 'connections')
+    ? (overrides.connections ?? [])
+    : resolvedConnection
+      ? [resolvedConnection]
+      : [];
+
   return {
     configured: true,
-    connection: {
-      id: 'connection-1',
-      guildId: 'guild-1',
-      guildName: 'Physics Guild',
-      channelId: 'channel-1',
-      channelName: 'announcements',
-    },
+    connection: resolvedConnection,
+    connections: resolvedConnections,
     channels: [
       { id: 'channel-1', name: 'announcements' },
       { id: 'channel-2', name: 'study-hall' },
     ],
     onConnect: vi.fn(),
+    onSelectConnection: vi.fn().mockResolvedValue(undefined),
     onSaveChannel: vi.fn().mockResolvedValue(undefined),
     onDisconnect: vi.fn().mockResolvedValue(undefined),
     onSyncEvent: vi.fn().mockResolvedValue(undefined),
@@ -525,7 +537,43 @@ describe('ScheduleClassesBox', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Sync with Discord"]')?.click();
     });
-    expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1');
+    expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1', 'connection-1');
+  });
+
+  it('lets teachers select which Discord guild to use for scheduled class sync', async () => {
+    const discordIntegration = makeDiscordIntegration({
+      connections: [
+        {
+          id: 'connection-1',
+          guildId: 'guild-1',
+          guildName: 'Physics Guild',
+          channelId: 'channel-1',
+          channelName: 'announcements',
+        },
+        {
+          id: 'connection-2',
+          guildId: 'guild-2',
+          guildName: 'Chemistry Guild',
+          channelId: 'channel-2',
+          channelName: 'study-hall',
+        },
+      ],
+    });
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-1', name: 'Physics room' }],
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1')],
+      discordIntegration,
+    });
+
+    await act(async () => {
+      findButton(container, 'Chemistry Guild')?.click();
+    });
+    expect(discordIntegration.onSelectConnection).toHaveBeenCalledWith('connection-2');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sync with Discord"]')?.click();
+    });
+    expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1', 'connection-2');
   });
 
   it.each(['javascript:alert(1)', 'https://discord.com/events/guild-1/event-1?token=secret'])(

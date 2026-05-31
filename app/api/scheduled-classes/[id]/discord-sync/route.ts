@@ -16,6 +16,10 @@ import {
 
 const log = createLogger('Scheduled Class Discord Sync API');
 
+interface DiscordSyncBody {
+  connectionId?: unknown;
+}
+
 const RECOVERABLE_DISCORD_SYNC_ERROR_PREFIXES = [
   'Assign this scheduled class',
   'Choose a classroom',
@@ -48,9 +52,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+  const body = (await request.json().catch(() => null)) as DiscordSyncBody | null;
+  const bodyConnectionId = typeof body?.connectionId === 'string' ? body.connectionId.trim() : '';
+  const queryConnectionId = request.nextUrl.searchParams.get('connectionId')?.trim() ?? '';
+  const connectionId = bodyConnectionId || queryConnectionId;
   try {
     const event = await syncScheduledClassDiscordForAccess(getScope(auth), id, {
       baseUrl: buildRequestOrigin(request),
+      ...(connectionId ? { connectionId } : {}),
     });
     if (!event) {
       return apiErrorWithRequestSession(

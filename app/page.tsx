@@ -177,6 +177,19 @@ async function readApiError(response: Response, fallback: string) {
   return body?.details || body?.error || fallback;
 }
 
+function toDiscordIntegrationSnapshot(
+  body: DiscordIntegrationApiBody | null,
+): DiscordIntegrationSnapshot {
+  const connection = body?.connection ?? null;
+  return {
+    configured: Boolean(body?.configured),
+    connection,
+    connections: body?.connections ?? (connection ? [connection] : []),
+    channels: body?.channels ?? [],
+    ...(body?.channelsError ? { channelsError: body.channelsError } : {}),
+  };
+}
+
 interface HomePageProps {
   readonly launchMode?: ClassroomLaunchMode;
 }
@@ -256,6 +269,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   const [discordIntegration, setDiscordIntegration] = useState<DiscordIntegrationSnapshot>({
     configured: false,
     connection: null,
+    connections: [],
     channels: [],
   });
   const [discordIntegrationLoading, setDiscordIntegrationLoading] = useState(false);
@@ -350,12 +364,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       if (!response.ok) {
         throw new Error(body?.details || body?.error || 'Failed to load Discord integration');
       }
-      setDiscordIntegration({
-        configured: Boolean(body?.configured),
-        connection: body?.connection ?? null,
-        channels: body?.channels ?? [],
-        ...(body?.channelsError ? { channelsError: body.channelsError } : {}),
-      });
+      setDiscordIntegration(toDiscordIntegrationSnapshot(body));
       setDiscordIntegrationError(body?.channelsError ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load Discord integration';
@@ -526,6 +535,31 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
     window.location.assign('/api/integrations/discord/oauth/start');
   }, []);
 
+  const handleDiscordSelectConnection = useCallback(async (connectionId: string) => {
+    if (!connectionId) return;
+
+    setDiscordIntegrationBusy(true);
+    setDiscordIntegrationError(null);
+    try {
+      const response = await fetch(
+        `/api/integrations/discord/connection?connectionId=${encodeURIComponent(connectionId)}`,
+        { cache: 'no-store' },
+      );
+      const body = (await response.json().catch(() => null)) as DiscordIntegrationApiBody | null;
+      if (!response.ok) {
+        throw new Error(body?.details || body?.error || 'Failed to load Discord connection');
+      }
+      setDiscordIntegration(toDiscordIntegrationSnapshot(body));
+      setDiscordIntegrationError(body?.channelsError ?? null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Discord connection';
+      setDiscordIntegrationError(message);
+      throw err;
+    } finally {
+      setDiscordIntegrationBusy(false);
+    }
+  }, []);
+
   const handleDiscordSaveChannel = useCallback(
     async (connectionId: string, channelId: string) => {
       setDiscordIntegrationBusy(true);
@@ -539,8 +573,8 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         if (!response.ok) {
           throw new Error(await readApiError(response, 'Failed to save Discord channel'));
         }
-        const body = (await response.json()) as DiscordIntegrationSnapshot;
-        setDiscordIntegration(body);
+        const body = (await response.json()) as DiscordIntegrationApiBody;
+        setDiscordIntegration(toDiscordIntegrationSnapshot(body));
         setDiscordIntegrationError(body.channelsError ?? null);
         toast.success(t('home.schedule.discord.channelSaved'));
       } catch (err) {
@@ -567,8 +601,8 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         if (!response.ok) {
           throw new Error(await readApiError(response, 'Failed to disconnect Discord'));
         }
-        const body = (await response.json()) as DiscordIntegrationSnapshot;
-        setDiscordIntegration(body);
+        const body = (await response.json()) as DiscordIntegrationApiBody;
+        setDiscordIntegration(toDiscordIntegrationSnapshot(body));
         setDiscordIntegrationError(body.channelsError ?? null);
         toast.success(t('home.schedule.discord.disconnected'));
       } catch (err) {
@@ -583,12 +617,21 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
   );
 
   const handleDiscordSyncScheduledClass = useCallback(
-    async (eventId: string) => {
+    async (eventId: string, connectionId?: string) => {
       setDiscordSyncingEventId(eventId);
       setDiscordIntegrationError(null);
       try {
-        const response = await fetch(`/api/scheduled-classes/${eventId}/discord-sync`, {
+        const requestOptions: RequestInit = {
           method: 'POST',
+          ...(connectionId
+            ? {
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ connectionId }),
+              }
+            : {}),
+        };
+        const response = await fetch(`/api/scheduled-classes/${eventId}/discord-sync`, {
+          ...requestOptions,
         });
         const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
         if (body?.event) {
@@ -1136,6 +1179,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
                   error: discordIntegrationError,
                   syncingEventId: discordSyncingEventId,
                   onConnect: handleDiscordConnect,
+                  onSelectConnection: handleDiscordSelectConnection,
                   onSaveChannel: handleDiscordSaveChannel,
                   onDisconnect: handleDiscordDisconnect,
                   onSyncEvent: handleDiscordSyncScheduledClass,

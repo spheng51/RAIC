@@ -54,12 +54,15 @@ function connectionMatchesOrganization(
 async function readConnectionSnapshot(
   ownerUserId: string,
   organizationId: string | null,
+  options: { connectionId?: string } = {},
 ): Promise<DiscordIntegrationSnapshot> {
   const configured = Boolean(getDiscordConfig());
   const connections = (await listDiscordConnectionsForUser(ownerUserId)).filter((connection) =>
     connectionMatchesOrganization(connection, organizationId),
   );
-  const connection = connections[0] ?? null;
+  const connection = options.connectionId
+    ? (connections.find((item) => item.id === options.connectionId) ?? null)
+    : (connections[0] ?? null);
   let channels: DiscordChannelSummary[] = [];
   let channelsError: string | undefined;
   if (configured && connection) {
@@ -72,6 +75,7 @@ async function readConnectionSnapshot(
   return {
     configured,
     connection: connection ? toSummary(connection) : null,
+    connections: connections.map(toSummary),
     channels: channels.map((channel) => ({ id: channel.id, name: channel.name })),
     ...(channelsError ? { channelsError } : {}),
   };
@@ -83,7 +87,18 @@ export async function GET(request: NextRequest) {
     return auth;
   }
 
-  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
+  const connectionId = request.nextUrl.searchParams.get('connectionId')?.trim() || undefined;
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null, {
+    connectionId,
+  });
+  if (connectionId && !snapshot.connection) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
@@ -161,7 +176,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await upsertDiscordConnection({
+  const saved = await upsertDiscordConnection({
     ownerUserId: auth.user.id,
     organizationId: auth.session.organizationId ?? null,
     guildId: connection.guildId,
@@ -170,7 +185,9 @@ export async function POST(request: NextRequest) {
     channelName: channel.name,
   });
 
-  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null, {
+    connectionId: saved.id,
+  });
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
