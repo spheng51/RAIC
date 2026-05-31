@@ -85,7 +85,7 @@ Usage:
 Environment:
   RAIC_DISCORD_SMOKE_BASE_URL       Preview or production base URL. Defaults to RAIC_PRODUCTION_BASE_URL, then https://open-raic.com.
   RAIC_DISCORD_SMOKE_COOKIE         Full Cookie header for a signed-in teacher session, for example "session=...".
-  RAIC_DISCORD_SMOKE_CONNECTION_ID  Optional Discord connection id for automated channel save.
+  RAIC_DISCORD_SMOKE_CONNECTION_ID  Optional Discord connection id for automated channel save and scheduled-class sync.
   RAIC_DISCORD_SMOKE_CHANNEL_ID     Optional Discord channel id for automated channel save.
   RAIC_DISCORD_SMOKE_EVENT_ID       Optional scheduled class id for automated Discord sync.
   RAIC_DISCORD_SMOKE_CRON_SECRET    Preferred cron bearer token for this smoke. Falls back to CRON_SECRET.
@@ -372,7 +372,10 @@ async function syncScheduledClassIfRequested() {
 
   const { response, body } = await fetchJson(
     `/api/scheduled-classes/${encodeURIComponent(eventId)}/discord-sync`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      ...(connectionId ? { body: JSON.stringify({ connectionId }) } : {}),
+    },
   );
   const sync = body?.event?.discordSync;
   if (

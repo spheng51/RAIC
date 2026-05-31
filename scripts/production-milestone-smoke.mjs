@@ -113,6 +113,14 @@ async function checkHealth() {
   } else {
     skip('MiroFish readiness', 'MiroFish is not required for this release');
   }
+
+  if (readiness.discord?.ready === true) {
+    pass('Discord readiness', 'production Discord scheduled-class env is configured');
+  } else if (isRequiredFeature('discord')) {
+    block('Discord readiness', readiness.discord?.reason || 'Discord beta is not ready');
+  } else {
+    skip('Discord readiness', 'Discord beta is not required for this release');
+  }
 }
 
 async function checkProviderReadiness() {

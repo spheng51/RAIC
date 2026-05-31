@@ -3,6 +3,7 @@ import 'server-only';
 import type { PersistenceMode } from '@/lib/db/client';
 import { getPersistenceMode, runPostgresQuery } from '@/lib/db/client';
 import { isHostedEphemeralDataRoot } from '@/lib/server/data-root';
+import { getDiscordConfig } from '@/lib/server/discord';
 import { hasEncryptionKeyConfigured } from '@/lib/server/encrypted-secrets';
 import { getMiroFishConfig, isMiroFishMultiUserEnabled } from '@/lib/server/mirofish';
 import { getMiroFishAuthoringReadiness } from '@/lib/server/mirofish-authoring';
@@ -35,8 +36,16 @@ interface HealthMiroFishReadiness extends ReadinessCheck {
   authoringReady: boolean;
 }
 
+interface HealthDiscordReadiness extends ReadinessCheck {
+  clientIdConfigured: boolean;
+  clientSecretConfigured: boolean;
+  botTokenConfigured: boolean;
+  cronSecretConfigured: boolean;
+}
+
 export interface HealthReadinessReport {
   auth: HealthAuthReadiness;
+  discord: HealthDiscordReadiness;
   encryption: HealthEncryptionReadiness;
   storage: HealthStorageReadiness;
   mirofish: HealthMiroFishReadiness;
@@ -165,6 +174,25 @@ function getMiroFishReadiness(): HealthMiroFishReadiness {
   };
 }
 
+function getDiscordReadiness(): HealthDiscordReadiness {
+  const clientIdConfigured = hasConfiguredEnv('DISCORD_CLIENT_ID');
+  const clientSecretConfigured = hasConfiguredEnv('DISCORD_CLIENT_SECRET');
+  const botTokenConfigured = hasConfiguredEnv('DISCORD_BOT_TOKEN');
+  const cronSecretConfigured = hasConfiguredEnv('CRON_SECRET');
+  const appConfigured = Boolean(getDiscordConfig());
+
+  return {
+    clientIdConfigured,
+    clientSecretConfigured,
+    botTokenConfigured,
+    cronSecretConfigured,
+    ...createReadyCheck(
+      appConfigured && cronSecretConfigured,
+      'Discord scheduled-class beta requires DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, and CRON_SECRET',
+    ),
+  };
+}
+
 export async function getHealthReadiness(): Promise<HealthReadinessReport> {
   const [storage, auth, encryption] = await Promise.all([
     getStorageReadiness(),
@@ -174,6 +202,7 @@ export async function getHealthReadiness(): Promise<HealthReadinessReport> {
 
   return {
     auth,
+    discord: getDiscordReadiness(),
     encryption,
     storage,
     mirofish: getMiroFishReadiness(),

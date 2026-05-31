@@ -83,6 +83,23 @@ globalThis.fetch = async (input, init = {}) => {
       return json(401, { success: false, errorCode: 'UNAUTHORIZED' });
     }
 
+    const expectedConnectionId = process.env.RAIC_DISCORD_SMOKE_MOCK_EXPECT_SYNC_CONNECTION_ID;
+    if (expectedConnectionId) {
+      let body = null;
+      try {
+        body = init.body ? JSON.parse(String(init.body)) : null;
+      } catch {
+        return json(400, { success: false, errorCode: 'BAD_JSON' });
+      }
+      if (body?.connectionId !== expectedConnectionId) {
+        return json(400, {
+          success: false,
+          errorCode: 'WRONG_CONNECTION',
+          receivedConnectionId: body?.connectionId ?? null,
+        });
+      }
+    }
+
     if (process.env.RAIC_DISCORD_SMOKE_MOCK_SYNC_WARNING_ONLY === '1') {
       return json(200, {
         success: true,

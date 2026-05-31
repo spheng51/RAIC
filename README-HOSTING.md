@@ -120,7 +120,7 @@ Public launch on `open-raic.com`:
    - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
    - For the Discord scheduled-class beta, run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before credentials are available, adding `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` when the preview is behind Vercel deployment protection. A pre-credential callback can return `?discord=not_configured`; treat that as the expected readiness signal until Discord env exists. Then rerun `corepack pnpm run smoke:discord-beta` with a signed-in teacher cookie, Discord test server, scheduled class id, and cron secret before production sign-off, where the callback should return `?discord=connected`.
-   - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke.
+   - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,discord,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke. When `discord` is required, the milestone smoke checks health readiness for `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`; still run `smoke:discord-beta` for the credentialed teacher/guild sync flow.
 9. Roll back with Vercel if production is unhealthy.
 
 Recommended when you want easiest CI/CD and global edge delivery.
@@ -211,7 +211,8 @@ Discord beta smoke inputs are operator-only local values:
 
 - `RAIC_DISCORD_SMOKE_BASE_URL` chooses the preview or production origin.
 - `RAIC_DISCORD_SMOKE_COOKIE` is the full signed-in teacher `Cookie` header used only for the smoke run.
-- `RAIC_DISCORD_SMOKE_CONNECTION_ID` and `RAIC_DISCORD_SMOKE_CHANNEL_ID` automate channel save.
+- `RAIC_DISCORD_SMOKE_CONNECTION_ID` selects the Discord guild for channel save and scheduled-class sync.
+- `RAIC_DISCORD_SMOKE_CHANNEL_ID` automates channel save for the selected Discord connection.
 - `RAIC_DISCORD_SMOKE_EVENT_ID` automates syncing one future teacher-owned scheduled class with a linked classroom.
 - `RAIC_DISCORD_SMOKE_CRON_SECRET` is preferred over `CRON_SECRET` for smoke cron invocation.
 - `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` optionally bypasses Vercel deployment protection for preview API smoke. Keep it operator-local and do not store it in project env.

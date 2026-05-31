@@ -183,6 +183,27 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('passes the selected Discord connection id during scheduled-class sync', async () => {
+    const result = await runSmoke(
+      [],
+      {
+        CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_CONNECTION_ID: 'connection-2',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_EVENT_ID: 'class-1',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_MOCK_EXPECT_SYNC_CONNECTION_ID: 'connection-2',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('PASS    Sync scheduled class');
+    expect(result.stdout).toContain('Summary: 9 automated passed, 0 failed, 0 blocked');
+    expect(result.stderr).toBe('');
+  });
+
   it('reports response details when health check fails', async () => {
     const result = await runSmoke(
       ['--allow-blockers'],
