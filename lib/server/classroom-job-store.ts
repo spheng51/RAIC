@@ -278,7 +278,13 @@ async function readUsableRequestKeyClaimedJob(
     return null;
   }
 
-  return claimedJob;
+  const reusableJob = await normalizeReusableRequestKeyJob(claimedJob);
+  if (!reusableJob) {
+    await removeRequestKeyClaim(claimPath);
+    return null;
+  }
+
+  return reusableJob;
 }
 
 async function waitForUsableRequestKeyClaim(
@@ -346,6 +352,29 @@ function markStaleIfNeeded(job: ClassroomGenerationJob): ClassroomGenerationJob 
   return job;
 }
 
+async function persistStaleRequestKeyJobIfNeeded(
+  job: ClassroomGenerationJob,
+): Promise<ClassroomGenerationJob> {
+  const markedJob = markStaleIfNeeded(job);
+  if (markedJob === job) {
+    return job;
+  }
+
+  if (isPostgresConfigured()) {
+    return (await updateClassroomGenerationJobRecord(markedJob)) ?? markedJob;
+  }
+
+  await writeJsonFileAtomic(jobFilePath(markedJob.id), markedJob);
+  return markedJob;
+}
+
+async function normalizeReusableRequestKeyJob(
+  job: ClassroomGenerationJob,
+): Promise<ClassroomGenerationJob | null> {
+  const markedJob = await persistStaleRequestKeyJobIfNeeded(job);
+  return markedJob.status === 'failed' ? null : markedJob;
+}
+
 export function isValidClassroomJobId(jobId: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(jobId);
 }
@@ -365,9 +394,14 @@ export async function createClassroomGenerationJob(
     }
 
     if (requestKey) {
-      const existing = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+      const existing = await findClassroomGenerationJobByRequestKey(requestKey, owner);
       if (existing) {
         return existing;
+      }
+
+      const retryInserted = await insertClassroomGenerationJobRecord(job);
+      if (retryInserted) {
+        return retryInserted;
       }
     }
 
@@ -393,7 +427,7 @@ export async function createOrReuseClassroomGenerationJob(
       };
     }
 
-    const existingJob = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    const existingJob = await findClassroomGenerationJobByRequestKey(requestKey, owner);
     if (existingJob) {
       return { existing: true, job: existingJob };
     }
@@ -405,7 +439,7 @@ export async function createOrReuseClassroomGenerationJob(
       return { existing: false, job: inserted };
     }
 
-    const conflictingJob = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    const conflictingJob = await findClassroomGenerationJobByRequestKey(requestKey, owner);
     if (conflictingJob) {
       return { existing: true, job: conflictingJob };
     }
@@ -515,7 +549,8 @@ export async function findClassroomGenerationJobByRequestKey(
   }
 
   if (isPostgresConfigured()) {
-    return findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    const job = await findClassroomGenerationJobRecordByRequestKey(requestKey, owner);
+    return job ? normalizeReusableRequestKeyJob(job) : null;
   }
 
   await ensureClassroomJobsDir();
@@ -543,7 +578,7 @@ export async function findClassroomGenerationJobByRequestKey(
         ) {
           return null;
         }
-        return job;
+        return normalizeReusableRequestKeyJob(job);
       }),
   );
 

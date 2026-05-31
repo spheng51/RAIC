@@ -372,7 +372,8 @@ describe('classroom generation job store', () => {
             progress: 80,
             message: 'Working',
             createdAt: '2026-04-19T00:00:00.000Z',
-            updatedAt: '2026-04-18T00:00:00.000Z',
+            startedAt: '2026-04-19T00:00:00.000Z',
+            updatedAt: new Date().toISOString(),
             owner,
             inputSummary: {
               requirementPreview: 'Teach gravity',
@@ -403,6 +404,151 @@ describe('classroom generation job store', () => {
       expect(
         files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-')),
       ).toHaveLength(1);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not reuse stale running request-key jobs during file scans', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir);
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+      const staleUpdatedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+
+      await store.createClassroomGenerationJob(
+        'job-stale',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+      await writeFile(
+        path.join(tempDir, 'job-stale.json'),
+        JSON.stringify(
+          {
+            id: 'job-stale',
+            requestKey: 'request-1',
+            status: 'running',
+            step: 'generating_media',
+            progress: 80,
+            message: 'Working',
+            createdAt: '2026-04-19T00:00:00.000Z',
+            startedAt: '2026-04-19T00:00:00.000Z',
+            updatedAt: staleUpdatedAt,
+            owner,
+            inputSummary: {
+              requirementPreview: 'Teach gravity',
+              language: 'en-US',
+              hasPdf: false,
+              pdfTextLength: 0,
+              pdfImageCount: 0,
+            },
+            scenesGenerated: 1,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+
+      await expect(store.findClassroomGenerationJobByRequestKey('request-1', owner)).resolves.toBe(
+        null,
+      );
+
+      const retry = await store.createOrReuseClassroomGenerationJob(
+        'job-retry',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      expect(retry.existing).toBe(false);
+      expect(retry.job.id).toBe('job-retry');
+
+      const staleRaw = JSON.parse(await readFile(path.join(tempDir, 'job-stale.json'), 'utf-8'));
+      expect(staleRaw).toMatchObject({
+        status: 'failed',
+        completionStatus: 'failed',
+        canRetry: true,
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not let stale claimed request-key jobs block retries', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'raic-job-store-'));
+    try {
+      const store = await importJobStore(tempDir);
+      const owner = {
+        organizationId: 'org-1',
+        userId: 'teacher-1',
+        actorRole: 'teacher' as const,
+      };
+      const staleUpdatedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+
+      const first = await store.createOrReuseClassroomGenerationJob(
+        'job-stale',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+      expect(first.existing).toBe(false);
+
+      await writeFile(
+        path.join(tempDir, 'job-stale.json'),
+        JSON.stringify(
+          {
+            id: 'job-stale',
+            requestKey: 'request-1',
+            status: 'running',
+            step: 'generating_media',
+            progress: 80,
+            message: 'Working',
+            createdAt: '2026-04-19T00:00:00.000Z',
+            startedAt: '2026-04-19T00:00:00.000Z',
+            updatedAt: staleUpdatedAt,
+            owner,
+            inputSummary: {
+              requirementPreview: 'Teach gravity',
+              language: 'en-US',
+              hasPdf: false,
+              pdfTextLength: 0,
+              pdfImageCount: 0,
+            },
+            scenesGenerated: 1,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+
+      const retry = await store.createOrReuseClassroomGenerationJob(
+        'job-retry',
+        { requirement: 'Teach gravity' },
+        owner,
+        'request-1',
+      );
+
+      expect(retry.existing).toBe(false);
+      expect(retry.job.id).toBe('job-retry');
+
+      const files = await readdir(tempDir);
+      expect(
+        files.filter((file) => file.endsWith('.json') && !file.startsWith('.request-key-')),
+      ).toHaveLength(2);
+
+      const staleRaw = JSON.parse(await readFile(path.join(tempDir, 'job-stale.json'), 'utf-8'));
+      expect(staleRaw).toMatchObject({
+        status: 'failed',
+        completionStatus: 'failed',
+        canRetry: true,
+      });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -737,5 +883,52 @@ describe('classroom generation job store', () => {
     expect(retry.job.id).toBe('pg-job-3');
     expect(db.rows).toHaveLength(2);
     expect(db.rows.map((row) => row.status)).toEqual(['failed', 'queued']);
+  });
+
+  it('marks stale Postgres request-key jobs failed before retrying', async () => {
+    const { db, store } = await importPostgresJobStore();
+    const owner = {
+      organizationId: 'org-1',
+      userId: 'teacher-1',
+      actorRole: 'teacher' as const,
+    };
+
+    await store.createOrReuseClassroomGenerationJob(
+      'pg-job-stale',
+      { requirement: 'Teach gravity' },
+      owner,
+      'request-1',
+    );
+    const staleUpdatedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    db.rows[0] = {
+      ...db.rows[0]!,
+      status: 'running',
+      step: 'generating_media',
+      progress: 80,
+      message: 'Working',
+      started_at: '2026-04-19T00:00:00.000Z',
+      updated_at: staleUpdatedAt,
+    };
+
+    const retry = await store.createOrReuseClassroomGenerationJob(
+      'pg-job-retry',
+      { requirement: 'Teach gravity' },
+      owner,
+      'request-1',
+    );
+
+    expect(retry.existing).toBe(false);
+    expect(retry.job.id).toBe('pg-job-retry');
+    expect(db.rows).toHaveLength(2);
+    expect(db.rows[0]).toMatchObject({
+      id: 'pg-job-stale',
+      status: 'failed',
+      completion_status: 'failed',
+      can_retry: true,
+    });
+    expect(db.rows[1]).toMatchObject({
+      id: 'pg-job-retry',
+      status: 'queued',
+    });
   });
 });

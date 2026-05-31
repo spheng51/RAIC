@@ -267,7 +267,7 @@ describe('Vercel env audit helpers', () => {
   });
 
   it('normalizes requested contexts and documents manual fallback', () => {
-    expect(parseAuditContexts(' production, preview,production ')).toEqual([
+    expect(parseAuditContexts(' production, PREVIEW,Production ')).toEqual([
       'production',
       'preview',
     ]);

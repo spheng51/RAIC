@@ -45,7 +45,7 @@ export const FEATURE_ENV_ALIASES = {
 export function parseAuditContexts(rawValue = 'production') {
   const contexts = String(rawValue)
     .split(',')
-    .map((entry) => entry.trim())
+    .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   return contexts.length > 0 ? [...new Set(contexts)] : ['production'];
 }

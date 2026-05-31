@@ -265,6 +265,29 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).not.toContain('sync-url-secret');
   });
 
+  it('rejects Discord scheduled event URLs with sensitive params', async () => {
+    const result = await runSmoke(
+      ['--allow-blockers'],
+      {
+        CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_BASE_URL: 'https://smoke.test',
+        RAIC_DISCORD_SMOKE_COOKIE: 'session=teacher',
+        RAIC_DISCORD_SMOKE_EVENT_ID: 'class-1',
+        RAIC_DISCORD_SMOKE_MOCK_CRON_SECRET: 'smoke-secret',
+        RAIC_DISCORD_SMOKE_MOCK_SYNC_DISCORD_SECRET_URL: '1',
+      },
+      { mockFetch: true },
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('FAIL    Sync scheduled class');
+    expect(result.stdout).toContain(
+      'scheduledEventUrl=https://discord.com/events/guild/event?token=redacted',
+    );
+    expect(result.stdout).not.toContain('sync-url-secret');
+    expect(result.stderr).not.toContain('sync-url-secret');
+  });
+
   it('fails reminder cron when the API returns malformed count fields', async () => {
     const result = await runSmoke(
       ['--allow-blockers'],

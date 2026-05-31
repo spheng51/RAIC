@@ -182,6 +182,8 @@ function isDiscordScheduledEventUrl(value) {
     return (
       url.protocol === 'https:' &&
       url.hostname === 'discord.com' &&
+      !url.search &&
+      !url.hash &&
       pathParts.length === 3 &&
       pathParts[0] === 'events'
     );
@@ -381,7 +383,7 @@ async function syncScheduledClassIfRequested() {
     sync?.enabled === true &&
     isDiscordScheduledEventUrl(sync.scheduledEventUrl)
   ) {
-    pass('Sync scheduled class', sync.scheduledEventUrl);
+    pass('Sync scheduled class', redactUrlForLog(sync.scheduledEventUrl));
     return;
   }
 
