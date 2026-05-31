@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getScheduledClassInviteExpiresAt,
   getUpcomingScheduledClassEvents,
+  mergeScheduledClassEvent,
   normalizeScheduledClassInput,
   sortScheduledClassEvents,
 } from '@/lib/utils/scheduled-classes';
@@ -122,5 +123,29 @@ describe('scheduled class utilities', () => {
         (item) => item.id,
       ),
     ).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('merges returned server events into local scheduled-class state', () => {
+    const events = [
+      event('later', '2026-05-13T17:00:00.000Z'),
+      {
+        ...event('sync-target', '2026-05-14T17:00:00.000Z'),
+        discordSync: {
+          enabled: true,
+          syncWarning: 'Previous Discord warning',
+        },
+      },
+    ];
+    const updated = {
+      ...event('sync-target', '2026-05-12T17:00:00.000Z'),
+      title: 'Recovered Discord sync',
+      discordSync: {
+        enabled: true,
+        syncWarning: 'Discord permission denied',
+      },
+    };
+
+    expect(mergeScheduledClassEvent(events, updated)).toEqual([updated, events[0]]);
+    expect(mergeScheduledClassEvent([events[0]], updated)).toEqual([updated, events[0]]);
   });
 });

@@ -142,6 +142,22 @@ export function sortScheduledClassEvents(
   });
 }
 
+export function mergeScheduledClassEvent(
+  events: readonly ScheduledClassEvent[],
+  nextEvent: ScheduledClassEvent,
+): ScheduledClassEvent[] {
+  let replaced = false;
+  const merged = events.map((event) => {
+    if (event.id !== nextEvent.id) {
+      return event;
+    }
+    replaced = true;
+    return nextEvent;
+  });
+
+  return sortScheduledClassEvents(replaced ? merged : [...merged, nextEvent]);
+}
+
 export function getUpcomingScheduledClassEvents(
   events: readonly ScheduledClassEvent[],
   options: { now?: Date; limit?: number } = {},

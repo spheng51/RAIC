@@ -92,6 +92,7 @@ import {
   updateLocalScheduledClassEvent,
 } from '@/lib/utils/scheduled-classes-storage';
 import {
+  mergeScheduledClassEvent,
   normalizeScheduledClassInput,
   sortScheduledClassEvents,
 } from '@/lib/utils/scheduled-classes';
@@ -493,9 +494,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
       if (!body.event) {
         throw new Error('Failed to save scheduled class');
       }
-      setScheduledClassEvents((prev) =>
-        sortScheduledClassEvents(prev.map((event) => (event.id === id ? body.event! : event))),
-      );
+      setScheduledClassEvents((prev) => mergeScheduledClassEvent(prev, body.event!));
       return;
     }
 
@@ -593,11 +592,7 @@ export function HomePage({ launchMode = 'public-demo' }: HomePageProps) {
         });
         const body = (await response.json().catch(() => null)) as ScheduledClassesApiBody | null;
         if (body?.event) {
-          setScheduledClassEvents((prev) =>
-            sortScheduledClassEvents(
-              prev.map((event) => (event.id === eventId ? body.event! : event)),
-            ),
-          );
+          setScheduledClassEvents((prev) => mergeScheduledClassEvent(prev, body.event!));
         }
         if (!response.ok) {
           throw new Error(body?.details || body?.error || 'Failed to sync scheduled class');
