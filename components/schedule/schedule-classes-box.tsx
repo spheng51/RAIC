@@ -161,6 +161,8 @@ function getSafeDiscordEventUrl(value?: string) {
     if (
       url.protocol !== 'https:' ||
       url.hostname !== 'discord.com' ||
+      url.search ||
+      url.hash ||
       pathParts.length !== 3 ||
       pathParts[0] !== 'events'
     ) {

@@ -508,25 +508,29 @@ describe('ScheduleClassesBox', () => {
     expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1');
   });
 
-  it('does not render unsafe Discord scheduled event links', async () => {
-    const unsafeEvent: ScheduledClassEvent = {
-      ...makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1'),
-      discordSync: {
-        enabled: true,
-        scheduledEventUrl: 'javascript:alert(1)',
-        lastSyncedAt: '2026-05-12T16:00:00.000Z',
-      },
-    };
-    const { container } = await mountBox({
-      classrooms: [{ id: 'room-1', name: 'Physics room' }],
-      events: [unsafeEvent],
-      discordIntegration: makeDiscordIntegration(),
-    });
+  it.each(['javascript:alert(1)', 'https://discord.com/events/guild-1/event-1?token=secret'])(
+    'does not render unsafe Discord scheduled event links',
+    async (scheduledEventUrl) => {
+      const unsafeEvent: ScheduledClassEvent = {
+        ...makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1'),
+        discordSync: {
+          enabled: true,
+          scheduledEventUrl,
+          lastSyncedAt: '2026-05-12T16:00:00.000Z',
+        },
+      };
+      const { container } = await mountBox({
+        classrooms: [{ id: 'room-1', name: 'Physics room' }],
+        events: [unsafeEvent],
+        discordIntegration: makeDiscordIntegration(),
+      });
 
-    expect(container.querySelector('a[aria-label="Open Discord event"]')).toBeNull();
-    expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
-    expect(container.textContent).toContain('Discord synced');
-  });
+      expect(container.querySelector('a[aria-label="Open Discord event"]')).toBeNull();
+      expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+      expect(container.querySelector('a[href*="token=secret"]')).toBeNull();
+      expect(container.textContent).toContain('Discord synced');
+    },
+  );
 
   it('disables Discord sync for scheduled classes without a linked classroom', async () => {
     const { container } = await mountBox({

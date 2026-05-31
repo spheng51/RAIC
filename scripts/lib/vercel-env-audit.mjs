@@ -170,6 +170,9 @@ export function summarizeAudit(auditResults) {
 
 export function manualFallbackLines({ projectId, teamId, contexts, requiredFeatures = '' }) {
   const normalizedRequiredFeatures = parseRequiredFeatures(requiredFeatures);
+  const unknownFeatureLines = normalizedRequiredFeatures
+    .filter((feature) => !FEATURE_ENV_REQUIREMENTS[feature])
+    .map((feature) => `- Unknown required feature: ${feature}.`);
   const featureLines = normalizedRequiredFeatures
     .filter((feature) => FEATURE_ENV_REQUIREMENTS[feature])
     .map((feature) => {
@@ -184,6 +187,7 @@ export function manualFallbackLines({ projectId, teamId, contexts, requiredFeatu
     `- Confirm these contexts: ${contexts.join(', ')}.`,
     `- Required keys: ${REQUIRED_PRODUCTION_KEYS.join(', ')}.`,
     `- At least one LLM provider key: ${LLM_PROVIDER_KEY_CANDIDATES.join(', ')}.`,
+    ...unknownFeatureLines,
     ...featureLines,
     '- Do not paste or print secret values; record only present/missing status.',
   ];

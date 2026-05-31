@@ -18,7 +18,11 @@ import {
   listDiscordConnectionsForUser,
   readDiscordConnectionForUser,
 } from '@/lib/db/repositories/discord-connections';
-import type { PlatformRole, ScheduledClassEventRecord } from '@/lib/db/schema';
+import type {
+  DiscordConnectionRecord,
+  PlatformRole,
+  ScheduledClassEventRecord,
+} from '@/lib/db/schema';
 import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
 import { readClassroom } from '@/lib/server/classroom-storage';
 import {
@@ -452,6 +456,34 @@ function buildDiscordScheduledEventUrl(guildId: string, eventId: string) {
   return `https://discord.com/events/${guildId}/${eventId}`;
 }
 
+function getScheduledClassOrganizationId(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+) {
+  return event.organizationId ?? scope.organizationId ?? null;
+}
+
+function isDiscordConnectionForScheduledClass(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+  connection: DiscordConnectionRecord,
+) {
+  return connection.organizationId === getScheduledClassOrganizationId(scope, event);
+}
+
+async function selectDefaultDiscordConnectionForScheduledClass(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+) {
+  const connections = await listDiscordConnectionsForUser(scope.userId);
+  const connection =
+    connections.find((item) => isDiscordConnectionForScheduledClass(scope, event, item)) ?? null;
+  if (!connection && connections.length > 0) {
+    throw new Error('Connect Discord for this organization before syncing this scheduled class.');
+  }
+  return connection;
+}
+
 export async function syncScheduledClassDiscordForAccess(
   scope: ScheduledClassAccessScope,
   id: string,
@@ -471,10 +503,13 @@ export async function syncScheduledClassDiscordForAccess(
   } else if (event.discordSync?.enabled) {
     throw new Error('Reconnect Discord before syncing this scheduled class.');
   } else {
-    connection = (await listDiscordConnectionsForUser(scope.userId))[0] ?? null;
+    connection = await selectDefaultDiscordConnectionForScheduledClass(scope, event);
   }
   if (!connection) {
     throw new Error('Connect Discord before syncing this scheduled class.');
+  }
+  if (!isDiscordConnectionForScheduledClass(scope, event, connection)) {
+    throw new Error('Connect Discord for this organization before syncing this scheduled class.');
   }
   if (!connection.channelId) {
     throw new Error('Choose a Discord announcement channel before syncing this scheduled class.');

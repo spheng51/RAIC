@@ -197,7 +197,7 @@ function describeDiscordSync(sync) {
 
   const details = [`enabled=${String(sync.enabled)}`];
   if (sync.scheduledEventUrl) {
-    details.push(`scheduledEventUrl=${sync.scheduledEventUrl}`);
+    details.push(`scheduledEventUrl=${redactUrlForLog(sync.scheduledEventUrl)}`);
   } else {
     details.push('scheduledEventUrl=missing');
   }

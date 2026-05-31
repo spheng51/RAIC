@@ -107,6 +107,18 @@ globalThis.fetch = async (input, init = {}) => {
       });
     }
 
+    if (process.env.RAIC_DISCORD_SMOKE_MOCK_SYNC_SECRET_URL === '1') {
+      return json(200, {
+        success: true,
+        event: {
+          discordSync: {
+            enabled: true,
+            scheduledEventUrl: 'https://evil.example/events/guild/event?token=sync-url-secret',
+          },
+        },
+      });
+    }
+
     return json(200, {
       success: true,
       event: {

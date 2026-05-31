@@ -279,11 +279,12 @@ describe('Vercel env audit helpers', () => {
       projectId: 'prj_123',
       teamId: 'team_123',
       contexts: ['production'],
-      requiredFeatures: 'discord',
+      requiredFeatures: 'discord, discord-betaa',
     }).join('\n');
 
     expect(fallback).toContain('prj_123');
     expect(fallback).toContain('team_123');
+    expect(fallback).toContain('Unknown required feature: discord-betaa');
     expect(fallback).toContain('Feature-required keys (discord)');
     expect(fallback).toContain('Do not paste or print secret values');
   });
