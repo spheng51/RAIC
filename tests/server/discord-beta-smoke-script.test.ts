@@ -70,6 +70,36 @@ describe('discord beta smoke script', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('writes sanitized JSON evidence for invalid base URLs', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'raic-discord-smoke-invalid-'));
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
+
+    try {
+      const result = await runSmoke([], {
+        RAIC_DISCORD_SMOKE_BASE_URL: 'not a url discord-url-secret',
+        RAIC_DISCORD_SMOKE_EVIDENCE_PATH: evidencePath,
+      });
+      const rawEvidence = await readFile(evidencePath, 'utf8');
+      const evidence = JSON.parse(rawEvidence);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain('FAIL    Discord beta smoke base URL');
+      expect(result.stdout).toContain('Summary: 0 automated passed, 1 failed');
+      expect(evidence.summary).toEqual({
+        automatedPassed: 0,
+        blocked: 0,
+        failed: 1,
+        manual: 0,
+      });
+      expect(evidence.exitCode).toBe(1);
+      expect(rawEvidence).not.toContain('discord-url-secret');
+      expect(result.stdout).not.toContain('discord-url-secret');
+      expect(result.stderr).toBe('');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('fails by default when live Discord prerequisites are blocked', async () => {
     const result = await runSmoke(
       [],
