@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import process from 'node:process';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
@@ -500,6 +501,7 @@ async function writeEvidenceArtifact(summary, exitCode) {
     },
   };
 
+  await mkdir(dirname(evidencePath), { recursive: true });
   await writeFile(evidencePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   console.log(`[discord-beta-smoke] Evidence JSON: ${evidencePath}`);
 }

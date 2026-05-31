@@ -216,8 +216,8 @@ Discord beta smoke inputs are operator-only local values:
 - `RAIC_DISCORD_SMOKE_EVENT_ID` automates syncing one future teacher-owned scheduled class with a linked classroom.
 - `RAIC_DISCORD_SMOKE_CRON_SECRET` is preferred over `CRON_SECRET` for smoke cron invocation.
 - `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` optionally bypasses Vercel deployment protection for preview API smoke. Keep it operator-local and do not store it in project env.
-- `RAIC_DISCORD_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence with summary counts and non-secret precondition booleans.
-- `RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence for `smoke:production:milestone`.
+- `RAIC_DISCORD_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence with summary counts and non-secret precondition booleans, creating parent directories as needed.
+- `RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence for `smoke:production:milestone`, creating parent directories as needed.
 
 Protected preview example:
 

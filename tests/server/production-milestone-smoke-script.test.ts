@@ -66,7 +66,7 @@ describe('production milestone smoke script', () => {
 
   it('writes sanitized JSON evidence for required Discord blockers', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'raic-production-smoke-'));
-    const evidencePath = join(tmp, 'evidence.json');
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
 
     try {
       const result = await runSmoke({

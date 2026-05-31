@@ -107,7 +107,7 @@ describe('discord beta smoke script', () => {
 
   it('writes sanitized JSON evidence without changing blocker exit semantics', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'raic-discord-smoke-'));
-    const evidencePath = join(tmp, 'evidence.json');
+    const evidencePath = join(tmp, 'nested', 'evidence.json');
 
     try {
       const result = await runSmoke(
