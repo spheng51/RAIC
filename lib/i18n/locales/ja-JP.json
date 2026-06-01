@@ -33,7 +33,28 @@
       "delete": "削除",
       "linkFailed": "教室は作成されましたが、スケジュールへのリンクに失敗しました。",
       "saveFailed": "予定クラスを保存できませんでした",
-      "deleteFailed": "予定クラスを削除できませんでした"
+      "deleteFailed": "予定クラスを削除できませんでした",
+      "discord": {
+        "title": "Discord",
+        "notConfigured": "Discord は未設定です",
+        "notConnected": "未接続",
+        "connect": "Discord に接続",
+        "connected": "Discord に接続しました",
+        "connectionFailed": "Discord 接続に失敗しました",
+        "invalidState": "Discord 接続の有効期限が切れました。もう一度お試しください。",
+        "missingGuild": "接続する Discord サーバーを選択してください。",
+        "noChannel": "チャンネルなし",
+        "saveChannel": "チャンネルを保存",
+        "channelSaved": "Discord チャンネルを保存しました",
+        "disconnect": "Discord を切断",
+        "disconnected": "Discord を切断しました",
+        "syncClass": "Discord と同期",
+        "openEvent": "Discord イベントを開く",
+        "synced": "Discord 同期済み",
+        "reminderSent": "Discord リマインダー送信済み",
+        "warning": "Discord 警告",
+        "actionFailed": "Discord 操作に失敗しました"
+      }
     }
   },
   "toolbar": {

@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ScheduleDiscordIntegrationState } from '@/components/schedule/schedule-classes-box';
 import type { ScheduledClassEvent } from '@/lib/types/scheduled-classes';
 
 vi.mock('@/components/ui/button', async () => {
@@ -156,6 +157,19 @@ vi.mock('@/lib/hooks/use-i18n', () => ({
         'home.schedule.delete': 'Delete',
         'home.schedule.saveFailed': 'Failed to save scheduled class',
         'home.schedule.deleteFailed': 'Failed to delete scheduled class',
+        'home.schedule.discord.title': 'Discord',
+        'home.schedule.discord.notConfigured': 'Discord is not configured',
+        'home.schedule.discord.notConnected': 'Not connected',
+        'home.schedule.discord.connect': 'Connect Discord',
+        'home.schedule.discord.noChannel': 'No channel',
+        'home.schedule.discord.saveChannel': 'Save channel',
+        'home.schedule.discord.disconnect': 'Disconnect Discord',
+        'home.schedule.discord.syncClass': 'Sync with Discord',
+        'home.schedule.discord.openEvent': 'Open Discord event',
+        'home.schedule.discord.synced': 'Discord synced',
+        'home.schedule.discord.reminderSent': 'Discord reminder sent',
+        'home.schedule.discord.warning': 'Discord warning',
+        'home.schedule.discord.actionFailed': 'Discord action failed',
         'common.cancel': 'Cancel',
       };
       return labels[key] ?? key;
@@ -173,6 +187,7 @@ interface ScheduleClassesBoxTestProps {
   onDelete: (id: string) => Promise<void>;
   onOpenClassroom: (classroomId: string) => void;
   gameModeActive?: boolean;
+  discordIntegration?: ScheduleDiscordIntegrationState;
 }
 
 function makeEvent(id: string, startsAt: string, classroomId?: string): ScheduledClassEvent {
@@ -203,6 +218,42 @@ function findButton(container: HTMLElement, text: string) {
   return [...container.querySelectorAll('button')].find((button) =>
     button.textContent?.includes(text),
   ) as HTMLButtonElement | undefined;
+}
+
+function makeDiscordIntegration(
+  overrides: Partial<ScheduleDiscordIntegrationState> = {},
+): ScheduleDiscordIntegrationState {
+  const connection = {
+    id: 'connection-1',
+    guildId: 'guild-1',
+    guildName: 'Physics Guild',
+    channelId: 'channel-1',
+    channelName: 'announcements',
+  };
+  const resolvedConnection = Object.prototype.hasOwnProperty.call(overrides, 'connection')
+    ? (overrides.connection ?? null)
+    : connection;
+  const resolvedConnections = Object.prototype.hasOwnProperty.call(overrides, 'connections')
+    ? (overrides.connections ?? [])
+    : resolvedConnection
+      ? [resolvedConnection]
+      : [];
+
+  return {
+    configured: true,
+    connection: resolvedConnection,
+    connections: resolvedConnections,
+    channels: [
+      { id: 'channel-1', name: 'announcements' },
+      { id: 'channel-2', name: 'study-hall' },
+    ],
+    onConnect: vi.fn(),
+    onSelectConnection: vi.fn().mockResolvedValue(undefined),
+    onSaveChannel: vi.fn().mockResolvedValue(undefined),
+    onDisconnect: vi.fn().mockResolvedValue(undefined),
+    onSyncEvent: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
 }
 
 async function mountBox(props: Partial<ScheduleClassesBoxTestProps> = {}) {
@@ -319,6 +370,80 @@ describe('ScheduleClassesBox', () => {
     expect(onOpenClassroom).toHaveBeenCalledWith('room-1');
   });
 
+  it('hides Discord controls unless a teacher Discord integration is provided', async () => {
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-1', name: 'Physics room' }],
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1')],
+    });
+
+    expect(container.querySelector('[data-testid="schedule-discord-panel"]')).toBeNull();
+    expect(container.textContent).not.toContain('Discord');
+  });
+
+  it('shows a disabled Discord setup state when the integration is not configured', async () => {
+    const discordIntegration = makeDiscordIntegration({
+      configured: false,
+      connection: null,
+      channels: [],
+    });
+    const { container } = await mountBox({ discordIntegration });
+
+    expect(container.textContent).toContain('Discord is not configured');
+    expect(findButton(container, 'Connect Discord')?.disabled).toBe(true);
+    expect(discordIntegration.onConnect).not.toHaveBeenCalled();
+  });
+
+  it('lets teachers disconnect a stale Discord connection when config is missing', async () => {
+    const discordIntegration = makeDiscordIntegration({
+      configured: false,
+      channels: [],
+    });
+    const { container } = await mountBox({ discordIntegration });
+
+    expect(container.textContent).toContain('Discord is not configured');
+    expect(findButton(container, 'Connect Discord')?.disabled).toBe(true);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Disconnect Discord"]')
+        ?.click();
+    });
+
+    expect(discordIntegration.onConnect).not.toHaveBeenCalled();
+    expect(discordIntegration.onDisconnect).toHaveBeenCalledWith('connection-1');
+  });
+
+  it('shows recoverable Discord integration warnings in the setup row', async () => {
+    const { container } = await mountBox({
+      discordIntegration: makeDiscordIntegration({
+        channels: [],
+        error: 'Unable to load Discord announcement channels.',
+      }),
+    });
+
+    expect(container.textContent).toContain('Unable to load Discord announcement channels.');
+  });
+
+  it('saves and disconnects a connected Discord announcement channel', async () => {
+    const discordIntegration = makeDiscordIntegration();
+    const { container } = await mountBox({ discordIntegration });
+
+    await act(async () => {
+      findButton(container, '#study-hall')?.click();
+    });
+    await act(async () => {
+      findButton(container, 'Save channel')?.click();
+    });
+    expect(discordIntegration.onSaveChannel).toHaveBeenCalledWith('connection-1', 'channel-2');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Disconnect Discord"]')
+        ?.click();
+    });
+    expect(discordIntegration.onDisconnect).toHaveBeenCalledWith('connection-1');
+  });
+
   it('adds multiplayer metadata for game-mode scheduled classes', async () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
     const { container } = await mountBox({
@@ -382,6 +507,129 @@ describe('ScheduleClassesBox', () => {
       findButton(container, 'Class 1')?.click();
     });
     expect(onOpenClassroom).toHaveBeenCalledWith('room-1');
+  });
+
+  it('syncs linked scheduled classes with Discord and shows sync status', async () => {
+    const discordIntegration = makeDiscordIntegration();
+    const syncedEvent: ScheduledClassEvent = {
+      ...makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1'),
+      discordSync: {
+        enabled: true,
+        scheduledEventUrl: 'https://discord.com/events/guild-1/discord-event-1',
+        lastSyncedAt: '2026-05-12T16:00:00.000Z',
+        syncWarning: 'Discord rate limited this update.',
+      },
+    };
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-1', name: 'Physics room' }],
+      events: [syncedEvent],
+      discordIntegration,
+    });
+
+    expect(container.textContent).toContain('Discord warning');
+    expect(container.textContent).toContain('Discord rate limited this update.');
+    expect(
+      container.querySelector<HTMLAnchorElement>(
+        'a[href="https://discord.com/events/guild-1/discord-event-1"]',
+      ),
+    ).toBeTruthy();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sync with Discord"]')?.click();
+    });
+    expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1', 'connection-1');
+  });
+
+  it('lets teachers select which Discord guild to use for scheduled class sync', async () => {
+    const discordIntegration = makeDiscordIntegration({
+      connections: [
+        {
+          id: 'connection-1',
+          guildId: 'guild-1',
+          guildName: 'Physics Guild',
+          channelId: 'channel-1',
+          channelName: 'announcements',
+        },
+        {
+          id: 'connection-2',
+          guildId: 'guild-2',
+          guildName: 'Chemistry Guild',
+          channelId: 'channel-2',
+          channelName: 'study-hall',
+        },
+      ],
+    });
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-1', name: 'Physics room' }],
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1')],
+      discordIntegration,
+    });
+
+    await act(async () => {
+      findButton(container, 'Chemistry Guild')?.click();
+    });
+    expect(discordIntegration.onSelectConnection).toHaveBeenCalledWith('connection-2');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sync with Discord"]')?.click();
+    });
+    expect(discordIntegration.onSyncEvent).toHaveBeenCalledWith('1', 'connection-2');
+  });
+
+  it.each(['javascript:alert(1)', 'https://discord.com/events/guild-1/event-1?token=secret'])(
+    'does not render unsafe Discord scheduled event links',
+    async (scheduledEventUrl) => {
+      const unsafeEvent: ScheduledClassEvent = {
+        ...makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1'),
+        discordSync: {
+          enabled: true,
+          scheduledEventUrl,
+          lastSyncedAt: '2026-05-12T16:00:00.000Z',
+        },
+      };
+      const { container } = await mountBox({
+        classrooms: [{ id: 'room-1', name: 'Physics room' }],
+        events: [unsafeEvent],
+        discordIntegration: makeDiscordIntegration(),
+      });
+
+      expect(container.querySelector('a[aria-label="Open Discord event"]')).toBeNull();
+      expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+      expect(container.querySelector('a[href*="token=secret"]')).toBeNull();
+      expect(container.textContent).toContain('Discord synced');
+    },
+  );
+
+  it('disables Discord sync for scheduled classes without a linked classroom', async () => {
+    const { container } = await mountBox({
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z')],
+      discordIntegration: makeDiscordIntegration(),
+    });
+
+    expect(
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sync with Discord"]')
+        ?.disabled,
+    ).toBe(true);
+  });
+
+  it('disables Discord sync for scheduled classes with stale classroom links', async () => {
+    const discordIntegration = makeDiscordIntegration();
+    const { container } = await mountBox({
+      classrooms: [{ id: 'room-2', name: 'Chemistry room' }],
+      events: [makeEvent('1', '2099-05-12T17:00:00.000Z', 'room-1')],
+      discordIntegration,
+    });
+
+    expect(container.textContent).toContain('Unlinked classroom');
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Sync with Discord"]',
+    );
+    expect(syncButton?.disabled).toBe(true);
+
+    await act(async () => {
+      syncButton?.click();
+    });
+    expect(discordIntegration.onSyncEvent).not.toHaveBeenCalled();
   });
 
   it('updates and deletes an existing scheduled class', async () => {

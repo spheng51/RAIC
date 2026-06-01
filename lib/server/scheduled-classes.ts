@@ -8,19 +8,26 @@ import {
   updateJoinTokenExpiration,
 } from '@/lib/db/repositories/join-tokens';
 import {
+  claimDiscordScheduledClassReminderRecord,
   deleteScheduledClassEventRecord,
+  finalizeDiscordScheduledClassReminderRecord,
   listDiscordSyncedScheduledClassEventRecords,
   listScheduledClassEventRecordsForAccess,
   readScheduledClassEventRecord,
+  releaseDiscordScheduledClassReminderClaimRecord,
   upsertScheduledClassEventRecord,
 } from '@/lib/db/repositories/scheduled-classes';
 import {
   listDiscordConnectionsForUser,
   readDiscordConnectionForUser,
 } from '@/lib/db/repositories/discord-connections';
-import type { PlatformRole, ScheduledClassEventRecord } from '@/lib/db/schema';
+import type {
+  DiscordConnectionRecord,
+  PlatformRole,
+  ScheduledClassEventRecord,
+} from '@/lib/db/schema';
 import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
-import { readClassroom } from '@/lib/server/classroom-storage';
+import { isValidClassroomId, readClassroom } from '@/lib/server/classroom-storage';
 import {
   createDiscordScheduledEvent,
   deleteDiscordScheduledEvent,
@@ -37,10 +44,24 @@ import {
   type NormalizedScheduledClassEventInput,
 } from '@/lib/utils/scheduled-classes';
 
+const DISCORD_REMINDER_CLAIM_STALE_MS = 15 * 60 * 1000;
+
 export interface ScheduledClassAccessScope {
   role: PlatformRole;
   userId: string;
   organizationId?: string | null;
+}
+
+export class ScheduledClassDiscordSyncError extends Error {
+  readonly event?: ScheduledClassEvent;
+
+  constructor(message: string, event?: ScheduledClassEvent | null) {
+    super(message);
+    this.name = 'ScheduledClassDiscordSyncError';
+    if (event) {
+      this.event = event;
+    }
+  }
 }
 
 function canAccessEvent(event: ScheduledClassEventRecord, scope: ScheduledClassAccessScope) {
@@ -149,6 +170,27 @@ function preserveExistingInviteMetadata(
   };
 }
 
+function preserveDiscordSyncForScheduleUpdate(
+  eventInput: NormalizedScheduledClassEventInput,
+  existing: ScheduledClassEventRecord,
+): ScheduledClassEventRecord['discordSync'] {
+  if (!existing.discordSync) {
+    return undefined;
+  }
+
+  if (eventInput.startsAt === existing.startsAt) {
+    return existing.discordSync;
+  }
+
+  const {
+    reminderClaimedAt: _reminderClaimedAt,
+    reminderMessageId: _reminderMessageId,
+    reminderSentAt: _reminderSentAt,
+    ...sync
+  } = existing.discordSync;
+  return sync;
+}
+
 export async function listScheduledClassesForAccess(
   scope: ScheduledClassAccessScope,
 ): Promise<ScheduledClassEvent[]> {
@@ -229,7 +271,7 @@ export async function updateScheduledClassForAccess(
       durationMinutes: eventInput.durationMinutes,
       classroomId: eventInput.classroomId,
       multiplayerGame: eventInput.multiplayerGame,
-      discordSync: existing.discordSync,
+      discordSync: preserveDiscordSyncForScheduleUpdate(eventInput, existing),
       updatedAt: new Date().toISOString(),
     });
     return updated ? toClientEvent(updated) : null;
@@ -260,7 +302,10 @@ export async function updateScheduledClassForAccess(
       durationMinutes: eventInput.durationMinutes,
       classroomId: eventInput.classroomId,
       multiplayerGame: eventInput.multiplayerGame,
-      discordSync: nextStore.scheduledClassEvents[index].discordSync,
+      discordSync: preserveDiscordSyncForScheduleUpdate(
+        eventInput,
+        nextStore.scheduledClassEvents[index],
+      ),
       updatedAt: new Date().toISOString(),
     };
     nextStore.scheduledClassEvents[index] = updated;
@@ -318,6 +363,28 @@ async function deleteDiscordScheduledEventIfPresent(event: ScheduledClassEventRe
     }
     throw new Error(`Failed to delete Discord scheduled event. ${normalizeDiscordError(error)}`);
   }
+}
+
+async function writeDiscordScheduledEvent(input: {
+  guildId: string;
+  scheduledEventId?: string;
+  payload: DiscordScheduledEventPayload;
+}) {
+  if (input.scheduledEventId) {
+    try {
+      return await updateDiscordScheduledEvent(
+        input.guildId,
+        input.scheduledEventId,
+        input.payload,
+      );
+    } catch (error) {
+      if (!isDiscordScheduledEventAlreadyDeleted(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return createDiscordScheduledEvent(input.guildId, input.payload);
 }
 
 async function updateScheduledClassRecord(
@@ -430,6 +497,57 @@ function buildDiscordScheduledEventUrl(guildId: string, eventId: string) {
   return `https://discord.com/events/${guildId}/${eventId}`;
 }
 
+function getScheduledClassOrganizationId(event: ScheduledClassEventRecord) {
+  return event.organizationId ?? null;
+}
+
+function isDiscordConnectionForScheduledClass(
+  event: ScheduledClassEventRecord,
+  connection: DiscordConnectionRecord,
+) {
+  return connection.organizationId === getScheduledClassOrganizationId(event);
+}
+
+function canScopeAccessClassroomForSync(
+  scope: ScheduledClassAccessScope,
+  classroom: Awaited<ReturnType<typeof readClassroom>>,
+) {
+  if (!classroom) return false;
+  if (scope.role === 'system_admin') return true;
+  if (scope.role === 'org_admin') {
+    return !!scope.organizationId && classroom.organizationId === scope.organizationId;
+  }
+  if (scope.role === 'teacher') {
+    return classroom.ownerUserId === scope.userId;
+  }
+  return false;
+}
+
+async function readAccessibleClassroomForDiscordSync(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+) {
+  if (!event.classroomId || !isValidClassroomId(event.classroomId)) {
+    return null;
+  }
+
+  const classroom = await readClassroom(event.classroomId);
+  return canScopeAccessClassroomForSync(scope, classroom) ? classroom : null;
+}
+
+async function selectDefaultDiscordConnectionForScheduledClass(
+  scope: ScheduledClassAccessScope,
+  event: ScheduledClassEventRecord,
+) {
+  const connections = await listDiscordConnectionsForUser(scope.userId);
+  const connection =
+    connections.find((item) => isDiscordConnectionForScheduledClass(event, item)) ?? null;
+  if (!connection && connections.length > 0) {
+    throw new Error('Connect Discord for this organization before syncing this scheduled class.');
+  }
+  return connection;
+}
+
 export async function syncScheduledClassDiscordForAccess(
   scope: ScheduledClassAccessScope,
   id: string,
@@ -437,21 +555,43 @@ export async function syncScheduledClassDiscordForAccess(
 ): Promise<ScheduledClassEvent | null> {
   const event = await readScheduledClassForAccess(scope, id);
   if (!event) return null;
+  if (!event.organizationId && scope.organizationId) {
+    throw new Error('Assign this scheduled class to an organization before syncing with Discord.');
+  }
+  if (!event.classroomId) {
+    throw new Error('Choose a classroom before syncing this scheduled class with Discord.');
+  }
+  const classroom = await readAccessibleClassroomForDiscordSync(scope, event);
+  if (!classroom) {
+    throw new Error(
+      'Choose an accessible classroom before syncing this scheduled class with Discord.',
+    );
+  }
 
-  const connection = options.connectionId
-    ? await readDiscordConnectionForUser(scope.userId, options.connectionId)
-    : event.discordSync?.connectionId
-      ? await readDiscordConnectionForUser(scope.userId, event.discordSync.connectionId)
-      : ((await listDiscordConnectionsForUser(scope.userId))[0] ?? null);
+  let connection: Awaited<ReturnType<typeof readDiscordConnectionForUser>> = null;
+  if (options.connectionId) {
+    connection = await readDiscordConnectionForUser(scope.userId, options.connectionId);
+  } else if (event.discordSync?.connectionId) {
+    connection = await readDiscordConnectionForUser(scope.userId, event.discordSync.connectionId);
+    if (!connection) {
+      throw new Error('Reconnect Discord before syncing this scheduled class.');
+    }
+  } else if (event.discordSync?.enabled) {
+    throw new Error('Reconnect Discord before syncing this scheduled class.');
+  } else {
+    connection = await selectDefaultDiscordConnectionForScheduledClass(scope, event);
+  }
   if (!connection) {
     throw new Error('Connect Discord before syncing this scheduled class.');
+  }
+  if (!isDiscordConnectionForScheduledClass(event, connection)) {
+    throw new Error('Connect Discord for this organization before syncing this scheduled class.');
   }
   if (!connection.channelId) {
     throw new Error('Choose a Discord announcement channel before syncing this scheduled class.');
   }
 
   const invite = await ensureDiscordInvite(scope, event, options.baseUrl);
-  const classroom = event.classroomId ? await readClassroom(event.classroomId) : null;
   const payload = buildDiscordScheduledClassPayload({
     event,
     inviteUrl: invite.inviteUrl,
@@ -459,13 +599,11 @@ export async function syncScheduledClassDiscordForAccess(
   });
 
   try {
-    const syncedEvent = event.discordSync?.scheduledEventId
-      ? await updateDiscordScheduledEvent(
-          connection.guildId,
-          event.discordSync.scheduledEventId,
-          payload,
-        )
-      : await createDiscordScheduledEvent(connection.guildId, payload);
+    const syncedEvent = await writeDiscordScheduledEvent({
+      guildId: connection.guildId,
+      scheduledEventId: event.discordSync?.scheduledEventId,
+      payload,
+    });
     const scheduledEventId = syncedEvent.id;
     const now = new Date().toISOString();
     const updated: ScheduledClassEventRecord = {
@@ -491,7 +629,7 @@ export async function syncScheduledClassDiscordForAccess(
   } catch (error) {
     const warning = normalizeDiscordError(error);
     const now = new Date().toISOString();
-    await updateScheduledClassRecord({
+    const saved = await updateScheduledClassRecord({
       ...event,
       discordSync: {
         ...event.discordSync,
@@ -507,7 +645,7 @@ export async function syncScheduledClassDiscordForAccess(
       },
       updatedAt: now,
     });
-    throw new Error(warning);
+    throw new ScheduledClassDiscordSyncError(warning, saved ? toClientEvent(saved) : null);
   }
 }
 
@@ -518,6 +656,179 @@ async function listDiscordSyncedEvents(): Promise<ScheduledClassEventRecord[]> {
 
   const store = await readPlatformStore();
   return store.scheduledClassEvents.filter((event) => event.discordSync?.enabled);
+}
+
+function isDiscordReminderClaimActive(event: ScheduledClassEventRecord, now: Date) {
+  const claimedAt = event.discordSync?.reminderClaimedAt;
+  if (!claimedAt) return false;
+  const claimedTime = new Date(claimedAt).getTime();
+  if (Number.isNaN(claimedTime)) return false;
+  return now.getTime() - claimedTime < DISCORD_REMINDER_CLAIM_STALE_MS;
+}
+
+function getDiscordReminderStaleClaimBefore(now: Date) {
+  return new Date(now.getTime() - DISCORD_REMINDER_CLAIM_STALE_MS).toISOString();
+}
+
+function isScheduledClassDueForReminder(
+  event: ScheduledClassEventRecord,
+  now: Date,
+  latestReminderTime: number,
+) {
+  const startsAt = new Date(event.startsAt).getTime();
+  return (
+    !Number.isNaN(startsAt) &&
+    startsAt >= now.getTime() &&
+    startsAt <= latestReminderTime &&
+    !event.discordSync?.reminderSentAt &&
+    !isDiscordReminderClaimActive(event, now) &&
+    Boolean(event.discordSync?.channelId) &&
+    Boolean(event.discordSync?.inviteUrl)
+  );
+}
+
+async function claimDiscordReminderForSend(
+  event: ScheduledClassEventRecord,
+  now: Date,
+  latestReminderTime: number,
+) {
+  const claimedAt = now.toISOString();
+  const staleClaimBefore = getDiscordReminderStaleClaimBefore(now);
+
+  if (isPostgresConfigured()) {
+    return claimDiscordScheduledClassReminderRecord({
+      id: event.id,
+      claimedAt,
+      latestReminderAt: new Date(latestReminderTime).toISOString(),
+      now: claimedAt,
+      staleClaimBefore,
+    });
+  }
+
+  return updatePlatformStore((store) => {
+    const index = store.scheduledClassEvents.findIndex((item) => item.id === event.id);
+    if (index < 0) return null;
+
+    const current = store.scheduledClassEvents[index];
+    if (
+      !current.discordSync?.enabled ||
+      !isScheduledClassDueForReminder(current, now, latestReminderTime)
+    ) {
+      return null;
+    }
+
+    const {
+      reminderMessageId: _reminderMessageId,
+      syncWarning: _syncWarning,
+      ...sync
+    } = current.discordSync;
+    const updated: ScheduledClassEventRecord = {
+      ...current,
+      discordSync: {
+        ...sync,
+        reminderClaimedAt: claimedAt,
+      },
+      updatedAt: claimedAt,
+    };
+    store.scheduledClassEvents[index] = updated;
+    return updated;
+  });
+}
+
+async function finalizeDiscordReminderSend(
+  event: ScheduledClassEventRecord,
+  sentAt: string,
+  messageId: string,
+) {
+  const claimedAt = event.discordSync?.reminderClaimedAt;
+  if (!claimedAt) return null;
+
+  if (isPostgresConfigured()) {
+    return finalizeDiscordScheduledClassReminderRecord({
+      id: event.id,
+      claimedAt,
+      messageId,
+      sentAt,
+    });
+  }
+
+  return updatePlatformStore((store) => {
+    const index = store.scheduledClassEvents.findIndex((item) => item.id === event.id);
+    if (index < 0) return null;
+
+    const current = store.scheduledClassEvents[index];
+    if (
+      current.discordSync?.reminderClaimedAt !== claimedAt ||
+      current.discordSync.reminderSentAt
+    ) {
+      return null;
+    }
+
+    const {
+      reminderClaimedAt: _reminderClaimedAt,
+      syncWarning: _syncWarning,
+      ...sync
+    } = current.discordSync;
+    const updated: ScheduledClassEventRecord = {
+      ...current,
+      discordSync: {
+        ...sync,
+        reminderSentAt: sentAt,
+        reminderMessageId: messageId,
+      },
+      updatedAt: sentAt,
+    };
+    store.scheduledClassEvents[index] = updated;
+    return updated;
+  });
+}
+
+async function releaseDiscordReminderClaim(
+  event: ScheduledClassEventRecord,
+  releasedAt: string,
+  syncWarning: string,
+) {
+  const claimedAt = event.discordSync?.reminderClaimedAt;
+  if (!claimedAt) return null;
+
+  if (isPostgresConfigured()) {
+    return releaseDiscordScheduledClassReminderClaimRecord({
+      id: event.id,
+      claimedAt,
+      releasedAt,
+      syncWarning,
+    });
+  }
+
+  return updatePlatformStore((store) => {
+    const index = store.scheduledClassEvents.findIndex((item) => item.id === event.id);
+    if (index < 0) return null;
+
+    const current = store.scheduledClassEvents[index];
+    if (
+      current.discordSync?.reminderClaimedAt !== claimedAt ||
+      current.discordSync.reminderSentAt
+    ) {
+      return null;
+    }
+
+    const {
+      reminderClaimedAt: _reminderClaimedAt,
+      reminderMessageId: _reminderMessageId,
+      reminderSentAt: _reminderSentAt,
+      ...sync
+    } = current.discordSync;
+    const updated: ScheduledClassEventRecord = {
+      ...current,
+      discordSync: {
+        ...sync,
+        syncWarning,
+      },
+      updatedAt: releasedAt,
+    };
+    store.scheduledClassEvents[index] = updated;
+    return updated;
+  });
 }
 
 export async function sendDueDiscordScheduledClassReminders(
@@ -532,44 +843,29 @@ export async function sendDueDiscordScheduledClassReminders(
   let failed = 0;
 
   for (const event of events) {
-    const startsAt = new Date(event.startsAt).getTime();
-    if (
-      Number.isNaN(startsAt) ||
-      startsAt < now.getTime() ||
-      startsAt > latestReminderTime ||
-      event.discordSync?.reminderSentAt ||
-      !event.discordSync?.channelId ||
-      !event.discordSync.inviteUrl
-    ) {
+    if (!isScheduledClassDueForReminder(event, now, latestReminderTime)) {
+      continue;
+    }
+
+    const claimedEvent = await claimDiscordReminderForSend(event, now, latestReminderTime);
+    if (!claimedEvent?.discordSync?.channelId || !claimedEvent.discordSync.inviteUrl) {
       continue;
     }
 
     checked += 1;
     try {
-      const message = await sendDiscordChannelMessage(event.discordSync.channelId, {
-        content: `Upcoming class: ${event.title}\n${event.discordSync.inviteUrl}`,
+      const message = await sendDiscordChannelMessage(claimedEvent.discordSync.channelId, {
+        content: `Upcoming class: ${claimedEvent.title}\n${claimedEvent.discordSync.inviteUrl}`,
       });
-      await updateScheduledClassRecord({
-        ...event,
-        discordSync: {
-          ...event.discordSync,
-          reminderSentAt: now.toISOString(),
-          reminderMessageId: message.id,
-          syncWarning: undefined,
-        },
-        updatedAt: now.toISOString(),
-      });
+      await finalizeDiscordReminderSend(claimedEvent, now.toISOString(), message.id);
       sent += 1;
     } catch (error) {
       failed += 1;
-      await updateScheduledClassRecord({
-        ...event,
-        discordSync: {
-          ...event.discordSync,
-          syncWarning: normalizeDiscordError(error),
-        },
-        updatedAt: now.toISOString(),
-      });
+      await releaseDiscordReminderClaim(
+        claimedEvent,
+        now.toISOString(),
+        normalizeDiscordError(error),
+      );
     }
   }
 

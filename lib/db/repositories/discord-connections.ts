@@ -58,6 +58,22 @@ function mapDiscordConnectionRow(row: DiscordConnectionRow): DiscordConnectionRe
   };
 }
 
+async function readDiscordConnectionForUpsert(
+  input: DiscordConnectionInput,
+): Promise<DiscordConnectionRecord | null> {
+  const rows = await runPostgresQuery<DiscordConnectionRow>(
+    `SELECT ${DISCORD_CONNECTION_COLUMNS}
+     FROM discord_connections
+     WHERE owner_user_id = $1
+       AND organization_id IS NOT DISTINCT FROM $2
+       AND (id = $3 OR guild_id = $4)
+     ORDER BY CASE WHEN id = $3 THEN 0 ELSE 1 END, created_at ASC
+     LIMIT 1`,
+    [input.ownerUserId, input.organizationId, input.id ?? '', input.guildId],
+  );
+  return rows?.[0] ? mapDiscordConnectionRow(rows[0]) : null;
+}
+
 export async function listDiscordConnectionsForUser(
   ownerUserId: string,
 ): Promise<DiscordConnectionRecord[]> {
@@ -109,6 +125,38 @@ export async function upsertDiscordConnection(
   const timestamp = new Date().toISOString();
 
   if (isPostgresConfigured()) {
+    const existing = await readDiscordConnectionForUpsert(input);
+    const id = existing?.id ?? input.id ?? randomUUID();
+    const createdAt = existing?.createdAt ?? timestamp;
+
+    if (existing) {
+      const rows = await runPostgresQuery<DiscordConnectionRow>(
+        `UPDATE discord_connections
+         SET organization_id = $3,
+             guild_id = $4,
+             guild_name = $5,
+             channel_id = $6,
+             channel_name = $7,
+             updated_at = $8
+         WHERE id = $1 AND owner_user_id = $2
+         RETURNING ${DISCORD_CONNECTION_COLUMNS}`,
+        [
+          id,
+          input.ownerUserId,
+          input.organizationId,
+          input.guildId,
+          input.guildName,
+          input.channelId,
+          input.channelName,
+          timestamp,
+        ],
+      );
+      if (!rows?.[0]) {
+        throw new Error('Failed to save Discord connection.');
+      }
+      return mapDiscordConnectionRow(rows[0]);
+    }
+
     const rows = await runPostgresQuery<DiscordConnectionRow>(
       `INSERT INTO discord_connections (
           id,
@@ -122,22 +170,21 @@ export async function upsertDiscordConnection(
           updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (owner_user_id, guild_id) DO UPDATE SET
-          organization_id = EXCLUDED.organization_id,
+        ON CONFLICT (owner_user_id, COALESCE(organization_id, ''), guild_id) DO UPDATE SET
           guild_name = EXCLUDED.guild_name,
           channel_id = EXCLUDED.channel_id,
           channel_name = EXCLUDED.channel_name,
           updated_at = EXCLUDED.updated_at
         RETURNING ${DISCORD_CONNECTION_COLUMNS}`,
       [
-        input.id ?? randomUUID(),
+        id,
         input.ownerUserId,
         input.organizationId,
         input.guildId,
         input.guildName,
         input.channelId,
         input.channelName,
-        timestamp,
+        createdAt,
         timestamp,
       ],
     );
@@ -151,6 +198,7 @@ export async function upsertDiscordConnection(
     const existingIndex = store.discordConnections.findIndex(
       (connection) =>
         connection.ownerUserId === input.ownerUserId &&
+        connection.organizationId === input.organizationId &&
         (connection.id === input.id || connection.guildId === input.guildId),
     );
     const existing = existingIndex >= 0 ? store.discordConnections[existingIndex] : null;

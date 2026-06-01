@@ -419,9 +419,9 @@ export const PLATFORM_SCHEMA_SQL = [
     channel_id TEXT,
     channel_name TEXT,
     created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL,
-    UNIQUE (owner_user_id, guild_id)
+    updated_at TIMESTAMPTZ NOT NULL
   )`,
+  `ALTER TABLE discord_connections DROP CONSTRAINT IF EXISTS discord_connections_owner_user_id_guild_id_key`,
   `CREATE TABLE IF NOT EXISTS classroom_generation_jobs (
     id TEXT PRIMARY KEY,
     request_key TEXT,
@@ -468,6 +468,11 @@ export const PLATFORM_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_org_start ON scheduled_class_events (organization_id, starts_at ASC)`,
   `CREATE INDEX IF NOT EXISTS idx_scheduled_class_events_discord_start ON scheduled_class_events (starts_at ASC) WHERE discord_sync IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_discord_connections_owner ON discord_connections (owner_user_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_discord_connections_owner_org_guild ON discord_connections (
+    owner_user_id,
+    COALESCE(organization_id, ''),
+    guild_id
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_classroom_generation_jobs_owner_updated ON classroom_generation_jobs (owner_user_id, owner_organization_id, updated_at DESC)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_generation_jobs_active_request_key ON classroom_generation_jobs (
     request_key,

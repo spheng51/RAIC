@@ -2,7 +2,7 @@
 
 This roadmap translates the current single-branch model into a dated execution sequence with one validated slice landing at a time.
 
-The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md). The v0.5.0 release evidence is captured in [Release Evidence: v0.5.0 Source-Grounded Experience Presets (2026-05-18)](./release-evidence-v0.5.0.md).
+The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliable Adaptive Learning Platform (2026-05-17)](./execution-plans/2026-05-17-v0.4.0-reliable-adaptive-learning-platform.md). The v0.5.0 release evidence is captured in [Release Evidence: v0.5.0 Source-Grounded Experience Presets (2026-05-18)](./release-evidence-v0.5.0.md). The latest release evidence is tracked in [v0.7.0 Discord Scheduled-Class Beta Readiness](./release-evidence-v0.7.0.md).
 
 ## 1) Operating baseline
 
@@ -32,10 +32,14 @@ The completed v0.4.0 cycle plan is documented in [Execution Plan: v0.4.0 Reliabl
   - Goal: monitor History Vlog source failures, web-search fallback behavior, source-mode metadata, and teacher-facing source-required UX.
   - Acceptance: only bug fixes, docs, smoke-test coverage, telemetry clarity, and small source-required UX improvements.
 
-- Next feature milestone: `v0.6.0` Adaptive Student Beta Readiness
-  - Goal: write privacy, consent, retention, and public API review before adding student-facing adaptation.
-  - Acceptance: behavior is feature-flagged, reversible, and covered by non-leakage tests before release.
+- Completed milestone: `v0.6.0` Adaptive Student Beta Readiness
+  - Result: student adaptation remains disabled by default behind `RAIC_STUDENT_ADAPTATION_BETA`, with consent-gated access paths and non-leakage tests.
   - Execution plan: [v0.6.0 Adaptive Student Beta Readiness (2026-05-18)](./execution-plans/2026-05-18-v0.6.0-adaptive-student-beta-readiness.md).
+
+- Active feature milestone: `v0.7.0` Discord Scheduled-Class Beta Readiness
+  - Goal: ship signed-in teacher Discord scheduled-class sync, reminders, and teacher UI as a production beta.
+  - Acceptance: preview credentials and smoke pass first, clean-main gates pass after merge, production smoke evidence is captured, and `v0.7.0` is tagged.
+  - Draft evidence: [v0.7.0 Discord Scheduled-Class Beta Readiness](./release-evidence-v0.7.0.md).
 
 ## 3) Performance and ops overlap
 

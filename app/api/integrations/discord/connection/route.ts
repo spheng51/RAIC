@@ -11,10 +11,15 @@ import {
   apiSuccessWithRequestSession,
   API_ERROR_CODES,
 } from '@/lib/server/api-response';
-import { listDiscordGuildChannels } from '@/lib/server/discord';
+import {
+  getDiscordConfig,
+  listDiscordGuildChannels,
+  normalizeDiscordError,
+} from '@/lib/server/discord';
 import type {
   DiscordChannelSummary,
   DiscordConnectionSummary,
+  DiscordIntegrationSnapshot,
 } from '@/lib/types/scheduled-classes';
 
 interface ConnectionBody {
@@ -39,16 +44,40 @@ function toSummary(connection: {
   };
 }
 
-async function readConnectionSnapshot(ownerUserId: string) {
-  const connections = await listDiscordConnectionsForUser(ownerUserId);
-  const connection = connections[0] ?? null;
+function connectionMatchesOrganization(
+  connection: { organizationId: string | null },
+  organizationId: string | null,
+): boolean {
+  return connection.organizationId === organizationId;
+}
+
+async function readConnectionSnapshot(
+  ownerUserId: string,
+  organizationId: string | null,
+  options: { connectionId?: string } = {},
+): Promise<DiscordIntegrationSnapshot> {
+  const configured = Boolean(getDiscordConfig());
+  const connections = (await listDiscordConnectionsForUser(ownerUserId)).filter((connection) =>
+    connectionMatchesOrganization(connection, organizationId),
+  );
+  const connection = options.connectionId
+    ? (connections.find((item) => item.id === options.connectionId) ?? null)
+    : (connections[0] ?? null);
   let channels: DiscordChannelSummary[] = [];
-  if (connection) {
-    channels = await listDiscordGuildChannels(connection.guildId).catch(() => []);
+  let channelsError: string | undefined;
+  if (configured && connection) {
+    try {
+      channels = await listDiscordGuildChannels(connection.guildId);
+    } catch (error) {
+      channelsError = normalizeDiscordError(error);
+    }
   }
   return {
+    configured,
     connection: connection ? toSummary(connection) : null,
+    connections: connections.map(toSummary),
     channels: channels.map((channel) => ({ id: channel.id, name: channel.name })),
+    ...(channelsError ? { channelsError } : {}),
   };
 }
 
@@ -58,7 +87,18 @@ export async function GET(request: NextRequest) {
     return auth;
   }
 
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const connectionId = request.nextUrl.searchParams.get('connectionId')?.trim() || undefined;
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null, {
+    connectionId,
+  });
+  if (connectionId && !snapshot.connection) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
@@ -86,6 +126,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!getDiscordConfig()) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.MISSING_API_KEY,
+      503,
+      'Discord integration is not configured.',
+    );
+  }
+
   const connection = await readDiscordConnectionForUser(auth.user.id, connectionId);
   if (!connection) {
     return apiErrorWithRequestSession(
@@ -95,8 +144,28 @@ export async function POST(request: NextRequest) {
       'Discord connection not found.',
     );
   }
+  if (!connectionMatchesOrganization(connection, auth.session.organizationId ?? null)) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
 
-  const channels = await listDiscordGuildChannels(connection.guildId);
+  let channels: DiscordChannelSummary[];
+  try {
+    channels = await listDiscordGuildChannels(connection.guildId);
+  } catch (error) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.UPSTREAM_ERROR,
+      502,
+      'Unable to load Discord announcement channels.',
+      normalizeDiscordError(error),
+    );
+  }
+
   const channel = channels.find((item) => item.id === channelId);
   if (!channel) {
     return apiErrorWithRequestSession(
@@ -107,7 +176,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await upsertDiscordConnection({
+  const saved = await upsertDiscordConnection({
     ownerUserId: auth.user.id,
     organizationId: auth.session.organizationId ?? null,
     guildId: connection.guildId,
@@ -116,7 +185,9 @@ export async function POST(request: NextRequest) {
     channelName: channel.name,
   });
 
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null, {
+    connectionId: saved.id,
+  });
   return apiSuccessWithRequestSession(request, snapshot);
 }
 
@@ -140,7 +211,20 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
+  const connection = await readDiscordConnectionForUser(auth.user.id, id);
+  if (
+    !connection ||
+    !connectionMatchesOrganization(connection, auth.session.organizationId ?? null)
+  ) {
+    return apiErrorWithRequestSession(
+      request,
+      API_ERROR_CODES.INVALID_REQUEST,
+      404,
+      'Discord connection not found.',
+    );
+  }
+
   await deleteDiscordConnectionForUser(auth.user.id, id);
-  const snapshot = await readConnectionSnapshot(auth.user.id);
+  const snapshot = await readConnectionSnapshot(auth.user.id, auth.session.organizationId ?? null);
   return apiSuccessWithRequestSession(request, snapshot);
 }

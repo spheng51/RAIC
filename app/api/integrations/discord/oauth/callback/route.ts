@@ -5,6 +5,7 @@ import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import {
   DISCORD_OAUTH_STATE_COOKIE,
   exchangeDiscordOAuthCode,
+  getDiscordConfig,
   getDiscordGuild,
   listDiscordGuildChannels,
 } from '@/lib/server/discord';
@@ -12,28 +13,40 @@ import {
 function redirectToStudio(request: NextRequest, status: string) {
   const url = new URL('/studio', request.nextUrl.origin);
   url.searchParams.set('discord', status);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  response.cookies.delete(DISCORD_OAUTH_STATE_COOKIE);
+  return response;
 }
 
 export async function GET(request: NextRequest) {
   const auth = await requireRequestRole(request, ['teacher']);
   if (auth instanceof NextResponse) {
-    return NextResponse.redirect(new URL('/sign-in?redirectTo=/studio', request.nextUrl.origin));
+    const response = NextResponse.redirect(
+      new URL('/sign-in?redirectTo=/studio', request.nextUrl.origin),
+    );
+    response.cookies.delete(DISCORD_OAUTH_STATE_COOKIE);
+    return response;
   }
 
   const expectedState = request.cookies.get(DISCORD_OAUTH_STATE_COOKIE)?.value ?? '';
   const state = request.nextUrl.searchParams.get('state') ?? '';
+  const oauthError = request.nextUrl.searchParams.get('error') ?? '';
   const code = request.nextUrl.searchParams.get('code') ?? '';
   const guildId = request.nextUrl.searchParams.get('guild_id') ?? '';
   const response = redirectToStudio(request, 'connected');
-  response.cookies.delete(DISCORD_OAUTH_STATE_COOKIE);
 
   try {
     if (!expectedState || state !== expectedState) {
       return redirectToStudio(request, 'invalid_state');
     }
+    if (oauthError) {
+      return redirectToStudio(request, 'error');
+    }
     if (!code || !guildId) {
       return redirectToStudio(request, 'missing_guild');
+    }
+    if (!getDiscordConfig()) {
+      return redirectToStudio(request, 'not_configured');
     }
 
     await exchangeDiscordOAuthCode({

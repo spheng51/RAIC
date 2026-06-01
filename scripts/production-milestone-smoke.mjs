@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import process from 'node:process';
 import {
   evaluateOptionalProviderFeature,
@@ -7,24 +9,41 @@ import {
   getFirstEnabledSecretProvider,
   isFriendlyProviderError,
   isRequiredFeature,
+  parseRequiredFeatures,
 } from './lib/production-smoke-readiness.mjs';
 
 const DEFAULT_BASE_URL = 'https://open-raic.com';
 const DEFAULT_MISSING_CLASSROOM_ID = 'missing-milestone-smoke-404';
 
-const baseUrl = normalizeBaseUrl(process.env.RAIC_PRODUCTION_BASE_URL || DEFAULT_BASE_URL);
+const results = [];
+const rawBaseUrl = process.env.RAIC_PRODUCTION_BASE_URL || DEFAULT_BASE_URL;
+const baseUrl = resolveBaseUrl(rawBaseUrl);
 const missingClassroomId =
   process.env.RAIC_SMOKE_MISSING_CLASSROOM_ID || DEFAULT_MISSING_CLASSROOM_ID;
 const allowBlockers = process.argv.includes('--allow-blockers');
-
-const results = [];
+const evidencePath = (process.env.RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH || '').trim();
+const runStartedAt = new Date().toISOString();
 
 function normalizeBaseUrl(rawValue) {
   const parsed = new URL(rawValue);
+  parsed.username = '';
+  parsed.password = '';
   parsed.hash = '';
   parsed.search = '';
   parsed.pathname = parsed.pathname.replace(/\/+$/, '');
   return parsed.toString();
+}
+
+function resolveBaseUrl(rawValue) {
+  try {
+    return normalizeBaseUrl(rawValue);
+  } catch (error) {
+    fail(
+      'Production milestone smoke base URL',
+      `invalid RAIC_PRODUCTION_BASE_URL: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 }
 
 function record(status, label, detail) {
@@ -59,7 +78,69 @@ function recordFeatureEvaluation(label, evaluation) {
   }
 }
 
+function buildSummary() {
+  const failures = results.filter((result) => result.status === 'fail');
+  const blockers = results.filter((result) => result.status === 'block');
+  const skipped = results.filter((result) => result.status === 'skip');
+
+  return {
+    passed: results.length - failures.length - blockers.length - skipped.length,
+    failed: failures.length,
+    blocked: blockers.length,
+    skipped: skipped.length,
+  };
+}
+
+function resolveExitCode(summary) {
+  if (summary.failed > 0) {
+    return 1;
+  }
+
+  if (summary.blocked > 0 && !allowBlockers) {
+    return 2;
+  }
+
+  return 0;
+}
+
+async function writeEvidenceArtifact(summary, exitCode) {
+  if (!evidencePath) {
+    return;
+  }
+
+  const payload = {
+    script: 'production-milestone-smoke',
+    generatedAt: new Date().toISOString(),
+    startedAt: runStartedAt,
+    baseUrl,
+    allowBlockers,
+    preconditions: {
+      requiredProductionFeatures: [
+        ...parseRequiredFeatures(process.env.RAIC_REQUIRED_PRODUCTION_FEATURES),
+      ],
+      requiredDiscord: isRequiredFeature('discord'),
+      requiredMiroFish: isRequiredFeature('mirofish'),
+      missingClassroomId,
+    },
+    summary,
+    results,
+    exitCode,
+    redaction: {
+      policy:
+        'production smoke evidence records only feature names, readiness status, and response diagnostics; provider secrets and credentials are never serialized',
+    },
+  };
+
+  await mkdir(dirname(evidencePath), { recursive: true });
+  await writeFile(evidencePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  console.log(`[production-smoke] Evidence JSON: ${evidencePath}`);
+}
+
 async function fetchJson(path, init = {}) {
+  if (!baseUrl) {
+    throw new Error('base URL is invalid');
+  }
+
   const response = await fetch(new URL(path, baseUrl), {
     ...init,
     headers: {
@@ -112,6 +193,14 @@ async function checkHealth() {
     block('MiroFish readiness', readiness.mirofish?.reason || 'MiroFish is not ready');
   } else {
     skip('MiroFish readiness', 'MiroFish is not required for this release');
+  }
+
+  if (readiness.discord?.ready === true) {
+    pass('Discord readiness', 'production Discord scheduled-class env is configured');
+  } else if (isRequiredFeature('discord')) {
+    block('Discord readiness', readiness.discord?.reason || 'Discord beta is not ready');
+  } else {
+    skip('Discord readiness', 'Discord beta is not required for this release');
   }
 }
 
@@ -266,29 +355,51 @@ async function checkMissingClassroom404s() {
   }
 }
 
+async function summarizeResults() {
+  const summary = buildSummary();
+  const exitCode = resolveExitCode(summary);
+
+  console.log(
+    `[production-smoke] Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.skipped} skipped`,
+  );
+
+  try {
+    await writeEvidenceArtifact(summary, exitCode);
+  } catch (error) {
+    console.error(
+      `[production-smoke] Failed to write evidence JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  process.exitCode = exitCode;
+}
+
 async function main() {
-  console.log(`[production-smoke] Base URL: ${baseUrl}`);
+  console.log(`[production-smoke] Base URL: ${baseUrl || '(invalid)'}`);
+  if (!baseUrl) {
+    await summarizeResults();
+    return;
+  }
+
   await checkHealth();
   const providers = await checkProviderReadiness();
   await checkFriendlyProviderErrors(providers);
   await checkAuthGuard();
   await checkMissingClassroom404s();
 
-  const failures = results.filter((result) => result.status === 'fail');
-  const blockers = results.filter((result) => result.status === 'block');
-  const skipped = results.filter((result) => result.status === 'skip');
-
-  console.log(
-    `[production-smoke] Summary: ${
-      results.length - failures.length - blockers.length - skipped.length
-    } passed, ${failures.length} failed, ${blockers.length} blocked, ${skipped.length} skipped`,
-  );
-
-  if (failures.length > 0) {
-    process.exitCode = 1;
-  } else if (blockers.length > 0 && !allowBlockers) {
-    process.exitCode = 2;
-  }
+  await summarizeResults();
 }
 
-await main();
+try {
+  await main();
+} catch (error) {
+  fail(
+    'Production milestone smoke runtime',
+    error instanceof Error ? error.message : String(error),
+  );
+  await summarizeResults();
+}

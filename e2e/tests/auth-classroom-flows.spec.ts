@@ -340,6 +340,59 @@ test('protected routes redirect unauthenticated users and authenticated users sk
   }
 });
 
+test('public home hides Discord scheduling controls while teacher Studio shows them', async ({
+  browser,
+  page,
+}) => {
+  let teacherContext: BrowserContext | undefined;
+  let publicDiscordRequests = 0;
+
+  try {
+    const teacherSession = createAuthSession({
+      role: 'teacher',
+      userId: 'teacher-discord-visibility',
+      email: 'teacher-discord-visibility@example.com',
+      displayName: 'Teacher Discord Visibility',
+      organizationId: 'org-discord-visibility',
+      organizationName: 'Discord Visibility Academy',
+      organizationSlug: 'discord-visibility-academy',
+    });
+
+    await writePlatformStore({
+      sessions: [teacherSession],
+    });
+
+    await page.route('**/api/integrations/discord/**', (route) => {
+      publicDiscordRequests += 1;
+      return route.fulfill({
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: false, error: 'Public page should not load Discord' }),
+      });
+    });
+    await page.goto(`${APP_BASE_URL}/`);
+    await expect(page.getByTestId('schedule-classes-box')).toBeVisible();
+    await expect(page.getByTestId('schedule-discord-panel')).toHaveCount(0);
+    expect(publicDiscordRequests).toBe(0);
+
+    const teacher = await createAuthedPage(browser, teacherSession.token);
+    teacherContext = teacher.context;
+    const connectionResponse = teacher.page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/integrations/discord/connection') &&
+        response.request().method() === 'GET',
+    );
+    await teacher.page.goto(`${APP_BASE_URL}/studio`);
+    await expect(teacher.page.getByTestId('schedule-classes-box')).toBeVisible();
+    await expect(teacher.page.getByTestId('schedule-discord-panel')).toBeVisible();
+    const response = await connectionResponse;
+    expect(response.ok()).toBeTruthy();
+    await expect(teacher.page.getByText('Discord is not configured')).toBeVisible();
+  } finally {
+    await closeContextIfOpen(teacherContext);
+  }
+});
+
 test('logout clears both web and classroom cookies', async ({ browser }) => {
   let teacherContext: BrowserContext | undefined;
 

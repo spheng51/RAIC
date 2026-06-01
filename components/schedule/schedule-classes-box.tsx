@@ -1,15 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   CalendarClock,
+  Check,
   Clock3,
   Copy,
   Edit3,
+  ExternalLink,
   Loader2,
+  MessageCircle,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
+  Unplug,
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,15 +39,38 @@ import {
 } from '@/components/ui/select';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { cn } from '@/lib/utils';
-import type { ScheduledClassEvent, ScheduledClassEventInput } from '@/lib/types/scheduled-classes';
+import type {
+  DiscordChannelSummary,
+  DiscordConnectionSummary,
+  ScheduledClassEvent,
+  ScheduledClassEventInput,
+} from '@/lib/types/scheduled-classes';
 import { getUpcomingScheduledClassEvents } from '@/lib/utils/scheduled-classes';
 
 const NO_CLASSROOM_VALUE = '__none__';
+const NO_DISCORD_CONNECTION_VALUE = '__discord_connection_none__';
+const NO_DISCORD_CHANNEL_VALUE = '__discord_none__';
 
 export interface ScheduleClassroomOption {
   id: string;
   name: string;
   creationMode?: 'course' | 'game-arcade';
+}
+
+export interface ScheduleDiscordIntegrationState {
+  configured: boolean;
+  loading?: boolean;
+  busy?: boolean;
+  error?: string | null;
+  syncingEventId?: string | null;
+  connection: DiscordConnectionSummary | null;
+  connections: DiscordConnectionSummary[];
+  channels: DiscordChannelSummary[];
+  onConnect: () => void;
+  onSelectConnection: (connectionId: string) => Promise<void>;
+  onSaveChannel: (connectionId: string, channelId: string) => Promise<void>;
+  onDisconnect: (connectionId: string) => Promise<void>;
+  onSyncEvent: (eventId: string, connectionId?: string) => Promise<void>;
 }
 
 interface ScheduleClassesBoxProps {
@@ -52,6 +81,7 @@ interface ScheduleClassesBoxProps {
   readonly onDelete: (id: string) => Promise<void>;
   readonly onOpenClassroom: (classroomId: string) => void;
   readonly gameModeActive?: boolean;
+  readonly discordIntegration?: ScheduleDiscordIntegrationState;
 }
 
 interface ScheduleFormState {
@@ -126,6 +156,27 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function getSafeDiscordEventUrl(value?: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'discord.com' ||
+      url.search ||
+      url.hash ||
+      pathParts.length !== 3 ||
+      pathParts[0] !== 'events'
+    ) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function ScheduleClassesBox({
   events,
   classrooms,
@@ -134,6 +185,7 @@ export function ScheduleClassesBox({
   onDelete,
   onOpenClassroom,
   gameModeActive = false,
+  discordIntegration,
 }: ScheduleClassesBoxProps) {
   const { t } = useI18n();
   const upcomingEvents = useMemo(() => getUpcomingScheduledClassEvents(events), [events]);
@@ -147,6 +199,27 @@ export function ScheduleClassesBox({
   const [busyAction, setBusyAction] = useState<'save' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [selectedDiscordConnectionId, setSelectedDiscordConnectionId] = useState('');
+  const [selectedDiscordChannelId, setSelectedDiscordChannelId] = useState('');
+  const [discordAction, setDiscordAction] = useState<string | null>(null);
+  const [discordActionError, setDiscordActionError] = useState<string | null>(null);
+  const discordConnections = useMemo(() => {
+    if (!discordIntegration) return [];
+    return discordIntegration.connections.length > 0
+      ? discordIntegration.connections
+      : discordIntegration.connection
+        ? [discordIntegration.connection]
+        : [];
+  }, [discordIntegration]);
+  const selectedDiscordConnection =
+    discordConnections.find((connection) => connection.id === selectedDiscordConnectionId) ??
+    discordIntegration?.connection ??
+    null;
+
+  useEffect(() => {
+    setSelectedDiscordConnectionId(discordIntegration?.connection?.id ?? '');
+    setSelectedDiscordChannelId(discordIntegration?.connection?.channelId ?? '');
+  }, [discordIntegration?.connection?.channelId, discordIntegration?.connection?.id]);
 
   const openCreateDialog = () => {
     setEditingEvent(null);
@@ -209,6 +282,70 @@ export function ScheduleClassesBox({
     );
   };
 
+  const runDiscordAction = async (action: string, task: () => Promise<void>) => {
+    setDiscordAction(action);
+    setDiscordActionError(null);
+    try {
+      await task();
+      return true;
+    } catch (err) {
+      setDiscordActionError(
+        err instanceof Error ? err.message : t('home.schedule.discord.actionFailed'),
+      );
+      return false;
+    } finally {
+      setDiscordAction(null);
+    }
+  };
+
+  const selectDiscordConnection = async (connectionId: string) => {
+    if (!discordIntegration || !connectionId) return;
+    const connection = discordConnections.find((item) => item.id === connectionId) ?? null;
+    if (!connection) return;
+
+    const previousConnectionId = selectedDiscordConnection?.id ?? '';
+    const previousChannelId = selectedDiscordChannelId;
+    setSelectedDiscordConnectionId(connectionId);
+    setSelectedDiscordChannelId(connection.channelId ?? '');
+    if (connectionId === discordIntegration.connection?.id) return;
+
+    const loaded = await runDiscordAction('select-connection', () =>
+      discordIntegration.onSelectConnection(connectionId),
+    );
+    if (!loaded) {
+      setSelectedDiscordConnectionId(previousConnectionId);
+      setSelectedDiscordChannelId(previousChannelId);
+    }
+  };
+
+  const saveDiscordChannel = async () => {
+    const connection = selectedDiscordConnection;
+    if (!discordIntegration || !connection || !selectedDiscordChannelId) return;
+    await runDiscordAction('save-channel', () =>
+      discordIntegration.onSaveChannel(connection.id, selectedDiscordChannelId),
+    );
+  };
+
+  const disconnectDiscord = async () => {
+    const connection = selectedDiscordConnection;
+    if (!discordIntegration || !connection) return;
+    await runDiscordAction('disconnect', () => discordIntegration.onDisconnect(connection.id));
+  };
+
+  const syncDiscordEvent = async (event: ScheduledClassEvent) => {
+    if (
+      !discordIntegration ||
+      !selectedDiscordConnection ||
+      !event.classroomId ||
+      !classroomById.has(event.classroomId)
+    ) {
+      return;
+    }
+    await runDiscordAction(`sync:${event.id}`, () =>
+      discordIntegration.onSyncEvent(event.id, selectedDiscordConnection.id),
+    );
+  };
+
   const selectedClassroom = form.classroomId ? classroomById.get(form.classroomId) : undefined;
   const canUseMultiplayerGame =
     gameModeActive ||
@@ -247,6 +384,159 @@ export function ScheduleClassesBox({
             </Button>
           </div>
 
+          {discordIntegration ? (
+            <div
+              data-testid="schedule-discord-panel"
+              className="mt-3 flex flex-col gap-2 border-t border-violet-100/80 pt-3 pl-2 dark:border-violet-500/15"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2 text-xs">
+                  <MessageCircle className="size-3.5 shrink-0 text-indigo-500" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-800 dark:text-slate-100">
+                      {t('home.schedule.discord.title')}
+                    </p>
+                    <p className="truncate text-muted-foreground">
+                      {!discordIntegration.configured
+                        ? t('home.schedule.discord.notConfigured')
+                        : selectedDiscordConnection
+                          ? `${selectedDiscordConnection.guildName}${
+                              selectedDiscordConnection.channelName
+                                ? ` · #${selectedDiscordConnection.channelName}`
+                                : ''
+                            }`
+                          : t('home.schedule.discord.notConnected')}
+                    </p>
+                  </div>
+                </div>
+
+                {!discordIntegration.configured ? (
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="outline" disabled>
+                      {t('home.schedule.discord.connect')}
+                    </Button>
+                    {selectedDiscordConnection ? (
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={t('home.schedule.discord.disconnect')}
+                        disabled={discordIntegration.busy || discordAction !== null}
+                        onClick={() => void disconnectDiscord()}
+                      >
+                        {discordAction === 'disconnect' ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Unplug className="size-3.5" />
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : !selectedDiscordConnection ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={discordIntegration.loading || discordIntegration.busy}
+                    onClick={discordIntegration.onConnect}
+                  >
+                    {discordIntegration.loading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    {t('home.schedule.discord.connect')}
+                  </Button>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {discordConnections.length > 1 ? (
+                      <Select
+                        value={selectedDiscordConnection.id || NO_DISCORD_CONNECTION_VALUE}
+                        onValueChange={(value) => {
+                          if (value !== NO_DISCORD_CONNECTION_VALUE) {
+                            void selectDiscordConnection(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          aria-label={t('home.schedule.discord.title')}
+                          className="h-8 w-44 text-xs"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {discordConnections.map((connection) => (
+                            <SelectItem key={connection.id} value={connection.id}>
+                              {connection.guildName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                    <Select
+                      value={selectedDiscordChannelId || NO_DISCORD_CHANNEL_VALUE}
+                      onValueChange={(value) =>
+                        setSelectedDiscordChannelId(value === NO_DISCORD_CHANNEL_VALUE ? '' : value)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_DISCORD_CHANNEL_VALUE}>
+                          {t('home.schedule.discord.noChannel')}
+                        </SelectItem>
+                        {discordIntegration.channels.map((channel) => (
+                          <SelectItem key={channel.id} value={channel.id}>
+                            #{channel.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        discordIntegration.busy ||
+                        discordAction !== null ||
+                        !selectedDiscordConnection ||
+                        !selectedDiscordChannelId ||
+                        selectedDiscordChannelId === selectedDiscordConnection.channelId
+                      }
+                      onClick={() => void saveDiscordChannel()}
+                    >
+                      {discordAction === 'save-channel' ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Check className="size-3.5" />
+                      )}
+                      {t('home.schedule.discord.saveChannel')}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={t('home.schedule.discord.disconnect')}
+                      disabled={discordIntegration.busy || discordAction !== null}
+                      onClick={() => void disconnectDiscord()}
+                    >
+                      {discordAction === 'disconnect' ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Unplug className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {discordIntegration.error || discordActionError ? (
+                <p className="flex items-start gap-2 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{discordActionError ?? discordIntegration.error}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-3 overflow-hidden rounded-xl border border-violet-100/70 bg-violet-50/40 dark:border-violet-500/15 dark:bg-violet-500/5">
             {upcomingEvents.length === 0 ? (
               <div className="flex items-center justify-between gap-3 px-3 py-3 text-sm text-muted-foreground">
@@ -263,6 +553,25 @@ export function ScheduleClassesBox({
                   const rowLabel = `${event.title} ${formatDate(event.startsAt)} ${formatTime(
                     event.startsAt,
                   )}`;
+                  const discordSyncAction = `sync:${event.id}`;
+                  const canSyncDiscord = Boolean(
+                    discordIntegration?.configured &&
+                    selectedDiscordConnection?.channelId &&
+                    canOpen,
+                  );
+                  const isSyncingDiscord =
+                    discordAction === discordSyncAction ||
+                    discordIntegration?.syncingEventId === event.id;
+                  const discordStatus = event.discordSync?.syncWarning
+                    ? t('home.schedule.discord.warning')
+                    : event.discordSync?.reminderSentAt
+                      ? t('home.schedule.discord.reminderSent')
+                      : event.discordSync?.lastSyncedAt
+                        ? t('home.schedule.discord.synced')
+                        : null;
+                  const discordEventUrl = getSafeDiscordEventUrl(
+                    event.discordSync?.scheduledEventUrl,
+                  );
 
                   return (
                     <li key={event.id} className="group flex items-center gap-2 px-2 py-2">
@@ -299,10 +608,56 @@ export function ScheduleClassesBox({
                                   ? ` · ${t('home.schedule.unlinkedClassroom')}`
                                   : ''}
                               {event.multiplayerGame?.enabled ? ' · Multiplayer' : ''}
+                              {discordIntegration && discordStatus ? ` · ${discordStatus}` : ''}
                             </p>
+                            {discordIntegration && event.discordSync?.syncWarning ? (
+                              <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                                <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                                <span className="line-clamp-2">
+                                  {event.discordSync.syncWarning}
+                                </span>
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </button>
+                      {discordIntegration ? (
+                        <>
+                          {discordEventUrl ? (
+                            <Button
+                              asChild
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={t('home.schedule.discord.openEvent')}
+                              className="opacity-80 hover:bg-white/80 dark:hover:bg-white/5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                            >
+                              <a href={discordEventUrl} target="_blank" rel="noreferrer">
+                                <ExternalLink className="size-3.5" />
+                              </a>
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('home.schedule.discord.syncClass')}
+                            disabled={
+                              discordIntegration.busy ||
+                              discordAction !== null ||
+                              isSyncingDiscord ||
+                              !canSyncDiscord
+                            }
+                            className="opacity-80 hover:bg-white/80 disabled:opacity-40 dark:hover:bg-white/5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                            onClick={() => void syncDiscordEvent(event)}
+                          >
+                            {isSyncingDiscord ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="size-3.5" />
+                            )}
+                          </Button>
+                        </>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"

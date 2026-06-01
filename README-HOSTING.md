@@ -17,7 +17,7 @@ The legacy pre-cutover deployment path is retired. Production and staging deploy
 
 ### Prerequisites
 
-- Node.js **20.9+**
+- Node.js **24.x** for parity with CI, Vercel runtime policy, and release/ops scripts
 - pnpm **10+**
 
 ### Setup
@@ -97,7 +97,7 @@ Public launch on `open-raic.com`:
 7. Run the full local release gates on clean local `main` before each production merge:
    - `corepack pnpm run secrets:scan`
    - `corepack pnpm run ops:drift`
-   - `VERCEL_PROJECT_ID=<project-id> VERCEL_TEAM_ID=<team-id> VERCEL_TOKEN=<token> corepack pnpm run ops:env:vercel`
+   - `corepack pnpm run ops:env:vercel` from a linked, logged-in Vercel CLI checkout, or `VERCEL_PROJECT_ID=<project-id> VERCEL_TEAM_ID=<team-id> VERCEL_TOKEN=<token> corepack pnpm run ops:env:vercel` for REST-token automation
    - `corepack pnpm run check`
    - `corepack pnpm run build`
    - `corepack pnpm run test:mirofish:gate`
@@ -105,6 +105,8 @@ Public launch on `open-raic.com`:
    - `CI=1 corepack pnpm run test:e2e`
    - `corepack pnpm run benchmark:milestone`
    - `corepack pnpm run ops:verify`
+   - For releases where Discord scheduled-class sync is in scope, run the Vercel env audit with `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` for the target context before smoke sign-off.
+   During PR hardening, `corepack pnpm run ops:drift:pr` can provide branch-local drift evidence from a feature worktree. It does not replace the final clean-`main` `ops:drift` or `ops:verify` gates.
 8. Merge to `main`, let Vercel deploy production automatically, then smoke-check the auth and governed surfaces before declaring the release healthy:
    - Signed out: `/studio` redirects to `/sign-in?next=%2Fstudio`
    - Signed out: `/admin` redirects to `/sign-in?next=%2Fadmin`
@@ -117,7 +119,8 @@ Public launch on `open-raic.com`:
    - One classroom flow still works end to end
    - `corepack pnpm run smoke:production:milestone` passes against the production origin
    - `corepack pnpm run smoke:production:classroom` passes its automated guard checks, then complete the signed-in manual checklist it prints for Make shareable, join-link entry, and multiplayer scheduling
-   - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke.
+   - For the Discord scheduled-class beta, run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before credentials are available, adding `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` when the preview is behind Vercel deployment protection. A pre-credential callback can return `?discord=not_configured`; treat that as the expected readiness signal until Discord env exists. Then rerun `corepack pnpm run smoke:discord-beta` with a signed-in teacher cookie, Discord test server, scheduled class id, and cron secret before production sign-off, where the callback should return `?discord=connected`.
+   - Optional feature smokes are skipped unless required. To make a feature release-blocking, set `RAIC_REQUIRED_PRODUCTION_FEATURES=mirofish,discord,tts,image,video,websearch` or the specific `RAIC_REQUIRE_<FEATURE>_SMOKE=true` flag before running the milestone smoke. When `discord` is required, the milestone smoke checks health readiness for `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`; still run `smoke:discord-beta` for the credentialed teacher/guild sync flow. Set `RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH` and `RAIC_DISCORD_SMOKE_EVIDENCE_PATH` to write sanitized JSON artifacts for release evidence.
 9. Roll back with Vercel if production is unhealthy.
 
 Recommended when you want easiest CI/CD and global edge delivery.
@@ -139,7 +142,7 @@ Recommended for self-hosting on a VPS or internal server.
 
 ## Option C: Traditional VM / Bare Metal
 
-1. Install Node.js + pnpm.
+1. Install Node.js 24.x + pnpm 10+.
 2. Clone repo, copy the previous `data/` directory forward if `DATABASE_URL` is unset, and configure `.env.local`.
 3. Run `pnpm build && pnpm start`.
 4. Put Nginx/Caddy in front for TLS and reverse proxy.
@@ -165,13 +168,36 @@ Recommended for managed org configuration:
 Production Vercel env audit:
 
 ```bash
+corepack pnpm run ops:env:vercel
+```
+
+By default, the audit uses `VERCEL_TOKEN`/`VERCEL_API_TOKEN` plus `VERCEL_PROJECT_ID` when provided. Without a REST token, it falls back to the logged-in Vercel CLI for the linked project and sanitizes the CLI JSON down to key/target metadata before auditing. The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
+
+For deterministic REST-token automation:
+
+```bash
 VERCEL_PROJECT_ID=prj_... \
 VERCEL_TEAM_ID=team_... \
 VERCEL_TOKEN=... \
 corepack pnpm run ops:env:vercel
 ```
 
-The audit prints only present/missing key names, never secret values. If Vercel auth or env listing is unavailable, use the printed manual fallback checklist in the Vercel dashboard and record only presence status.
+Discord beta Vercel env audit:
+
+```bash
+VERCEL_ENV_AUDIT_CONTEXTS=preview \
+VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord \
+corepack pnpm run ops:env:vercel
+```
+
+For production Discord beta sign-off, repeat with `VERCEL_ENV_AUDIT_CONTEXTS=production` after the preview smoke has passed.
+
+Discord app setup for this beta:
+
+- Register the preview and production callback URLs at `/api/integrations/discord/oauth/callback` before credentialed smoke.
+- RAIC's Discord OAuth start route requests scopes `bot applications.commands identify guilds` and permission bitfield `8589937664`; use those same values when manually validating the bot install.
+- Confirm the installed bot can see and send messages in the selected announcement channel and can create, update, and delete scheduled events in the disposable smoke guild.
+- Hosted reminder cron requests require `CRON_SECRET`. For local-only manual cron testing without a secret, set `CRON_ALLOW_NO_SECRET=true` and call the cron route from `localhost`; keep this unset in preview, staging, and production.
 
 Optional advanced parsing:
 
@@ -186,6 +212,27 @@ Optional production features:
 - `MIROFISH_EMBED_SECRET`
 - `MIROFISH_AUTHORING_ENABLED` (teacher-server AI-guided creation inside the classroom MiroFish dialog)
 - `MIROFISH_MULTI_USER_ENABLED`
+- `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` for Discord scheduled-class sync and reminders
+
+Discord beta smoke inputs are operator-only local values:
+
+- `RAIC_DISCORD_SMOKE_BASE_URL` chooses the preview or production origin.
+- `RAIC_DISCORD_SMOKE_COOKIE` is the full signed-in teacher `Cookie` header used only for the smoke run.
+- `RAIC_DISCORD_SMOKE_CONNECTION_ID` selects the Discord guild for channel save and scheduled-class sync.
+- `RAIC_DISCORD_SMOKE_CHANNEL_ID` automates channel save for the selected Discord connection.
+- `RAIC_DISCORD_SMOKE_EVENT_ID` automates syncing one future teacher-owned scheduled class with a linked classroom.
+- `RAIC_DISCORD_SMOKE_CRON_SECRET` is preferred over `CRON_SECRET` for smoke cron invocation.
+- `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` optionally bypasses Vercel deployment protection for preview API smoke. Keep it operator-local and do not store it in project env.
+- `RAIC_DISCORD_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence with summary counts and non-secret precondition booleans, creating parent directories as needed.
+- `RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH` writes sanitized JSON evidence for `smoke:production:milestone`, creating parent directories as needed.
+
+Protected preview example:
+
+```bash
+read -rs RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
+export RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN
+RAIC_DISCORD_SMOKE_BASE_URL=https://<preview>.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers
+```
 
 If you enable `MIROFISH_AUTHORING_ENABLED`, the MiroFish wrapper also needs to expose:
 

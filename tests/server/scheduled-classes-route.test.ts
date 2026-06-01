@@ -262,22 +262,166 @@ describe('/api/scheduled-classes', () => {
     expect(deleteScheduledClassForAccessMock).toHaveBeenCalledWith(scope, 'event-1');
   });
 
-  it('requires teacher access', async () => {
+  it('rejects scheduled class updates without an id', async () => {
+    const { PATCH } = await import('@/app/api/scheduled-classes/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: 'Updated lab',
+          startsAt: '2026-05-12T18:00:00.000Z',
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'MISSING_REQUIRED_FIELD',
+      error: 'Missing required field: id',
+    });
+    expect(updateScheduledClassForAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces scheduled class update validation errors as recoverable requests', async () => {
+    updateScheduledClassForAccessMock.mockRejectedValue(
+      new Error('Duration must be between 1 minute and 24 hours.'),
+    );
+
+    const { PATCH } = await import('@/app/api/scheduled-classes/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: 'event-1',
+          title: 'Updated lab',
+          startsAt: '2026-05-12T18:00:00.000Z',
+          durationMinutes: 'abc',
+        }),
+      }),
+    );
+    const json = await response.json();
+    const [, , input] = updateScheduledClassForAccessMock.mock.calls[0];
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Duration must be between 1 minute and 24 hours.',
+    });
+    expect(Number.isNaN(input.durationMinutes)).toBe(true);
+  });
+
+  it('rejects multiplayer updates for non-game classrooms before persistence', async () => {
+    const { PATCH } = await import('@/app/api/scheduled-classes/route');
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: 'event-1',
+          title: 'Physics game',
+          startsAt: '2026-05-12T18:00:00.000Z',
+          classroomId: 'room-1',
+          multiplayerGame: { enabled: true, mode: 'both', linkPolicy: 'always_open' },
+        }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Multiplayer scheduling is available for game-mode classrooms only.',
+    });
+    expect(updateScheduledClassForAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('deletes scheduled classes from the query id fallback', async () => {
+    deleteScheduledClassForAccessMock.mockResolvedValue(true);
+
+    const { DELETE } = await import('@/app/api/scheduled-classes/route');
+    const response = await DELETE(
+      new NextRequest('http://localhost/api/scheduled-classes?id=event-1', {
+        method: 'DELETE',
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ success: true, event: null });
+    expect(deleteScheduledClassForAccessMock).toHaveBeenCalledWith(scope, 'event-1');
+  });
+
+  it('rejects scheduled class deletes without an id', async () => {
+    const { DELETE } = await import('@/app/api/scheduled-classes/route');
+    const response = await DELETE(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'DELETE',
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'MISSING_REQUIRED_FIELD',
+      error: 'Missing required field: id',
+    });
+    expect(deleteScheduledClassForAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('requires teacher access for every scheduled-class route', async () => {
     requireRequestRoleMock.mockResolvedValue(
       NextResponse.json(
         {
           success: false,
-          errorCode: 'UNAUTHORIZED',
-          error: 'Authentication required',
+          errorCode: 'FORBIDDEN',
+          error: 'You do not have permission to perform this action',
         },
-        { status: 401 },
+        { status: 403 },
       ),
     );
 
-    const { GET } = await import('@/app/api/scheduled-classes/route');
-    const response = await GET(new NextRequest('http://localhost/api/scheduled-classes'));
+    const { DELETE, GET, PATCH, POST } = await import('@/app/api/scheduled-classes/route');
+    const getResponse = await GET(new NextRequest('http://localhost/api/scheduled-classes'));
+    const postResponse = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Physics', startsAt: '2099-05-12T17:00:00.000Z' }),
+      }),
+    );
+    const patchResponse = await PATCH(
+      new NextRequest('http://localhost/api/scheduled-classes', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: 'event-1',
+          title: 'Physics',
+          startsAt: '2099-05-12T17:00:00.000Z',
+        }),
+      }),
+    );
+    const deleteResponse = await DELETE(
+      new NextRequest('http://localhost/api/scheduled-classes?id=event-1', {
+        method: 'DELETE',
+      }),
+    );
 
-    expect(response.status).toBe(401);
+    expect(getResponse.status).toBe(403);
+    expect(postResponse.status).toBe(403);
+    expect(patchResponse.status).toBe(403);
+    expect(deleteResponse.status).toBe(403);
+    expect(requireRequestRoleMock).toHaveBeenCalledTimes(4);
+    expect(requireRequestRoleMock.mock.calls.map(([, roles]) => roles)).toEqual([
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+    ]);
     expect(listScheduledClassesForAccessMock).not.toHaveBeenCalled();
+    expect(createScheduledClassForAccessMock).not.toHaveBeenCalled();
+    expect(updateScheduledClassForAccessMock).not.toHaveBeenCalled();
+    expect(deleteScheduledClassForAccessMock).not.toHaveBeenCalled();
   });
 });

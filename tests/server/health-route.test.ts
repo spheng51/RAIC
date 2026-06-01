@@ -69,10 +69,14 @@ describe('GET /api/health', () => {
     getServerTTSProvidersMock.mockReturnValue({});
   });
 
-  it('returns distinct readiness details for auth, storage, encryption, and MiroFish', async () => {
+  it('returns distinct readiness details for auth, storage, encryption, Discord, and MiroFish', async () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_CLIENT_ID', 'google-client-id');
     vi.stubEnv('RAIC_SECRET_ENCRYPTION_KEY', 'encryption-key');
     vi.stubEnv('DATABASE_URL', 'postgres://localhost/raic');
+    vi.stubEnv('DISCORD_CLIENT_ID', 'discord-client-id');
+    vi.stubEnv('DISCORD_CLIENT_SECRET', 'discord-client-secret');
+    vi.stubEnv('DISCORD_BOT_TOKEN', 'discord-bot-token');
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
     vi.stubEnv('MIROFISH_BASE_URL', 'https://mirofish.example');
     vi.stubEnv('MIROFISH_API_BASE_URL', 'https://mirofish-api.example');
     vi.stubEnv('MIROFISH_API_KEY', 'mirofish-api-key');
@@ -114,6 +118,14 @@ describe('GET /api/health', () => {
         reason: null,
         configured: true,
       },
+      discord: {
+        ready: true,
+        reason: null,
+        clientIdConfigured: true,
+        clientSecretConfigured: true,
+        botTokenConfigured: true,
+        cronSecretConfigured: true,
+      },
       storage: {
         ready: true,
         reason: null,
@@ -148,6 +160,15 @@ describe('GET /api/health', () => {
     expect(body.readiness.auth.ready).toBe(false);
     expect(body.readiness.auth.reason).toContain('Google sign-in');
     expect(body.readiness.encryption.ready).toBe(false);
+    expect(body.readiness.discord).toEqual({
+      ready: false,
+      reason:
+        'Discord scheduled-class beta requires DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_BOT_TOKEN, and CRON_SECRET',
+      clientIdConfigured: false,
+      clientSecretConfigured: false,
+      botTokenConfigured: false,
+      cronSecretConfigured: false,
+    });
     expect(body.readiness.storage).toEqual({
       ready: false,
       reason: 'schema init failed',

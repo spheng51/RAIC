@@ -1,0 +1,303 @@
+# Release Evidence: v0.7.0 Discord Scheduled-Class Beta Readiness
+
+Date: 2026-05-31
+Target release: `v0.7.0`
+Evidence status: draft branch evidence. Final clean-main gates, live Discord smoke, production deployment ID, and tag are pending.
+
+## Scope
+
+`v0.7.0` ships Discord scheduled-class support as a production beta for signed-in teachers.
+
+- Backend foundation: Discord OAuth/API routes, connection storage, scheduled-event sync, reminder cron, delete cleanup, and access tests.
+- Teacher UI follow-up: Studio schedule-box Discord setup row, channel save/disconnect, per-class sync controls, warning/status display, and teacher-server-only visibility.
+- Release gate: `pnpm run smoke:discord-beta` for automated API guard checks, optional credentialed sync/cron checks, and manual Discord beta smoke checklist.
+- Out of scope: duplicate `* 2.*` cleanup and the older dirty `/repo` worktree.
+
+## Pull Requests
+
+- Backend PR: `#53`, merged into `main` as `de2fdf20a99388748e60804a50a586900375706a`.
+- Teacher UI PR: `#54`, branch `codex/v0.7.0-discord-scheduled-classes-ui`.
+- Notable branch commits:
+  - `303e30d` `feat: add discord schedule teacher UI`
+  - `aade99c` `test: add discord beta smoke gate`
+  - `d43bf01` / `42734e3` evidence and release-readiness doc hardening.
+  - `48db290` scheduled-class route regression tests.
+  - `a706168` / `f49bebc` CI E2E timeout and system-Chrome hardening.
+  - `d651003` release evidence for the green `f49bebc` PR checks.
+  - `42cba11` first fully checked implementation head after protected-preview smoke blocker/bypass handling, GitHub Actions Node 24-native action upgrades, and the `ops:drift` workflow action runtime guard.
+  - `786e241` one-time Discord OAuth state-cookie cleanup on every callback redirect path.
+  - `639a6fb` recoverable `UPSTREAM_ERROR` response when Discord channel loading fails while saving the announcement channel.
+  - `bd2b20c` Discord readiness hardening checkpoint; GitHub CI and Vercel preview checks were green at that point.
+  - `fcb110e` feature-aware Vercel env audit for required Discord beta keys, with GitHub CI and Vercel preview checks green.
+  - `08ef6a7` PR-local drift evidence gate and Node 24 hosting prerequisite alignment.
+  - `5d7048a` TypeScript-safe PR-local drift policy fixture; GitHub CI and Vercel preview checks were green for this code snapshot.
+  - `0a36c8c` / `20217e8` recoverable Discord connection warnings, explicit OAuth denial routing, and Studio callback feedback refresh coverage.
+  - `f1f55eb` missing-config channel-save protection when Discord config is absent.
+  - `d074b03` strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes.
+  - Current hardening slices: multi-guild Discord connection snapshots with selected active connection loading, teacher guild selection, explicit body/query `connectionId` scheduled-class sync with body-over-query precedence, live smoke selected-connection sync payload coverage, production health/readiness reporting for Discord beta env, feature-gated production milestone smoke blocking when Discord is required but not configured, sanitized JSON evidence artifacts for production and Discord smoke runs, service-level explicit connection override and cross-org rejection coverage, recoverable Discord connection snapshot channel-load warnings, explicit OAuth denial routing back to Studio, tested Studio callback feedback/refresh behavior for every Discord callback status, `MISSING_API_KEY` channel-save protection when Discord config is absent, stale connection disconnect recovery when Discord config is absent, strengthened teacher-only access coverage for `GET`/`POST`/`DELETE` connection routes, organization-scoped Discord connection snapshots/channel saves/disconnects, same-guild Discord connection isolation across organizations, scoped Postgres Discord connection upsert race recovery, fail-fast handling for legacy unscoped scheduled-class Discord sync, explicit `not_configured` OAuth callback feedback when Discord config is absent, safe rendering for stored Discord scheduled-event URLs, operator guidance for `?discord=not_configured` pre-credential smoke behavior, automatic recreation of missing upstream Discord scheduled events during re-sync, recoverable failed-sync event reconciliation for persisted warnings, shared scheduled-class event merge handling for returned server events, stale classroom-link Discord sync gating in Studio and server-side classroom access validation before invite/Discord writes, safe `500 INTERNAL_ERROR` handling for unexpected Discord sync API failures without leaking raw details, organization-bound default Discord connection selection during class sync, Discord reminder-state reset when a synced class is rescheduled, atomic Discord reminder claiming to prevent overlapping cron duplicates, targeted reminder finalization/release that avoids stale overwrites after in-flight schedule edits, Studio Discord callback lifecycle hook coverage for toast refresh and URL scrubbing, in-process request-key locking for JSON classroom generation job create-or-reuse, stale classroom generation request-key retry recovery for file and Postgres stores, stricter smoke proof that automated live sync only passes with a valid Discord scheduled-event URL, malformed reminder-cron count rejection, cron unauth smoke guarding, trimmed smoke cron-secret fallback selection, explicit localhost-only `CRON_ALLOW_NO_SECRET` dev override for reminder cron execution without `CRON_SECRET`, Vercel bypass-token redaction from smoke redirect diagnostics, scheduled-event URL secret-param redaction in smoke failure output, scheduled-event URL query/hash suppression in the teacher UI and smoke gate, base-URL username/password redaction in smoke output/evidence, explicit student-session denial for teacher-only request gates, route-level teacher-only assertions across Discord and scheduled-class APIs, tokenless Vercel CLI fallback for secret-safe env presence auditing, case-insensitive Vercel env-audit context parsing, script-boundary coverage for CLI fallback/source-selection behavior, manual fallback warnings for unknown env-audit feature names, and sanitized CLI failure reporting that does not echo raw stderr.
+
+## PR #54 Assumptions
+
+- Before Discord credentials exist, `pnpm run smoke:discord-beta -- --allow-blockers` may pass with blocked/manual live prerequisites, and `?discord=not_configured` is the expected Studio callback signal.
+- A no-credential smoke pass is PR readiness evidence only; it does not replace the credentialed preview smoke or production smoke required for `v0.7.0` closeout.
+- Credentialed preview acceptance requires `configured:true`, a connected disposable Discord test server, a saved announcement channel, a synced future teacher-owned scheduled class with a clean `https://discord.com/events/{guild}/{event}` URL, and reminder cron counts returned with the operator-supplied cron secret.
+- Credential values, teacher cookies, Vercel bypass tokens, Discord server/channel ids, and smoke cron secrets remain operator-local; evidence records only pass/fail/blocker state and sanitized identifiers.
+
+## Branch Evidence
+
+Environment:
+
+- Workspace: `/Users/matthewgore/Desktop/CODEX/Open-RAIC/repo-main`
+- Branch: `codex/v0.7.0-discord-scheduled-classes-ui`
+- Base: `main` at `de2fdf20a99388748e60804a50a586900375706a`
+- Local Node available during this evidence update: `v22.11.0` with expected `engines.node=24.x` warning.
+- Node 24 release-parity checks are listed explicitly with `npx -y node@24 ...`; plain `corepack pnpm ...` entries are local developer-runtime checks and do not replace the final clean-main Node 24 gates.
+
+Passed focused gates:
+
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts`
+  - Result: 28 tests passed, including OAuth callback state-cookie cleanup, explicit OAuth denial routing, missing-config OAuth callback feedback, recoverable connection snapshot channel-load warnings, active-organization connection snapshot/channel-save/disconnect scoping, missing-config channel-save protection, recoverable channel-save error coverage, failed-sync persisted event return, safe `500 INTERNAL_ERROR` handling for unexpected sync failures, and teacher-only `GET`/`POST`/`DELETE` connection-route access coverage.
+- `corepack pnpm test tests/lib/discord-studio-callback.test.ts`
+  - Result: 7 tests passed, covering `connected`, `invalid_state`, `missing_guild`, `not_configured`, `error`, unknown statuses, and the connection-snapshot refresh flag used by `/studio`.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts`
+  - Result: 18 tests passed.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 15 tests passed after protected-preview blocker/bypass coverage, `?discord=not_configured` checklist guidance, cron unauth smoke guarding, whitespace-only smoke cron-secret fallback coverage, richer response diagnostics, redirect URL bypass-token redaction, scheduled-event URL secret-param redaction in sync failure output, invalid-url regression coverage, Discord-event URL query-param rejection, malformed reminder-cron count coverage, and the stricter valid-Discord-event-URL sync proof were added.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 16 tests passed after the live smoke gate started passing `RAIC_DISCORD_SMOKE_CONNECTION_ID` through scheduled-class sync, not only channel save.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts tests/server/production-milestone-smoke-script.test.ts tests/lib/discord-studio-callback-hook.test.tsx`
+  - Result: 3 files passed, 25 tests passed after adding sanitized JSON evidence artifacts for Discord and production smoke scripts plus hook coverage for `?discord=error` and `?discord=missing_guild` refresh/URL-scrub behavior.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts tests/server/production-milestone-smoke-script.test.ts`
+  - Result: 2 files passed, 20 tests passed after smoke evidence artifact writes began creating nested parent directories automatically.
+- `corepack pnpm test tests/server/production-milestone-smoke-script.test.ts tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 2 files passed, 21 tests passed after production milestone smoke began reporting invalid `RAIC_PRODUCTION_BASE_URL` as sanitized failure evidence instead of throwing before summary output.
+- `corepack pnpm test tests/server/production-milestone-smoke-script.test.ts`
+  - Result: 5 tests passed after production milestone smoke runtime fetch failures began proving sanitized summary/evidence output instead of a stack trace.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 18 tests passed after Discord beta smoke invalid-base-url runs began writing sanitized JSON evidence without raw URL leakage.
+- `corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 19 tests passed after Discord beta smoke runtime fetch failures began proving sanitized summary/evidence output.
+- `corepack pnpm test tests/server/production-milestone-smoke-script.test.ts tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 2 files passed, 24 tests passed after smoke base URL normalization began stripping username/password credentials from stdout and JSON evidence in addition to query/hash data.
+- `corepack pnpm test tests/server/authorize.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/production-milestone-smoke-script.test.ts tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 5 files passed, 72 tests passed after adding explicit student-session denial for teacher-only request gates and route-level teacher-role assertions across Discord and scheduled-class APIs.
+- `corepack pnpm test tests/server/authorize.test.ts tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx tests/server/health-route.test.ts tests/server/production-milestone-smoke-script.test.ts tests/lib/discord-studio-callback-hook.test.tsx`
+  - Result: 10 files passed, 116 tests passed after the smoke credential-scrub and explicit student/teacher access hardening slices.
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/discord.test.ts tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 3 files passed, 55 tests passed after requiring an explicit localhost-only `CRON_ALLOW_NO_SECRET=true` development override for no-secret reminder cron execution, adding OAuth install scope/permission bitfield regression coverage, and printing the install contract in the Discord beta smoke checklist.
+- `corepack pnpm exec playwright test e2e/tests/auth-classroom-flows.spec.ts -g "public home hides Discord" --list`
+  - Result: discovered one Chromium E2E test for public-home Discord non-rendering and authenticated teacher Studio Discord setup-panel rendering. The local Playwright browser run timed out waiting for the local web server before assertions ran; GitHub CI provided the authoritative browser-run proof for this slice on `90fcc379eeb61557639691031a234eff098db589`.
+- `corepack pnpm test tests/server/health-route.test.ts tests/server/production-smoke-readiness.test.ts tests/server/production-milestone-smoke-script.test.ts`
+  - Result: 3 files passed, 10 tests passed after health readiness started reporting Discord beta env status and production milestone smoke began blocking when `RAIC_REQUIRED_PRODUCTION_FEATURES=discord` but Discord env is missing.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
+  - Result before the invalid-url and malformed cron-count regressions were added: 9 tests passed under Node 24. The updated 14-test slice passed locally under the available Node runtime; rerun PR CI after this local hardening is pushed for release-runtime coverage.
+- `corepack pnpm test tests/server/scheduled-classes.test.ts`
+  - Result: 13 tests passed, including delete cleanup, missing-event delete tolerance, hard delete failure preservation, synced-class reminder-state reset on reschedule, legacy synced-record connection safety, legacy unscoped sync fail-fast behavior, inaccessible linked-classroom rejection before Discord invite/write side effects, organization-bound default Discord connection selection, cross-organization default-sync rejection, re-sync recreation when the upstream Discord scheduled event is already gone, and persisted warning event propagation after Discord write failures.
+- `corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
+  - Result: 4 tests passed, including the explicit PR-local drift mode guard.
+- `corepack pnpm test tests/server/vercel-env-audit.test.ts`
+  - Result: 12 tests passed after adding sanitized Vercel CLI JSON parsing, REST/CLI env-record sanitization coverage, script-boundary CLI fallback coverage, PATH preservation coverage, explicit API-source no-fallback coverage, manual fallback warnings for unknown required feature names, script-output secret non-leakage assertions, and CLI failure-stderr redaction coverage.
+- `corepack pnpm test tests/server/classroom-generation-job-store.test.ts`
+  - Result: 13 tests passed after adding the in-process request-key mutex for the JSON classroom generation job store and stale request-key retry recovery for file scans, claimed jobs, and Postgres active request-key conflicts.
+- `corepack pnpm test tests/server/classroom-generation-job-store.test.ts tests/server/discord-beta-smoke-script.test.ts tests/server/vercel-env-audit.test.ts`
+  - Result: 3 files passed, 39 tests passed after the stale request-key retry recovery, smoke non-leakage, and env-audit context hardening.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts`
+  - Result: 5 tests passed after adding shared server-event merge coverage for successful and recoverable failed Discord sync responses.
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts`
+  - Result: 2 files passed, 39 tests passed after organization-scoped Discord connection snapshot/save/delete hardening, failed-sync persisted warning reconciliation, and reminder-state reset on rescheduled synced classes.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx`
+  - Result: 5 files passed, 73 tests passed after shared returned-event merge handling was wired into the Studio sync/update paths.
+- `corepack pnpm test tests/components/schedule-classes-box.test.tsx tests/server/scheduled-classes.test.ts`
+  - Result: 2 files passed, 28 tests passed after stale classroom-link Discord sync gating was added to the teacher schedule UI and server sync path.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx`
+  - Result: 5 files passed, 75 tests passed after the stale classroom-link sync gating and server classroom-access validation slice.
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts`
+  - Result: 28 tests passed after unexpected Discord sync failures were split to a safe `500 INTERNAL_ERROR` response while recoverable teacher-action errors remain `400 INVALID_REQUEST`.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx`
+  - Result: 5 files passed, 76 tests passed after the sync error-safety split.
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx`
+  - Result: 3 files passed, 64 tests passed after the multi-guild Discord connection snapshot, selected-guild sync payload, body-over-query sync precedence, and service-level explicit connection override hardening.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx`
+  - Result: 5 files passed, 85 tests passed after the multi-guild Discord connection snapshot, body/query `connectionId` route coverage and precedence, selected teacher guild UI, explicit selected-connection service coverage, and selected-connection smoke sync propagation.
+- `corepack pnpm test tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx tests/server/health-route.test.ts tests/server/production-milestone-smoke-script.test.ts`
+  - Result: 7 files passed, 90 tests passed after the Discord readiness health and production milestone smoke blocker slice.
+- `corepack pnpm test tests/server/discord-connections-repository.test.ts tests/server/scheduled-classes.test.ts`
+  - Result: 2 files passed, 14 tests passed after same-guild Discord connection isolation across organizations, scoped Postgres upsert race recovery, and legacy unscoped scheduled-class sync fail-fast hardening.
+- `corepack pnpm test tests/lib/discord-scheduled-classes.test.ts tests/server/scheduled-classes-repository.test.ts tests/server/scheduled-classes.test.ts`
+  - Result: 3 files passed, 20 tests passed after atomic Discord reminder claiming, targeted reminder finalize/release, overlapping-cron non-duplication coverage, failed-send claim release/retry coverage, in-flight schedule edit preservation, and Postgres conditional claim/finalize/release coverage.
+- `corepack pnpm test tests/server/discord-connections-repository.test.ts tests/server/scheduled-classes-repository.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/lib/discord-studio-callback.test.ts tests/lib/discord-studio-callback-hook.test.tsx tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts tests/server/vercel-env-audit.test.ts tests/server/classroom-generation-job-store.test.ts`
+  - Result: 12 files passed, 126 tests passed after the latest connection scoping, same-guild connection isolation, scoped Postgres upsert race recovery, legacy unscoped sync fail-fast, atomic reminder claiming, targeted reminder finalize/release, failed-sync persisted warning reconciliation, Studio callback lifecycle coverage, stale not-configured connection recovery, reminder reset, stale request-key, smoke non-leakage, and env-audit hardening slices.
+- `corepack pnpm test tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/server/vercel-env-audit.test.ts`
+  - Result: 4 files passed, 56 tests passed after the latest org-bound Discord sync, smoke non-leakage, and env-audit hardening.
+- `corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
+  - Result: 6 files passed, 71 tests passed after the latest org-bound Discord sync and non-leakage hardening.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/lib/discord-scheduled-classes.test.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-beta-smoke-script.test.ts`
+  - Result before the latest org-bound Discord sync and non-leakage hardening: 6 files passed, 52 tests passed.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/ops-check-workflow-policy.test.ts`
+  - Result: 3 tests passed before the later PR-local drift mode case was added; the updated 4-test slice passed locally under the available Node runtime and then passed PR CI's Node 24 TypeScript/test coverage on `5d7048a`.
+- `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/vercel-env-audit.test.ts`
+  - Result: 7 tests passed.
+- `npx -y node@24 ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
+  - Result: completed in 55.38s.
+- `node ./node_modules/typescript/bin/tsc --noEmit --pretty false --incremental false --diagnostics`
+  - Result after CI system-Chrome config update: completed in 13.29s.
+- `PLAYWRIGHT_USE_SYSTEM_CHROME=true corepack pnpm exec playwright test --list`
+  - Result: Playwright loaded config and listed 33 tests in 10 files.
+- `node --check scripts/discord-beta-smoke.mjs`
+  - Result: passed after smoke-gate diagnostics and valid-event-URL enforcement.
+- `node --check scripts/ops-check.mjs`
+- `node --check scripts/vercel-env-audit.mjs`
+- `node --check scripts/lib/vercel-env-audit.mjs`
+- `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md --check`
+  - Result: all matched files use Prettier style after the CLI fallback hardening.
+- `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord node scripts/vercel-env-audit.mjs`
+  - Result: exited 2 as expected without Vercel credentials and printed the manual fallback, including the Discord feature-required key list, without secret values.
+- `node scripts/discord-beta-smoke.mjs --help`
+- `corepack pnpm exec prettier scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
+  - Result: all matched files use Prettier style after the latest smoke-gate hardening.
+- `corepack pnpm exec prettier package.json scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
+- `corepack pnpm exec prettier lib/server/scheduled-classes.ts tests/server/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts scripts/discord-beta-smoke.mjs tests/server/discord-beta-smoke-script.test.ts tests/support/discord-beta-smoke-fetch-mock.mjs --check`
+- `corepack pnpm exec prettier scripts/ops-check.mjs tests/server/ops-check-workflow-policy.test.ts package.json README-HOSTING.md --check`
+- `corepack pnpm exec prettier scripts/vercel-env-audit.mjs scripts/lib/vercel-env-audit.mjs tests/server/vercel-env-audit.test.ts README-HOSTING.md docs/release-evidence-v0.7.0.md --check`
+- `corepack pnpm exec prettier components/schedule/schedule-classes-box.tsx lib/server/scheduled-classes.ts tests/components/schedule-classes-box.test.tsx tests/server/scheduled-classes.test.ts --write`
+  - Result: all touched sync-gating files use Prettier style.
+- `corepack pnpm exec prettier 'app/api/scheduled-classes/[id]/discord-sync/route.ts' tests/server/discord-integration-routes.test.ts --check`
+  - Result: all touched sync error-mapping files use Prettier style.
+- `corepack pnpm exec prettier app/api/integrations/discord/connection/route.ts 'app/api/scheduled-classes/[id]/discord-sync/route.ts' app/page.tsx components/schedule/schedule-classes-box.tsx lib/types/scheduled-classes.ts tests/components/schedule-classes-box.test.tsx tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes.test.ts --check`
+  - Result: all matched files use Prettier style after the multi-guild Discord hardening slice.
+- `corepack pnpm run check:i18n-keys`
+  - Result: i18n key alignment passed.
+- `corepack pnpm exec vitest run tests/components/schedule-classes-box.test.tsx --pool=forks --no-file-parallelism --maxWorkers=1 --reporter=verbose`
+  - Result: 14 tests passed, including stale connection disconnect recovery while Discord config is absent, recoverable Discord integration warning display, and suppression of unsafe stored Discord event links, including event URLs with sensitive query params.
+- `corepack pnpm exec prettier app/api/integrations/discord/oauth/callback/route.ts lib/utils/discord-studio-callback.ts tests/lib/discord-studio-callback.test.ts tests/server/discord-integration-routes.test.ts components/schedule/schedule-classes-box.tsx tests/components/schedule-classes-box.test.tsx --check`
+  - Result: all matched files use Prettier style.
+- `corepack pnpm exec prettier .github/workflows/ci.yml --check`
+- `RAIC_DISCORD_SMOKE_BASE_URL=https://raic-git-codex-v070-discor-908f39-vangorestudios-6959s-projects.vercel.app corepack pnpm run smoke:discord-beta -- --allow-blockers`
+  - Result after the `4f8435a` preview deploy: exited 0 with zero automated failures and one blocker: Vercel deployment protection. Live app API smoke still requires preview auth/bypass plus Discord beta credentials.
+- Protected-preview bypass path is now supported with `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN`; the token is operator-local and must not be stored in project env or release evidence.
+- `ops:env:vercel` now supports `VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord` so preview and production env audits can require `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` without exposing values. When `VERCEL_TOKEN` is absent, it can use the logged-in Vercel CLI and sanitizes `vercel env ls --format json` output down to key/target metadata before auditing.
+- `VERCEL_ENV_AUDIT_CONTEXTS=preview VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+  - Result on the linked Vercel project: exited 1 from the secret-safe Vercel CLI fallback. Preview currently has `BLOB_READ_WRITE_TOKEN`, but is missing `DATABASE_URL`, `RAIC_SECRET_ENCRYPTION_KEY`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_ID`, an LLM provider key, and all four Discord beta keys: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`.
+- `VERCEL_ENV_AUDIT_CONTEXTS=production VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+  - Result on the linked Vercel project: exited 1 from the secret-safe Vercel CLI fallback. Production base keys and `OPENAI_API_KEY` are present, but all four Discord beta keys are missing: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`.
+- `corepack pnpm run ops:drift:pr`
+  - Result: passed on the PR worktree; required a clean working tree, ran CI action runtime policy, and explicitly logged skipped clean-main-only local branch/ref/worktree/scratch-branch hygiene. This is PR evidence only and does not replace final clean-`main` `ops:drift` or `ops:verify`.
+- CI now uses `actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`, and `actions/upload-artifact@v6`, whose action metadata targets Node 24 without the temporary force-runtime override.
+- `ops:drift` enforces those Node 24-native CI action major floors so the release gate catches accidental downgrades.
+- `git diff --check`
+  - Result: no whitespace errors.
+
+Current-slice typecheck and CI note:
+
+- `corepack pnpm exec tsc --noEmit --pretty false --incremental false --diagnostics` completed locally in 12.06s after the missing-config OAuth callback guard and safe Discord event URL rendering, then in 23.28s after missing upstream Discord event recreation, then in 629.31s after the org-bound Discord sync and non-leakage hardening, then in 1167.41s after stale request-key retry recovery and the latest smoke/env-audit hardening, then in 13.36s after organization-scoped connection handling and reminder-state reset hardening, then in 16.35s after stale not-configured connection recovery, then in 12.51s after same-guild connection isolation and legacy unscoped sync fail-fast hardening, then in 13.26s after scoped Postgres upsert race recovery, then in 12.58s after atomic Discord reminder claiming, then in 13.21s after targeted reminder finalization and Studio callback lifecycle hook coverage, then in 12.90s after failed-sync persisted warning reconciliation and trimmed smoke cron-secret fallback coverage, then in 12.96s after shared returned-event merge handling for Studio schedule state, then in 13.14s after stale classroom-link sync gating and server classroom-access validation, then in 12.98s after safe unexpected-sync-failure API handling, then in 11.95s after multi-guild Discord connection selection and explicit `connectionId` sync hardening, then in 12.62s after Discord health readiness and production milestone smoke blocking, then in 13.86s after sanitized smoke evidence artifacts and expanded Studio callback hook coverage. The latest pushed PR code head passed the canonical GitHub CI/Vercel checks; run the canonical clean-main gate after merge before marking `v0.7.0` ready.
+
+Recent completed code CI snapshot:
+
+- PR `#54` CI on `1662481cad7a9c059cb89ceb62158849d9e88110` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
+- The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
+- PR `#54` CI on `90fcc379eeb61557639691031a234eff098db589` is draft, mergeable, and green after adding the public-vs-Studio Discord visibility E2E coverage.
+- Latest green check times on `90fcc379eeb61557639691031a234eff098db589`:
+  - Ops Drift: `2026-06-01T02:43:12Z`
+  - MiroFish Contract Gate: `2026-06-01T02:43:30Z`
+  - Lint, Typecheck & Unit Tests: `2026-06-01T02:44:52Z`
+  - E2E Tests: `2026-06-01T02:45:37Z`
+  - Vercel preview deployment target: `https://vercel.com/vangorestudios-6959s-projects/raic/CAPWAhVUHgMu9Zep9Z4PX9s8SFLi`
+- Latest green check times on `1662481cad7a9c059cb89ceb62158849d9e88110`:
+  - Ops Drift: `2026-05-31T23:11:28Z`
+  - MiroFish Contract Gate: `2026-05-31T23:11:40Z`
+  - Lint, Typecheck & Unit Tests: `2026-05-31T23:13:04Z`
+  - E2E Tests: `2026-05-31T23:14:12Z`
+  - Vercel preview deployment target: `https://vercel.com/vangorestudios-6959s-projects/raic/3kNG33zQMbKeLfXPhBBpDRETdf2T`
+
+Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
+
+- Focused Discord/schedule/component tests.
+- `corepack pnpm run check:i18n-keys`
+- `corepack pnpm exec tsc --noEmit`
+- `corepack pnpm run check`
+- `corepack pnpm lint`
+- `corepack pnpm test`
+- `corepack pnpm run build`
+- `CI=1 corepack pnpm run test:e2e`
+  - Result: 32 Playwright tests passed, 1 skipped.
+
+## Coverage Notes
+
+- `tests/server/authorize.test.ts` covers redirect sanitization and explicit student-session denial for teacher-only request gates.
+- `tests/server/discord-integration-routes.test.ts` covers connection snapshot/configured state, active-organization connection snapshot/channel-save/disconnect scoping, requested active connection snapshot selection, inaccessible requested-connection rejection, selected `connectionId` body/query Discord sync routing with body-over-query precedence, teacher-only `GET`/`POST`/`DELETE` connection-route access, recoverable snapshot warnings when Discord channel listing fails, channel update/delete, missing-config channel-save protection, recoverable channel-save failures when Discord channel listing fails, OAuth start, OAuth callback success and negative paths, missing-config OAuth callback feedback without code exchange, explicit OAuth denial routing, one-time OAuth state-cookie cleanup on callback redirects, cron authorization, Discord sync success, sync not-found, sync validation errors, failed-sync persisted event return, safe no-detail `500 INTERNAL_ERROR` responses for unexpected sync failures, and route-level teacher-role assertions before protected Discord route side effects.
+- `tests/lib/scheduled-classes.test.ts` covers scheduled-class normalization, sorting/upcoming filters, invite expiration, and shared returned-event merge behavior used by Studio schedule update and Discord sync response handling.
+- `tests/server/discord-connections-repository.test.ts` covers same-guild Discord connection isolation across organizations for JSON and Postgres persistence plus scoped Postgres upsert recovery when the pre-insert read is stale.
+- `tests/server/scheduled-classes-repository.test.ts` covers the Postgres conditional Discord reminder claim, finalize, and release updates used to prevent overlapping cron workers from claiming the same due class and to avoid stale reminder writes after send completion.
+- `tests/server/scheduled-classes-route.test.ts` covers scheduled-class list/create/update/delete paths, classroom access checks, multiplayer game-mode validation, `PATCH` missing-id and duration validation mapping, `DELETE` body/query id handling, and route-level teacher-role assertions before scheduled-class side effects.
+- `tests/server/scheduled-classes.test.ts` covers Discord scheduled-event cleanup on class deletion, already-missing Discord events, hard delete failures preserving the RAIC class, reminder-state reset when a synced class is rescheduled, legacy synced records not silently moving to another Discord connection, explicit selected-connection sync precedence over an existing fallback, cross-organization selected-connection rejection, legacy unscoped scheduled-class sync fail-fast behavior, inaccessible linked-classroom rejection before Discord invite/write side effects, organization-bound default Discord connection selection, cross-organization default-sync rejection, re-sync recreation when the upstream Discord scheduled event is already gone, and failed-sync warning event propagation after Discord write failures.
+- `tests/lib/discord-scheduled-classes.test.ts` covers Discord scheduled-event payloads, normalized sync warnings, reminder sending, overlapping reminder-cron non-duplication, claim release/retry behavior after Discord send failures, and targeted reminder finalization that does not overwrite schedule edits made while Discord send is in flight.
+- `tests/server/classroom-generation-job-store.test.ts` covers request-key create-or-reuse serialization, stale request-key jobs being marked failed instead of reused in file scans, stale claimed request-key jobs not blocking retries, and stale Postgres request-key rows being failed before a retry insert.
+- `tests/server/discord-beta-smoke-script.test.ts` covers CLI help, invalid base URL summaries with sanitized JSON evidence, runtime fetch failure summaries with sanitized JSON evidence, default blocker exit behavior, `--allow-blockers`, sanitized JSON evidence artifact writing to nested paths without teacher cookie, Vercel bypass-token, base URL username/password, or query-token leakage, `?discord=not_configured` operator guidance, Vercel deployment-protection blocker detection, Vercel bypass-token injection, Vercel bypass-token redaction from redirected response diagnostics, selected Discord connection propagation during live scheduled-class sync, scheduled-event URL secret-param redaction in sync failure output, smoke-specific cron secret precedence, fallback to `CRON_SECRET` when the smoke-specific cron secret is blank, cron unauth smoke guarding, malformed reminder-cron count rejection, richer health-check diagnostics, and failure when live sync returns only a recoverable Discord warning, a non-Discord scheduled-event URL, or a Discord event URL with query/hash data.
+- `tests/server/health-route.test.ts` covers secret-safe Discord beta readiness booleans in `/api/health` alongside auth, storage, encryption, and MiroFish readiness.
+- `tests/server/production-milestone-smoke-script.test.ts` covers production milestone smoke skipping Discord readiness unless required, blocking when `RAIC_REQUIRED_PRODUCTION_FEATURES=discord` while Discord env is incomplete, invalid production base URL and runtime fetch failure summaries without stack traces, and writing sanitized JSON evidence to nested paths with URL username/password and query secrets stripped from the normalized base URL.
+- `tests/server/ops-check-workflow-policy.test.ts` covers the `ops:drift` guard for Node 24-native GitHub Actions majors in the CI workflow and keeps the final clean-main drift mode distinct from explicit PR-local drift evidence.
+- `tests/server/vercel-env-audit.test.ts` covers feature-required Discord env keys, case-insensitive context parsing, unknown feature names failing closed, manual fallback feature-key output, manual fallback warnings for unknown feature names, sanitized Vercel CLI JSON parsing, REST/CLI env-record sanitization, script-boundary CLI fallback invocation, PATH preservation, explicit API-source no-fallback behavior, CLI failure-stderr redaction, and non-leakage of secret values in audit results and script output.
+- `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping, including `not_configured`, and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
+- `tests/lib/discord-studio-callback-hook.test.tsx` covers teacher-server success, error, invalid-state, and missing-guild callback handling, one-time connection refresh, URL scrubbing that preserves unrelated query params and hashes, rerender idempotence, and public-mode no-op behavior.
+- `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state including stale connection disconnect recovery, channel save/disconnect, selected Discord guild sync, sync callbacks, warning/link rendering, unsafe event-link suppression including sensitive query-param links, and no-classroom/stale-classroom disabled states.
+- `e2e/tests/auth-classroom-flows.spec.ts` covers browser-level Discord schedule visibility: public `/` renders the schedule box without calling or showing Discord integration controls, while authenticated `/studio` loads the Discord connection snapshot and renders the teacher setup panel.
+
+## Pending Release Gates
+
+Run from a clean updated `main` after PR `#54` merges:
+
+- `corepack pnpm run secrets:scan`
+- `corepack pnpm run ops:drift`
+- `corepack pnpm run check:i18n-keys`
+- `corepack pnpm exec tsc --noEmit`
+- `corepack pnpm run check`
+- `corepack pnpm lint`
+- `corepack pnpm test`
+- `corepack pnpm run build`
+- `CI=1 corepack pnpm run test:e2e`
+- `corepack pnpm run ops:verify`
+- `RAIC_REQUIRED_PRODUCTION_FEATURES=discord corepack pnpm run smoke:production:milestone`
+- `VERCEL_ENV_AUDIT_CONTEXTS=preview VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+- `VERCEL_ENV_AUDIT_CONTEXTS=production VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`
+
+## Discord Smoke Plan
+
+Preview first:
+
+- Configure Discord app callback URL for the preview deployment at `/api/integrations/discord/oauth/callback`.
+- Configure Vercel preview env: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET`.
+- Verify preview env presence with `VERCEL_ENV_AUDIT_CONTEXTS=preview VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`; record only present/missing status.
+- Run `corepack pnpm run smoke:discord-beta -- --allow-blockers` before live prerequisites exist.
+- Run `corepack pnpm run smoke:discord-beta` with:
+  - `RAIC_DISCORD_SMOKE_BASE_URL`
+  - `RAIC_DISCORD_SMOKE_COOKIE`
+  - `RAIC_DISCORD_SMOKE_CONNECTION_ID`
+  - `RAIC_DISCORD_SMOKE_CHANNEL_ID`
+  - `RAIC_DISCORD_SMOKE_EVENT_ID`
+  - `RAIC_DISCORD_SMOKE_CRON_SECRET`
+  - `RAIC_DISCORD_SMOKE_VERCEL_BYPASS_TOKEN` if Vercel deployment protection is enabled on the preview.
+  - `RAIC_DISCORD_SMOKE_EVIDENCE_PATH` to write sanitized JSON smoke evidence.
+
+Production after preview smoke passes:
+
+- Configure production callback URL: `https://open-raic.com/api/integrations/discord/oauth/callback`.
+- Configure the same four Discord/Cron env vars in production.
+- Verify production env presence with `VERCEL_ENV_AUDIT_CONTEXTS=production VERCEL_ENV_AUDIT_REQUIRED_FEATURES=discord corepack pnpm run ops:env:vercel`; record only present/missing status.
+- Run standard production smokes:
+  - `RAIC_REQUIRED_PRODUCTION_FEATURES=discord RAIC_PRODUCTION_SMOKE_EVIDENCE_PATH=docs/artifacts/v0.7.0-production-milestone-smoke.json corepack pnpm run smoke:production:milestone`
+  - `corepack pnpm run smoke:production:classroom`
+  - `RAIC_DISCORD_SMOKE_EVIDENCE_PATH=docs/artifacts/v0.7.0-discord-beta-smoke.json corepack pnpm run smoke:discord-beta`
+
+Manual Discord beta checks printed by the smoke gate:
+
+- Confirm preview and production callback URLs are registered in the Discord developer app, and that the install request uses scopes `bot applications.commands identify guilds` with permission bitfield `8589937664`.
+- Sign in as a teacher, connect a disposable Discord server, and verify Studio returns with `?discord=connected`; before Discord app config exists, `?discord=not_configured` is the expected pre-credential readiness signal.
+- Create or choose a future scheduled class with a linked classroom, sync it, and inspect Discord event name/time/location link.
+- Edit and re-sync the class, then delete it and confirm the Discord scheduled event is removed or already gone.
+- Use a near-term class and cron invocation to confirm the configured channel receives exactly one reminder.
+
+## Current Blockers
+
+- Live preview and production Discord smoke require real `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `CRON_SECRET` values. The latest secret-safe Vercel CLI fallback audit confirms all four Discord keys are missing in both preview and production. Record only variable presence, never secret values.
+- Live smoke also requires a maintainer teacher account, a disposable Discord test server, bot install permissions, and a future teacher-owned scheduled class linked to a classroom.
+- Final `v0.7.0` closeout requires a clean `main` gate run, production deployment ID, production smoke output, and `v0.7.0` tag.

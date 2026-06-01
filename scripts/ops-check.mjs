@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import yaml from 'js-yaml';
 import {
   assessBenchmarkEvidence,
   evaluateBenchmarkSnapshot,
@@ -38,6 +39,13 @@ const SECRET_SCANNERS = [
 const PERF_BUDGETS_PATH = path.join('ops', 'perf-budgets.json');
 const BENCHMARK_REPLAY_PATH = path.join('ops', 'benchmark-replay.json');
 const BENCHMARK_LIVE_SNAPSHOT_PATH = path.join('data', 'perf-results', 'latest.json');
+const CI_WORKFLOW_PATH = path.join('.github', 'workflows', 'ci.yml');
+const NODE24_ACTION_MAJOR_FLOORS = new Map([
+  ['actions/checkout', 6],
+  ['actions/setup-node', 6],
+  ['pnpm/action-setup', 6],
+  ['actions/upload-artifact', 6],
+]);
 
 const SECRET_VALUE_INDICATORS = [
   /\bsk-[A-Za-z0-9]{20,}\b/g,
@@ -57,10 +65,11 @@ const NEXT_PUBLIC_SECRET_RE =
 const PLACEHOLDER_VALUE_RE =
   /^\s*["']?(?:\s*|\$\{[^}]*\}|<[^>]*>|your[^\n]*|replace[^\n]*|placeholder[^\n]*|example[^\n]*|sample[^\n]*|dummy[^\n]*|changeme[^\n]*|to-be-filled[^\n]*|todo[^\n]*|redacted[^\n]*|[^"'\n]*\.\.\.[^"'\n]*|…)\s*["']?$/i;
 
-function normalizeArgv(argv) {
+function normalizeArgv(argv, env = process.env) {
   const args = {
     mode: null,
-    ci: process.env.GITHUB_ACTIONS === 'true',
+    ci: env.GITHUB_ACTIONS === 'true',
+    prLocal: false,
     strictRemoteBacklog: false,
   };
   let seenMode = false;
@@ -68,6 +77,8 @@ function normalizeArgv(argv) {
   for (const arg of argv) {
     if (arg === '--ci') {
       args.ci = true;
+    } else if (arg === '--pr-local') {
+      args.prLocal = true;
     } else if (arg === '--strict-remote-backlog') {
       args.strictRemoteBacklog = true;
     } else if (!arg.startsWith('--') && !seenMode) {
@@ -81,6 +92,10 @@ function normalizeArgv(argv) {
   }
 
   return args;
+}
+
+function shouldEnforceStrictLocalHandoff(args) {
+  return !args.ci && !args.prLocal;
 }
 
 const options = normalizeArgv(process.argv.slice(2));
@@ -189,6 +204,103 @@ function readJsonFile(pathname) {
 
 function listTrackedFiles() {
   return runGitCommand('git ls-files', { parse: true });
+}
+
+function collectWorkflowActionUses(workflow) {
+  const uses = [];
+  const jobs = workflow && typeof workflow === 'object' ? workflow.jobs : null;
+  if (!jobs || typeof jobs !== 'object') {
+    return uses;
+  }
+
+  for (const [jobName, job] of Object.entries(jobs)) {
+    if (!job || typeof job !== 'object') {
+      continue;
+    }
+
+    if (typeof job.uses === 'string') {
+      uses.push({ location: `jobs.${jobName}`, uses: job.uses });
+    }
+
+    if (!Array.isArray(job.steps)) {
+      continue;
+    }
+
+    job.steps.forEach((step, index) => {
+      if (step && typeof step === 'object' && typeof step.uses === 'string') {
+        uses.push({ location: `jobs.${jobName}.steps[${index}]`, uses: step.uses });
+      }
+    });
+  }
+
+  return uses;
+}
+
+function parseActionMajor(uses) {
+  const atIndex = uses.lastIndexOf('@');
+  if (atIndex === -1) {
+    return null;
+  }
+
+  const action = uses.slice(0, atIndex).toLowerCase();
+  const ref = uses.slice(atIndex + 1);
+  const majorMatch = ref.match(/^v?(\d+)(?:\.|$)/i);
+  return {
+    action,
+    major: majorMatch ? Number.parseInt(majorMatch[1], 10) : null,
+    ref,
+  };
+}
+
+function findCiWorkflowActionRuntimeFindings(workflowText, workflowPath = CI_WORKFLOW_PATH) {
+  let workflow;
+  try {
+    workflow = yaml.load(workflowText);
+  } catch (error) {
+    return [
+      `${workflowPath}: unable to parse workflow YAML: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    ];
+  }
+
+  const findings = [];
+  for (const usage of collectWorkflowActionUses(workflow)) {
+    const parsed = parseActionMajor(usage.uses);
+    if (!parsed) {
+      continue;
+    }
+
+    const requiredMajor = NODE24_ACTION_MAJOR_FLOORS.get(parsed.action);
+    if (!requiredMajor) {
+      continue;
+    }
+
+    if (parsed.major == null || parsed.major < requiredMajor) {
+      findings.push(
+        `${workflowPath} ${usage.location}: ${usage.uses} must use v${requiredMajor}+ to keep CI actions on a Node 24-native runtime.`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+function checkCiWorkflowActionRuntimePolicy() {
+  if (!existsSync(CI_WORKFLOW_PATH)) {
+    fail('CI workflow file is missing.', {
+      details: [`Expected: ${CI_WORKFLOW_PATH}`],
+    });
+  }
+
+  const findings = findCiWorkflowActionRuntimeFindings(readFileSync(CI_WORKFLOW_PATH, 'utf8'));
+  if (findings.length > 0) {
+    fail('CI workflow uses action majors that are not Node 24-native.', {
+      details: findings,
+    });
+  }
+
+  console.log('[ops-check] CI action runtime policy passed.');
 }
 
 function isFileIgnored(path) {
@@ -406,8 +518,9 @@ function checkDrift() {
   console.log('[ops-check] Starting local branch and environment drift checks.');
 
   const branch = getCurrentBranch();
+  const enforceStrictLocalHandoff = shouldEnforceStrictLocalHandoff(options);
 
-  if (!options.ci && branch !== 'main') {
+  if (enforceStrictLocalHandoff && branch !== 'main') {
     fail(`Expected local branch to be 'main', found '${branch}'.`);
   }
 
@@ -425,10 +538,12 @@ function checkDrift() {
     (name) => !(options.ci && isDetachedHeadBranchName(name)),
   );
   const extraBranches = localBranches.filter((name) => name !== 'main');
-  if (extraBranches.length > 0) {
+  if (enforceStrictLocalHandoff && extraBranches.length > 0) {
     fail('Local branch cleanup required before handoff.', {
       details: [`Remove local branches: ${extraBranches.join(', ')}`],
     });
+  } else if (options.prLocal && extraBranches.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping strict local branch cleanup gate.');
   }
 
   const remoteBranches = listRemoteBranches().filter((name) => name !== 'origin');
@@ -439,6 +554,8 @@ function checkDrift() {
     console.log(
       '[ops-check] CI mode active: skipping strict remote ref gating to allow ephemeral runner refs.',
     );
+  } else if (options.prLocal) {
+    console.log('[ops-check] PR-local mode active: skipping strict remote ref gating.');
   } else if (unexpectedRemote.length > 0) {
     fail('Unexpected remote refs detected.', {
       details: [
@@ -451,18 +568,24 @@ function checkDrift() {
   const worktrees = parseWorktrees();
   const toplevel = getWorkingToplevel();
   const otherWorktrees = worktrees.filter((path) => path !== toplevel);
-  if (otherWorktrees.length > 0) {
+  if (enforceStrictLocalHandoff && otherWorktrees.length > 0) {
     fail('Additional git worktrees detected; remove stale worktrees before handoff.', {
       details: ['Run: git worktree list', `Remaining: ${otherWorktrees.join(', ')}`],
     });
+  } else if (options.prLocal && otherWorktrees.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping sibling worktree cleanup gate.');
   }
 
   const codexBranches = localBranches.filter((name) => name.startsWith('codex/'));
-  if (codexBranches.length > 0) {
+  if (enforceStrictLocalHandoff && codexBranches.length > 0) {
     fail('Scratch branches still exist locally.', {
       details: codexBranches,
     });
+  } else if (options.prLocal && codexBranches.length > 0) {
+    console.log('[ops-check] PR-local mode active: skipping scratch branch cleanup gate.');
   }
+
+  checkCiWorkflowActionRuntimePolicy();
 
   console.log('[ops-check] Drift checks passed.');
 }
@@ -471,7 +594,10 @@ export {
   assessBenchmarkEvidence,
   evaluateBenchmarkSnapshot,
   extractBenchmarkMetricValue,
+  findCiWorkflowActionRuntimeFindings,
   isFixtureBenchmarkSnapshot,
+  normalizeArgv,
+  shouldEnforceStrictLocalHandoff,
 };
 
 function checkBenchmarkEvidence() {
@@ -642,6 +768,12 @@ function checkVerify() {
 }
 
 async function main() {
+  if (options.prLocal && options.mode !== 'drift') {
+    fail(
+      '--pr-local is only supported with drift mode. Use final ops gates without PR-local mode.',
+    );
+  }
+
   if (options.mode === 'drift') {
     checkDrift();
     await checkRemoteBacklog();

@@ -32,6 +32,7 @@ export interface ScheduledClassDiscordSync {
   scheduledEventUrl?: string;
   lastSyncedAt?: string;
   syncWarning?: string;
+  reminderClaimedAt?: string;
   reminderSentAt?: string;
   reminderMessageId?: string;
 }
@@ -74,4 +75,12 @@ export interface DiscordConnectionSummary {
 export interface DiscordChannelSummary {
   id: string;
   name: string;
+}
+
+export interface DiscordIntegrationSnapshot {
+  configured: boolean;
+  connection: DiscordConnectionSummary | null;
+  connections: DiscordConnectionSummary[];
+  channels: DiscordChannelSummary[];
+  channelsError?: string;
 }

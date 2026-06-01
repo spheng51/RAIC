@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Discord scheduled-class beta release gate via `pnpm run smoke:discord-beta`, including automated API guard checks, optional teacher-cookie sync/cron checks, and a manual Discord smoke checklist.
+
+### Changed
+
+- Discord scheduled-class re-sync now requires reconnecting when legacy synced records lack an explicit connection id, preventing silent movement to another Discord server.
+
+### Testing
+
+- Added offline smoke-gate regression coverage plus Discord OAuth callback negative-path and scheduled-class sync error mapping tests.
+
 ## [0.6.0] - 2026-05-19
 
 `v0.6.0` prepares Adaptive Student Beta with a reversible server-side readiness gate and non-leakage coverage while keeping student-facing adaptation disabled by default.

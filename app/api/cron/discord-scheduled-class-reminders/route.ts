@@ -7,8 +7,24 @@ const log = createLogger('DiscordScheduledClassRemindersCron');
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return process.env.NODE_ENV !== 'production';
+  if (!secret) {
+    return (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.CRON_ALLOW_NO_SECRET?.trim() === 'true' &&
+      isLocalCronRequest(request)
+    );
+  }
   return request.headers.get('authorization') === `Bearer ${secret}`;
+}
+
+function isLocalCronRequest(request: NextRequest) {
+  const hostname = request.nextUrl.hostname.toLowerCase();
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '[::1]'
+  );
 }
 
 export async function GET(request: NextRequest) {

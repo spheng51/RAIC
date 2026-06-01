@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   exchangeDiscordOAuthCode: vi.fn(),
   getDiscordGuild: vi.fn(),
   listDiscordGuildChannels: vi.fn(),
+  normalizeDiscordError: vi.fn(),
   sendDueDiscordScheduledClassReminders: vi.fn(),
   syncScheduledClassDiscordForAccess: vi.fn(),
 }));
@@ -34,12 +35,28 @@ vi.mock('@/lib/server/discord', () => ({
   getDiscordGuild: mocks.getDiscordGuild,
   getDiscordConfig: mocks.getDiscordConfig,
   listDiscordGuildChannels: mocks.listDiscordGuildChannels,
+  normalizeDiscordError: mocks.normalizeDiscordError,
 }));
 
-vi.mock('@/lib/server/scheduled-classes', () => ({
-  sendDueDiscordScheduledClassReminders: mocks.sendDueDiscordScheduledClassReminders,
-  syncScheduledClassDiscordForAccess: mocks.syncScheduledClassDiscordForAccess,
-}));
+vi.mock('@/lib/server/scheduled-classes', () => {
+  class ScheduledClassDiscordSyncError extends Error {
+    readonly event?: unknown;
+
+    constructor(message: string, event?: unknown) {
+      super(message);
+      this.name = 'ScheduledClassDiscordSyncError';
+      if (event) {
+        this.event = event;
+      }
+    }
+  }
+
+  return {
+    ScheduledClassDiscordSyncError,
+    sendDueDiscordScheduledClassReminders: mocks.sendDueDiscordScheduledClassReminders,
+    syncScheduledClassDiscordForAccess: mocks.syncScheduledClassDiscordForAccess,
+  };
+});
 
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
@@ -60,16 +77,30 @@ const authContext = {
   user: { id: 'teacher-1' },
 };
 
+function expectDiscordOAuthStateCookieCleared(response: Response) {
+  const setCookie = response.headers.get('set-cookie') ?? '';
+  expect(setCookie).toContain('raic_discord_oauth_state=');
+  expect(setCookie.toLowerCase()).toMatch(/expires=thu, 01 jan 1970|max-age=0/);
+}
+
 describe('Discord integration routes', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.requireRequestRole.mockResolvedValue(authContext);
+    mocks.getDiscordConfig.mockReturnValue({
+      clientId: 'client',
+      clientSecret: 'secret',
+      botToken: 'bot',
+    });
     mocks.listDiscordGuildChannels.mockResolvedValue([
       { id: 'channel-1', name: 'announcements', type: 0 },
       { id: 'channel-2', name: 'study-hall', type: 0 },
     ]);
+    mocks.normalizeDiscordError.mockImplementation((error) =>
+      error instanceof Error ? error.message : String(error),
+    );
     mocks.exchangeDiscordOAuthCode.mockResolvedValue(undefined);
     mocks.getDiscordGuild.mockResolvedValue({ id: 'guild-1', name: 'Physics Guild' });
   });
@@ -94,11 +125,197 @@ describe('Discord integration routes', () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(json.configured).toBe(true);
     expect(json.connection).toMatchObject({ id: 'connection-1', guildId: 'guild-1' });
+    expect(json.connections).toEqual([
+      expect.objectContaining({ id: 'connection-1', guildId: 'guild-1' }),
+    ]);
     expect(json.channels).toEqual([
       { id: 'channel-1', name: 'announcements' },
       { id: 'channel-2', name: 'study-hall' },
     ]);
+  });
+
+  it('scopes the Discord connection snapshot to the active organization', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-other',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-other',
+        guildName: 'Other Guild',
+        channelId: 'channel-other',
+        channelName: 'other-announcements',
+      },
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.connection).toMatchObject({ id: 'connection-1', guildId: 'guild-1' });
+    expect(mocks.listDiscordGuildChannels).toHaveBeenCalledWith('guild-1');
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalledWith('guild-other');
+  });
+
+  it('selects a requested Discord connection from the active organization snapshot', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: 'channel-1',
+        channelName: 'announcements',
+      },
+      {
+        id: 'connection-2',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-2',
+        guildName: 'Chemistry Guild',
+        channelId: 'channel-2',
+        channelName: 'study-hall',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/connection?connectionId=connection-2',
+      ),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.connection).toMatchObject({ id: 'connection-2', guildId: 'guild-2' });
+    expect(json.connections).toEqual([
+      expect.objectContaining({ id: 'connection-1', guildId: 'guild-1' }),
+      expect.objectContaining({ id: 'connection-2', guildId: 'guild-2' }),
+    ]);
+    expect(mocks.listDiscordGuildChannels).toHaveBeenCalledWith('guild-2');
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalledWith('guild-1');
+  });
+
+  it('does not expose another organization Discord connection as the active snapshot', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-other',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-other',
+        guildName: 'Other Guild',
+        channelId: 'channel-other',
+        channelName: 'other-announcements',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      configured: true,
+      connection: null,
+      connections: [],
+      channels: [],
+    });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+  });
+
+  it('rejects a requested Discord connection from another organization snapshot', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-other',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-2',
+        guildId: 'guild-other',
+        guildName: 'Other Guild',
+        channelId: 'channel-other',
+        channelName: 'other-announcements',
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/connection?connectionId=connection-other',
+      ),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord connection not found.',
+    });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+  });
+
+  it('reports when Discord is not configured', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([]);
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      configured: false,
+      connection: null,
+      connections: [],
+      channels: [],
+    });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+  });
+
+  it('keeps the connection snapshot recoverable when Discord channels cannot be loaded', async () => {
+    mocks.listDiscordConnectionsForUser.mockResolvedValue([
+      {
+        id: 'connection-1',
+        ownerUserId: 'teacher-1',
+        organizationId: 'org-1',
+        guildId: 'guild-1',
+        guildName: 'Physics Guild',
+        channelId: null,
+        channelName: null,
+      },
+    ]);
+    mocks.listDiscordGuildChannels.mockRejectedValue(new Error('Missing Discord permissions'));
+
+    const { GET } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      configured: true,
+      connection: { id: 'connection-1', guildId: 'guild-1' },
+      channels: [],
+      channelsError: 'Missing Discord permissions',
+    });
   });
 
   it('updates and deletes a Discord announcement channel', async () => {
@@ -138,6 +355,120 @@ describe('Discord integration routes', () => {
     expect(mocks.deleteDiscordConnectionForUser).toHaveBeenCalledWith('teacher-1', 'connection-1');
   });
 
+  it('rejects channel saves when Discord app config is missing', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'MISSING_API_KEY',
+      error: 'Discord integration is not configured.',
+    });
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects channel saves for another organization Discord connection', async () => {
+    mocks.readDiscordConnectionForUser.mockResolvedValue({
+      id: 'connection-other',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-2',
+      guildId: 'guild-other',
+      guildName: 'Other Guild',
+      channelId: 'channel-other',
+      channelName: 'other-announcements',
+    });
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-other', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord connection not found.',
+    });
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns a recoverable error when Discord channels cannot be loaded while saving', async () => {
+    const connection = {
+      id: 'connection-1',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-1',
+      guildId: 'guild-1',
+      guildName: 'Physics Guild',
+      channelId: 'channel-1',
+      channelName: 'announcements',
+    };
+    mocks.readDiscordConnectionForUser.mockResolvedValue(connection);
+    mocks.listDiscordGuildChannels.mockRejectedValue(new Error('Missing Discord permissions'));
+
+    const { POST } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-2' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'UPSTREAM_ERROR',
+      error: 'Unable to load Discord announcement channels.',
+      details: 'Missing Discord permissions',
+    });
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects disconnect requests for another organization Discord connection', async () => {
+    mocks.readDiscordConnectionForUser.mockResolvedValue({
+      id: 'connection-other',
+      ownerUserId: 'teacher-1',
+      organizationId: 'org-2',
+      guildId: 'guild-other',
+      guildName: 'Other Guild',
+      channelId: 'channel-other',
+      channelName: 'other-announcements',
+    });
+
+    const { DELETE } = await import('@/app/api/integrations/discord/connection/route');
+    const response = await DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-other' }),
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord connection not found.',
+    });
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
+  });
+
   it('starts Discord OAuth only when Discord app config exists', async () => {
     const { GET } = await import('@/app/api/integrations/discord/oauth/start/route');
     mocks.getDiscordConfig.mockReturnValue(null);
@@ -175,6 +506,7 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/studio?discord=connected');
+    expectDiscordOAuthStateCookieCleared(response);
     expect(mocks.exchangeDiscordOAuthCode).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'code-1' }),
     );
@@ -186,6 +518,124 @@ describe('Discord integration routes', () => {
         channelId: 'channel-1',
       }),
     );
+  });
+
+  it('rejects Discord OAuth callbacks with invalid state before exchanging codes', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=wrong-state&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=invalid_state');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.getDiscordGuild).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects Discord OAuth callbacks missing required install metadata', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=missing_guild');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns an explicit Studio status when Discord OAuth callback config is missing', async () => {
+    mocks.getDiscordConfig.mockReturnValue(null);
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=not_configured');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.getDiscordGuild).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns a recoverable Studio status when Discord OAuth is denied before code exchange', async () => {
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&error=access_denied',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=error');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns a recoverable Studio status when Discord OAuth exchange fails', async () => {
+    mocks.exchangeDiscordOAuthCode.mockRejectedValue(new Error('Discord exchange failed'));
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/studio?discord=error');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+  });
+
+  it('redirects unauthenticated Discord OAuth callbacks to teacher sign-in', async () => {
+    mocks.requireRequestRole.mockResolvedValue(
+      NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 }),
+    );
+
+    const { GET } = await import('@/app/api/integrations/discord/oauth/callback/route');
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/integrations/discord/oauth/callback?state=state-1&code=code-1&guild_id=guild-1',
+        {
+          headers: { cookie: 'raic_discord_oauth_state=state-1' },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/sign-in?redirectTo=/studio');
+    expectDiscordOAuthStateCookieCleared(response);
+    expect(mocks.exchangeDiscordOAuthCode).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
   });
 
   it('runs the reminder cron behind CRON_SECRET when configured', async () => {
@@ -212,8 +662,21 @@ describe('Discord integration routes', () => {
     expect(json).toMatchObject({ checked: 1, sent: 1, failed: 0 });
   });
 
-  it('allows local reminder cron execution without CRON_SECRET outside production', async () => {
+  it('requires explicit local override before running the reminder cron without CRON_SECRET', async () => {
     vi.stubEnv('NODE_ENV', 'development');
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.sendDueDiscordScheduledClassReminders).not.toHaveBeenCalled();
+  });
+
+  it('allows local reminder cron execution without CRON_SECRET only with the local override', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('CRON_ALLOW_NO_SECRET', 'true');
     mocks.sendDueDiscordScheduledClassReminders.mockResolvedValue({
       checked: 0,
       sent: 0,
@@ -227,6 +690,19 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.sendDueDiscordScheduledClassReminders).toHaveBeenCalled();
+  });
+
+  it('rejects no-secret reminder cron override on non-local hosts', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('CRON_ALLOW_NO_SECRET', 'true');
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('https://preview.example.test/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.sendDueDiscordScheduledClassReminders).not.toHaveBeenCalled();
   });
 
   it('requires CRON_SECRET before running the reminder cron in production', async () => {
@@ -271,27 +747,275 @@ describe('Discord integration routes', () => {
     expect(json.event.discordSync.scheduledEventId).toBe('discord-event-1');
   });
 
+  it('passes a selected Discord connection when syncing a scheduled class', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockResolvedValue({
+      id: 'event-1',
+      title: 'Physics game night',
+      startsAt: '2026-05-12T17:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-2',
+        scheduledEventId: 'discord-event-2',
+      },
+    });
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-2' }),
+      }),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.syncScheduledClassDiscordForAccess).toHaveBeenCalledWith(
+      {
+        role: 'teacher',
+        userId: 'teacher-1',
+        organizationId: 'org-1',
+      },
+      'event-1',
+      { baseUrl: 'http://localhost', connectionId: 'connection-2' },
+    );
+    expect(json.event.discordSync.connectionId).toBe('connection-2');
+  });
+
+  it('accepts a query-selected Discord connection when syncing a scheduled class', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockResolvedValue({
+      id: 'event-1',
+      title: 'Physics game night',
+      startsAt: '2026-05-12T17:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-2',
+        scheduledEventId: 'discord-event-2',
+      },
+    });
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest(
+        'http://localhost/api/scheduled-classes/event-1/discord-sync?connectionId=connection-2',
+        { method: 'POST' },
+      ),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.syncScheduledClassDiscordForAccess).toHaveBeenCalledWith(
+      {
+        role: 'teacher',
+        userId: 'teacher-1',
+        organizationId: 'org-1',
+      },
+      'event-1',
+      { baseUrl: 'http://localhost', connectionId: 'connection-2' },
+    );
+  });
+
+  it('prefers the body-selected Discord connection over a query fallback during sync', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockResolvedValue({
+      id: 'event-1',
+      title: 'Physics game night',
+      startsAt: '2026-05-12T17:00:00.000Z',
+      discordSync: {
+        enabled: true,
+        connectionId: 'connection-body',
+        scheduledEventId: 'discord-event-body',
+      },
+    });
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest(
+        'http://localhost/api/scheduled-classes/event-1/discord-sync?connectionId=connection-query',
+        {
+          method: 'POST',
+          body: JSON.stringify({ connectionId: 'connection-body' }),
+        },
+      ),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.syncScheduledClassDiscordForAccess).toHaveBeenCalledWith(
+      {
+        role: 'teacher',
+        userId: 'teacher-1',
+        organizationId: 'org-1',
+      },
+      'event-1',
+      { baseUrl: 'http://localhost', connectionId: 'connection-body' },
+    );
+  });
+
+  it('returns not found when a Discord sync target is unavailable', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockResolvedValue(null);
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/missing-event/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'missing-event' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Scheduled class not found',
+    });
+  });
+
+  it('returns a recoverable validation error when Discord sync cannot proceed', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(
+      new Error('Connect Discord before syncing this scheduled class.'),
+    );
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Connect Discord before syncing this scheduled class.',
+    });
+  });
+
+  it('returns a safe server error when Discord sync fails unexpectedly', async () => {
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(new Error('db unavailable'));
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      error: 'Failed to sync scheduled class with Discord.',
+    });
+    expect(JSON.stringify(json)).not.toContain('db unavailable');
+  });
+
+  it('returns the persisted warning event when Discord sync records a recoverable failure', async () => {
+    const { ScheduledClassDiscordSyncError } = await import('@/lib/server/scheduled-classes');
+    mocks.syncScheduledClassDiscordForAccess.mockRejectedValue(
+      new ScheduledClassDiscordSyncError('Discord unavailable', {
+        id: 'event-1',
+        title: 'Physics game night',
+        startsAt: '2099-05-12T17:00:00.000Z',
+        createdAt: '2026-05-11T00:00:00.000Z',
+        updatedAt: '2026-05-11T00:01:00.000Z',
+        discordSync: {
+          enabled: true,
+          syncWarning: 'Discord unavailable',
+          inviteUrl: 'https://open-raic.com/join/token',
+        },
+      }),
+    );
+
+    const { POST } = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const response = await POST(
+      new NextRequest('http://localhost/api/scheduled-classes/event-1/discord-sync'),
+      {
+        params: Promise.resolve({ id: 'event-1' }),
+      },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toMatchObject({
+      success: false,
+      errorCode: 'INVALID_REQUEST',
+      error: 'Discord unavailable',
+      event: {
+        id: 'event-1',
+        discordSync: {
+          syncWarning: 'Discord unavailable',
+          inviteUrl: 'https://open-raic.com/join/token',
+        },
+      },
+    });
+  });
+
   it('requires teacher access for connection routes', async () => {
     mocks.requireRequestRole.mockResolvedValue(
       NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 }),
     );
 
-    const { GET } = await import('@/app/api/integrations/discord/connection/route');
-    const response = await GET(
+    const { DELETE, GET, POST } = await import('@/app/api/integrations/discord/connection/route');
+    const getResponse = await GET(
       new NextRequest('http://localhost/api/integrations/discord/connection'),
     );
+    const postResponse = await POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-1' }),
+      }),
+    );
+    const deleteResponse = await DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-1' }),
+      }),
+    );
 
-    expect(response.status).toBe(401);
+    expect(getResponse.status).toBe(401);
+    expect(postResponse.status).toBe(401);
+    expect(deleteResponse.status).toBe(401);
     expect(mocks.listDiscordConnectionsForUser).not.toHaveBeenCalled();
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
   });
 
-  it('requires teacher access for OAuth start and scheduled-class sync routes', async () => {
+  it('keeps Discord routes behind teacher-only access', async () => {
     mocks.requireRequestRole.mockResolvedValue(
       NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 }),
     );
 
+    const connection = await import('@/app/api/integrations/discord/connection/route');
     const oauthStart = await import('@/app/api/integrations/discord/oauth/start/route');
     const discordSync = await import('@/app/api/scheduled-classes/[id]/discord-sync/route');
+    const connectionGetResponse = await connection.GET(
+      new NextRequest('http://localhost/api/integrations/discord/connection'),
+    );
+    const connectionPostResponse = await connection.POST(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'connection-1', channelId: 'channel-1' }),
+      }),
+    );
+    const connectionDeleteResponse = await connection.DELETE(
+      new NextRequest('http://localhost/api/integrations/discord/connection', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: 'connection-1' }),
+      }),
+    );
     const oauthResponse = await oauthStart.GET(
       new NextRequest('http://localhost/api/integrations/discord/oauth/start'),
     );
@@ -302,8 +1026,24 @@ describe('Discord integration routes', () => {
       },
     );
 
+    expect(connectionGetResponse.status).toBe(403);
+    expect(connectionPostResponse.status).toBe(403);
+    expect(connectionDeleteResponse.status).toBe(403);
     expect(oauthResponse.status).toBe(403);
     expect(syncResponse.status).toBe(403);
+    expect(mocks.requireRequestRole).toHaveBeenCalledTimes(5);
+    expect(mocks.requireRequestRole.mock.calls.map(([, roles]) => roles)).toEqual([
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+      ['teacher'],
+    ]);
+    expect(mocks.listDiscordConnectionsForUser).not.toHaveBeenCalled();
+    expect(mocks.readDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.upsertDiscordConnection).not.toHaveBeenCalled();
+    expect(mocks.deleteDiscordConnectionForUser).not.toHaveBeenCalled();
+    expect(mocks.listDiscordGuildChannels).not.toHaveBeenCalled();
     expect(mocks.buildDiscordOAuthUrl).not.toHaveBeenCalled();
     expect(mocks.syncScheduledClassDiscordForAccess).not.toHaveBeenCalled();
   });

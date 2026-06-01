@@ -33,7 +33,28 @@
       "delete": "删除",
       "linkFailed": "课堂已创建，但关联课程安排失败。",
       "saveFailed": "保存课程安排失败",
-      "deleteFailed": "删除课程安排失败"
+      "deleteFailed": "删除课程安排失败",
+      "discord": {
+        "title": "Discord",
+        "notConfigured": "Discord 尚未配置",
+        "notConnected": "未连接",
+        "connect": "连接 Discord",
+        "connected": "Discord 已连接",
+        "connectionFailed": "Discord 连接失败",
+        "invalidState": "Discord 连接已过期，请重试。",
+        "missingGuild": "请选择要连接的 Discord 服务器。",
+        "noChannel": "无频道",
+        "saveChannel": "保存频道",
+        "channelSaved": "Discord 频道已保存",
+        "disconnect": "断开 Discord",
+        "disconnected": "Discord 已断开",
+        "syncClass": "同步到 Discord",
+        "openEvent": "打开 Discord 事件",
+        "synced": "Discord 已同步",
+        "reminderSent": "Discord 提醒已发送",
+        "warning": "Discord 警告",
+        "actionFailed": "Discord 操作失败"
+      }
     }
   },
   "toolbar": {

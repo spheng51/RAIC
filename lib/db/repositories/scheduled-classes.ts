@@ -172,3 +172,96 @@ export async function listDiscordSyncedScheduledClassEventRecords(): Promise<
 
   return rows?.map(mapScheduledClassEventRow) ?? [];
 }
+
+export async function claimDiscordScheduledClassReminderRecord(input: {
+  id: string;
+  claimedAt: string;
+  latestReminderAt: string;
+  now: string;
+  staleClaimBefore: string;
+}): Promise<ScheduledClassEventRecord | null> {
+  const rows = await runPostgresQuery<ScheduledClassEventRow>(
+    `UPDATE scheduled_class_events
+     SET discord_sync = jsonb_set(
+           discord_sync - 'syncWarning' - 'reminderMessageId',
+           '{reminderClaimedAt}',
+           to_jsonb($2::text),
+           true
+         ),
+         updated_at = $2
+     WHERE id = $1
+       AND starts_at >= $4
+       AND starts_at <= $5
+       AND discord_sync IS NOT NULL
+       AND discord_sync->>'enabled' = 'true'
+       AND NULLIF(discord_sync->>'channelId', '') IS NOT NULL
+       AND NULLIF(discord_sync->>'inviteUrl', '') IS NOT NULL
+       AND (discord_sync->>'reminderSentAt') IS NULL
+       AND (
+         (discord_sync->>'reminderClaimedAt') IS NULL
+         OR (discord_sync->>'reminderClaimedAt') <= $3
+       )
+     RETURNING ${SCHEDULED_CLASS_COLUMNS}`,
+    [input.id, input.claimedAt, input.staleClaimBefore, input.now, input.latestReminderAt],
+  );
+
+  if (!rows) return null;
+  return rows[0] ? mapScheduledClassEventRow(rows[0]) : null;
+}
+
+export async function finalizeDiscordScheduledClassReminderRecord(input: {
+  id: string;
+  claimedAt: string;
+  messageId: string;
+  sentAt: string;
+}): Promise<ScheduledClassEventRecord | null> {
+  const rows = await runPostgresQuery<ScheduledClassEventRow>(
+    `UPDATE scheduled_class_events
+     SET discord_sync = jsonb_set(
+           jsonb_set(
+             discord_sync - 'reminderClaimedAt' - 'syncWarning',
+             '{reminderSentAt}',
+             to_jsonb($3::text),
+             true
+           ),
+           '{reminderMessageId}',
+           to_jsonb($4::text),
+           true
+         ),
+         updated_at = $3
+     WHERE id = $1
+       AND discord_sync->>'reminderClaimedAt' = $2
+       AND (discord_sync->>'reminderSentAt') IS NULL
+     RETURNING ${SCHEDULED_CLASS_COLUMNS}`,
+    [input.id, input.claimedAt, input.sentAt, input.messageId],
+  );
+
+  if (!rows) return null;
+  return rows[0] ? mapScheduledClassEventRow(rows[0]) : null;
+}
+
+export async function releaseDiscordScheduledClassReminderClaimRecord(input: {
+  id: string;
+  claimedAt: string;
+  releasedAt: string;
+  syncWarning: string;
+}): Promise<ScheduledClassEventRecord | null> {
+  const rows = await runPostgresQuery<ScheduledClassEventRow>(
+    `UPDATE scheduled_class_events
+     SET discord_sync = jsonb_set(
+           discord_sync - 'reminderClaimedAt' - 'reminderMessageId' - 'reminderSentAt',
+           '{syncWarning}',
+           to_jsonb($3::text),
+           true
+         ),
+         updated_at = $4
+     WHERE id = $1
+       AND discord_sync->>'reminderClaimedAt' = $2
+       AND (discord_sync->>'reminderSentAt') IS NULL
+     RETURNING ${SCHEDULED_CLASS_COLUMNS}`,
+    [input.id, input.claimedAt, input.syncWarning, input.releasedAt],
+  );
+
+  if (!rows) return null;
+  return rows[0] ? mapScheduledClassEventRow(rows[0]) : null;
+}
