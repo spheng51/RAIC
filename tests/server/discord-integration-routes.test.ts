@@ -662,8 +662,21 @@ describe('Discord integration routes', () => {
     expect(json).toMatchObject({ checked: 1, sent: 1, failed: 0 });
   });
 
-  it('allows local reminder cron execution without CRON_SECRET outside production', async () => {
+  it('requires explicit local override before running the reminder cron without CRON_SECRET', async () => {
     vi.stubEnv('NODE_ENV', 'development');
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('http://localhost/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.sendDueDiscordScheduledClassReminders).not.toHaveBeenCalled();
+  });
+
+  it('allows local reminder cron execution without CRON_SECRET only with the local override', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('CRON_ALLOW_NO_SECRET', 'true');
     mocks.sendDueDiscordScheduledClassReminders.mockResolvedValue({
       checked: 0,
       sent: 0,
@@ -677,6 +690,19 @@ describe('Discord integration routes', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.sendDueDiscordScheduledClassReminders).toHaveBeenCalled();
+  });
+
+  it('rejects no-secret reminder cron override on non-local hosts', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('CRON_ALLOW_NO_SECRET', 'true');
+
+    const { GET } = await import('@/app/api/cron/discord-scheduled-class-reminders/route');
+    const response = await GET(
+      new NextRequest('https://preview.example.test/api/cron/discord-scheduled-class-reminders'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.sendDueDiscordScheduledClassReminders).not.toHaveBeenCalled();
   });
 
   it('requires CRON_SECRET before running the reminder cron in production', async () => {

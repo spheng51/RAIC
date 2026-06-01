@@ -132,6 +132,8 @@ describe('discord beta smoke script', () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('blocked');
     expect(result.stdout).toContain('?discord=not_configured');
+    expect(result.stdout).toContain('bot applications.commands identify guilds');
+    expect(result.stdout).toContain('8589937664');
     expect(result.stderr).toBe('');
   });
 

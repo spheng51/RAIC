@@ -3,6 +3,8 @@ import 'server-only';
 export const DISCORD_OAUTH_STATE_COOKIE = 'raic_discord_oauth_state';
 
 const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
+export const DISCORD_OAUTH_SCOPES = 'bot applications.commands identify guilds';
+export const DISCORD_OAUTH_PERMISSION_BITS = '8589937664';
 
 export interface DiscordConfig {
   clientId: string;
@@ -83,8 +85,8 @@ export function buildDiscordOAuthUrl(input: { origin: string; state: string }): 
     'redirect_uri',
     `${new URL(input.origin).origin}/api/integrations/discord/oauth/callback`,
   );
-  url.searchParams.set('scope', 'bot applications.commands identify guilds');
-  url.searchParams.set('permissions', '8589937664');
+  url.searchParams.set('scope', DISCORD_OAUTH_SCOPES);
+  url.searchParams.set('permissions', DISCORD_OAUTH_PERMISSION_BITS);
   url.searchParams.set('state', input.state);
   return url.toString();
 }

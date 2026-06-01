@@ -438,7 +438,7 @@ function printManualChecklist() {
   console.log('[discord-beta-smoke] Manual Discord beta checklist');
   manual(
     'Discord app redirect URLs',
-    'Confirm preview and production callback URLs are registered in the Discord developer app.',
+    'Confirm preview and production callback URLs are registered in the Discord developer app. The RAIC install request uses scopes "bot applications.commands identify guilds" and permission bitfield "8589937664"; keep those values aligned when manually validating the bot install.',
   );
   manual(
     'Connect Discord test server',

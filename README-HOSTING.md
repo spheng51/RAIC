@@ -192,6 +192,13 @@ corepack pnpm run ops:env:vercel
 
 For production Discord beta sign-off, repeat with `VERCEL_ENV_AUDIT_CONTEXTS=production` after the preview smoke has passed.
 
+Discord app setup for this beta:
+
+- Register the preview and production callback URLs at `/api/integrations/discord/oauth/callback` before credentialed smoke.
+- RAIC's Discord OAuth start route requests scopes `bot applications.commands identify guilds` and permission bitfield `8589937664`; use those same values when manually validating the bot install.
+- Confirm the installed bot can see and send messages in the selected announcement channel and can create, update, and delete scheduled events in the disposable smoke guild.
+- Hosted reminder cron requests require `CRON_SECRET`. For local-only manual cron testing without a secret, set `CRON_ALLOW_NO_SECRET=true` and call the cron route from `localhost`; keep this unset in preview, staging, and production.
+
 Optional advanced parsing:
 
 - `PDF_MINERU_BASE_URL`
