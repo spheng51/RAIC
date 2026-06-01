@@ -83,6 +83,8 @@ Passed focused gates:
   - Result: 5 files passed, 72 tests passed after adding explicit student-session denial for teacher-only request gates and route-level teacher-role assertions across Discord and scheduled-class APIs.
 - `corepack pnpm test tests/server/authorize.test.ts tests/lib/scheduled-classes.test.ts tests/server/discord-integration-routes.test.ts tests/server/scheduled-classes-route.test.ts tests/server/scheduled-classes.test.ts tests/server/discord-beta-smoke-script.test.ts tests/components/schedule-classes-box.test.tsx tests/server/health-route.test.ts tests/server/production-milestone-smoke-script.test.ts tests/lib/discord-studio-callback-hook.test.tsx`
   - Result: 10 files passed, 116 tests passed after the smoke credential-scrub and explicit student/teacher access hardening slices.
+- `corepack pnpm exec playwright test e2e/tests/auth-classroom-flows.spec.ts -g "public home hides Discord" --list`
+  - Result: discovered one Chromium E2E test for public-home Discord non-rendering and authenticated teacher Studio Discord setup-panel rendering. The local Playwright browser run timed out waiting for the local web server before assertions ran; GitHub CI provided the authoritative browser-run proof for this slice on `90fcc379eeb61557639691031a234eff098db589`.
 - `corepack pnpm test tests/server/health-route.test.ts tests/server/production-smoke-readiness.test.ts tests/server/production-milestone-smoke-script.test.ts`
   - Result: 3 files passed, 10 tests passed after health readiness started reporting Discord beta env status and production milestone smoke began blocking when `RAIC_REQUIRED_PRODUCTION_FEATURES=discord` but Discord env is missing.
 - `npx -y node@24 /usr/local/bin/corepack pnpm test tests/server/discord-beta-smoke-script.test.ts`
@@ -191,6 +193,13 @@ Recent completed code CI snapshot:
 
 - PR `#54` CI on `1662481cad7a9c059cb89ceb62158849d9e88110` was draft, mergeable, and green for Ops Drift, MiroFish Contract Gate, Lint/Typecheck/Unit Tests, E2E Tests, Vercel preview, and Vercel preview comments. Vercel Agent Review completed as neutral/non-blocking.
 - The CI E2E job now skips Playwright browser installation, verifies system Chrome, and runs Playwright with `PLAYWRIGHT_USE_SYSTEM_CHROME=true`, retaining a 45-minute job timeout and 30-minute test timeout.
+- PR `#54` CI on `90fcc379eeb61557639691031a234eff098db589` is draft, mergeable, and green after adding the public-vs-Studio Discord visibility E2E coverage.
+- Latest green check times on `90fcc379eeb61557639691031a234eff098db589`:
+  - Ops Drift: `2026-06-01T02:43:12Z`
+  - MiroFish Contract Gate: `2026-06-01T02:43:30Z`
+  - Lint, Typecheck & Unit Tests: `2026-06-01T02:44:52Z`
+  - E2E Tests: `2026-06-01T02:45:37Z`
+  - Vercel preview deployment target: `https://vercel.com/vangorestudios-6959s-projects/raic/CAPWAhVUHgMu9Zep9Z4PX9s8SFLi`
 - Latest green check times on `1662481cad7a9c059cb89ceb62158849d9e88110`:
   - Ops Drift: `2026-05-31T23:11:28Z`
   - MiroFish Contract Gate: `2026-05-31T23:11:40Z`
@@ -229,6 +238,7 @@ Earlier full branch gates on `303e30d` passed before the smoke hardening slice:
 - `tests/lib/discord-studio-callback.test.ts` covers the `/studio?discord=...` feedback mapping, including `not_configured`, and verifies every callback status refreshes the Discord connection snapshot instead of leaving stale setup state in place.
 - `tests/lib/discord-studio-callback-hook.test.tsx` covers teacher-server success, error, invalid-state, and missing-guild callback handling, one-time connection refresh, URL scrubbing that preserves unrelated query params and hashes, rerender idempotence, and public-mode no-op behavior.
 - `tests/components/schedule-classes-box.test.tsx` covers hidden Discord UI without the teacher prop, not-configured state including stale connection disconnect recovery, channel save/disconnect, selected Discord guild sync, sync callbacks, warning/link rendering, unsafe event-link suppression including sensitive query-param links, and no-classroom/stale-classroom disabled states.
+- `e2e/tests/auth-classroom-flows.spec.ts` covers browser-level Discord schedule visibility: public `/` renders the schedule box without calling or showing Discord integration controls, while authenticated `/studio` loads the Discord connection snapshot and renders the teacher setup panel.
 
 ## Pending Release Gates
 
